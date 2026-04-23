@@ -1,0 +1,92 @@
+{
+  "name": "mediasoft-pos-waldevelop",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "MediaSoft POS WalDevelop - Modern Desktop Point of Sale Application",
+  "main": "main/bootstrap.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"npm:react\" \"npm:electron\"",
+    "react": "vite",
+    "electron": "wait-on http://localhost:5173 && node ./main/launch-electron.cjs",
+    "rebuild:native": "electron-rebuild -f -w better-sqlite3",
+    "build": "vite build",
+    "build:electron": "npm run build && electron-builder",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux",
+    "postinstall": "npm run rebuild:native",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "pos",
+    "electron",
+    "react",
+    "sqlite"
+  ],
+  "author": "WalDevelop",
+  "license": "MIT",
+  "dependencies": {
+    "@tanstack/react-table": "^8.11.6",
+    "better-sqlite3": "^9.2.2",
+    "drizzle-orm": "^0.29.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.1"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.1",
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/react": "^18.2.47",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "drizzle-kit": "^0.20.10",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.9.1",
+    "postcss": "^8.4.33",
+    "tailwindcss": "^3.4.1",
+    "vite": "^5.0.11",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.waldevelop.mediasoft-pos",
+    "productName": "MediaSoft POS",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "main/**/*",
+      "backend/**/*",
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "sistem_pos.db",
+        "to": "sistem_pos.db"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.icns"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Office"
+    }
+  }
+}
