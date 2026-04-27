@@ -1,0 +1,330 @@
+import { useEffect, useState } from 'react'
+import { DollarSign, TrendingUp, TrendingDown, Lock, Unlock } from 'lucide-react'
+import Card from '../components/Card'
+import Button from '../components/Button'
+import Input from '../components/Input'
+import Modal from '../components/Modal'
+import Badge from '../components/Badge'
+import { api } from '../utils/api'
+import { formatRupiah, formatDateTime } from '../utils/format'
+import { useToast } from '../contexts/ToastContext'
+import { useAuth } from '../contexts/AuthContext'
+
+interface KasDrawer {
+  kd_kas: string
+  username: string
+  modal_awal: number
+  total_penjualan: number
+  total_pengeluaran: number
+  saldo_akhir: number
+  selisih: number
+  status: 'OPEN' | 'CLOSED'
+  tgl_buka: string
+  tgl_tutup: string | null
+  catatan?: string | null
+}
+
+interface KasTransaksi {
+  kd_kas_transaksi: number
+  kd_kas: string
+  jenis: 'MASUK' | 'KELUAR'
+  jumlah: number
+  keterangan: string
+  tgl_transaksi: string
+  username: string
+}
+
+export default function Kas() {
+  const toast = useToast()
+  const { user } = useAuth()
+  const [activeDrawer, setActiveDrawer] = useState<KasDrawer | null>(null)
+  const [history, setHistory] = useState<KasDrawer[]>([])
+  const [transactions, setTransactions] = useState<KasTransaksi[]>([])
+  const [modal, setModal] = useState<'open' | 'close' | 'expense' | null>(null)
+  const [modalAwal, setModalAwal] = useState('')
+  const [modalAkhir, setModalAkhir] = useState('')
+  const [expense, setExpense] = useState({ jumlah: '', keterangan: '' })
+  const [loading, setLoading] = useState(false)
+
+  const load = async () => {
+    const [r1, r2] = await Promise.all([
+      api<KasDrawer>('kas:getActiveKas', user?.nama_pengguna),
+      api<KasDrawer[]>('kas:getAllKas'),
+    ])
+    if (r1.success && r1.data) {
+      setActiveDrawer(r1.data)
+      loadTransactions(r1.data.kd_kas)
+    } else {
+      setActiveDrawer(null)
+    }
+    if (r2.success) setHistory(r2.data ?? [])
+  }
+
+  const loadTransactions = async (kd_kas: string) => {
+    const r = await api<KasTransaksi[]>('kas:getTransaksi', kd_kas)
+    if (r.success) setTransactions(r.data ?? [])
+  }
+
+  useEffect(() => { load() }, [])
+
+  const handleOpenKas = async () => {
+    if (!modalAwal || parseFloat(modalAwal) <= 0) {
+      return toast('Modal awal harus lebih dari 0', 'error')
+    }
+    setLoading(true)
+    const r = await api('kas:bukaKas', user?.nama_pengguna, parseFloat(modalAwal))
+    setLoading(false)
+    if (r.success) {
+      toast(r.message as string)
+      setModal(null)
+      setModalAwal('')
+      load()
+    } else {
+      toast(r.message as string, 'error')
+    }
+  }
+
+  const handleCloseKas = async () => {
+    if (!modalAkhir) {
+      return toast('Modal akhir wajib diisi', 'error')
+    }
+    setLoading(true)
+    const r = await api('kas:tutupKas', activeDrawer!.kd_kas, parseFloat(modalAkhir))
+    setLoading(false)
+    if (r.success) {
+      toast(r.message as string)
+      setModal(null)
+      setModalAkhir('')
+      load()
+    } else {
+      toast(r.message as string, 'error')
+    }
+  }
+
+  const handleAddExpense = async () => {
+    if (!expense.jumlah || !expense.keterangan) {
+      return toast('Jumlah dan keterangan wajib diisi', 'error')
+    }
+    setLoading(true)
+    const r = await api('kas:addPengeluaran', activeDrawer!.kd_kas, parseFloat(expense.jumlah), expense.keterangan, user?.nama_pengguna)
+    setLoading(false)
+    if (r.success) {
+      toast(r.message as string)
+      setModal(null)
+      setExpense({ jumlah: '', keterangan: '' })
+      load()
+    } else {
+      toast(r.message as string, 'error')
+    }
+  }
+
+  const expectedCash = activeDrawer
+    ? activeDrawer.modal_awal + activeDrawer.total_penjualan - activeDrawer.total_pengeluaran
+    : 0
+
+  return (
+    <div className="space-y-4">
+      {/* Active Drawer Status */}
+      {activeDrawer ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card title="Modal Awal" action={<DollarSign size={16} className="text-blue-500" />}>
+            <p className="text-2xl font-bold text-slate-800 dark:text-white mt-2">{formatRupiah(activeDrawer.modal_awal)}</p>
+            <p className="text-xs text-slate-400 mt-1">{formatDateTime(activeDrawer.tgl_buka)}</p>
+          </Card>
+          <Card title="Total Penjualan" action={<TrendingUp size={16} className="text-emerald-500" />}>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">{formatRupiah(activeDrawer.total_penjualan)}</p>
+            <p className="text-xs text-slate-400 mt-1">Dari transaksi hari ini</p>
+          </Card>
+          <Card title="Total Pengeluaran" action={<TrendingDown size={16} className="text-red-500" />}>
+            <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">{formatRupiah(activeDrawer.total_pengeluaran)}</p>
+            <p className="text-xs text-slate-400 mt-1">Pengeluaran operasional</p>
+          </Card>
+          <Card title="Kas Seharusnya" action={<DollarSign size={16} className="text-primary-500" />}>
+            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-2">{formatRupiah(expectedCash)}</p>
+            <p className="text-xs text-slate-400 mt-1">Modal + Penjualan - Pengeluaran</p>
+          </Card>
+        </div>
+      ) : (
+        <Card>
+          <div className="text-center py-10">
+            <Lock size={48} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+            <p className="text-slate-600 dark:text-slate-300 font-medium mb-2">Kas Belum Dibuka</p>
+            <p className="text-sm text-slate-400 mb-4">Buka kas untuk memulai transaksi hari ini</p>
+            <Button icon={<Unlock size={16} />} onClick={() => setModal('open')}>Buka Kas</Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Actions */}
+      {activeDrawer && (
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button variant="secondary" icon={<TrendingDown size={16} />} onClick={() => setModal('expense')} className="w-full sm:w-auto">
+            Tambah Pengeluaran
+          </Button>
+          <Button variant="danger" icon={<Lock size={16} />} onClick={() => setModal('close')} className="w-full sm:w-auto">
+            Tutup Kas
+          </Button>
+        </div>
+      )}
+
+      {/* Transactions Today */}
+      {activeDrawer && transactions.length > 0 && (
+        <Card title="Transaksi Hari Ini">
+          <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin">
+            {transactions.map(t => (
+              <div key={t.kd_kas_transaksi} className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 dark:bg-slate-700/50">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t.keterangan}</p>
+                  <p className="text-xs text-slate-400">{formatDateTime(t.tgl_transaksi)}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-bold ${t.jenis === 'MASUK' ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {t.jenis === 'MASUK' ? '+' : '-'} {formatRupiah(t.jumlah)}
+                  </p>
+                  <Badge label={t.jenis} variant={t.jenis === 'MASUK' ? 'green' : 'red'} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* History */}
+      <Card title="Riwayat Kas">
+        <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <div className="min-w-[640px]">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50/80 dark:bg-slate-800/80">
+                <tr>
+                  <th className="px-3 sm:px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Kasir</th>
+                  <th className="px-3 sm:px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Waktu Buka</th>
+                  <th className="px-3 sm:px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Waktu Tutup</th>
+                  <th className="px-3 sm:px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Modal Awal</th>
+                  <th className="px-3 sm:px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Modal Akhir</th>
+                  <th className="px-3 sm:px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Selisih</th>
+                  <th className="px-3 sm:px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                {history.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-3 sm:px-4 py-10 text-center text-slate-400 text-sm">
+                      Belum ada riwayat kas
+                    </td>
+                  </tr>
+                ) : (
+                  history.map(h => (
+                    <tr key={h.kd_kas} className="hover:bg-primary-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                      <td className="px-3 sm:px-4 py-3 text-slate-700 dark:text-slate-300">{h.username}</td>
+                      <td className="px-3 sm:px-4 py-3 text-slate-700 dark:text-slate-300">{formatDateTime(h.tgl_buka)}</td>
+                      <td className="px-3 sm:px-4 py-3 text-slate-700 dark:text-slate-300">{h.tgl_tutup ? formatDateTime(h.tgl_tutup) : '-'}</td>
+                      <td className="px-3 sm:px-4 py-3 text-right text-slate-700 dark:text-slate-300">{formatRupiah(h.modal_awal)}</td>
+                      <td className="px-3 sm:px-4 py-3 text-right text-slate-700 dark:text-slate-300">{formatRupiah(h.saldo_akhir)}</td>
+                      <td className={`px-3 sm:px-4 py-3 text-right font-semibold ${h.selisih >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {formatRupiah(h.selisih)}
+                      </td>
+                      <td className="px-3 sm:px-4 py-3 text-center">
+                        <Badge label={h.status} variant={h.status === 'OPEN' ? 'green' : 'blue'} />
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Card>
+
+      {/* Open Kas Modal */}
+      <Modal
+        open={modal === 'open'}
+        onClose={() => setModal(null)}
+        title="Buka Kas"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto">Batal</Button>
+            <Button loading={loading} onClick={handleOpenKas} className="w-full sm:w-auto">Buka Kas</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+          Masukkan modal awal untuk membuka kas hari ini
+        </p>
+        <Input
+          label="Modal Awal *"
+          type="number"
+          value={modalAwal}
+          onChange={e => setModalAwal(e.target.value)}
+          placeholder="0"
+        />
+      </Modal>
+
+      {/* Close Kas Modal */}
+      <Modal
+        open={modal === 'close'}
+        onClose={() => setModal(null)}
+        title="Tutup Kas"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto">Batal</Button>
+            <Button variant="danger" loading={loading} onClick={handleCloseKas} className="w-full sm:w-auto">Tutup Kas</Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="p-3 rounded-xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800">
+            <p className="text-xs text-slate-500 dark:text-slate-400">Kas Seharusnya</p>
+            <p className="text-xl font-bold text-primary-600 dark:text-primary-400">{formatRupiah(expectedCash)}</p>
+          </div>
+          <Input
+            label="Modal Akhir (Uang di Kas) *"
+            type="number"
+            value={modalAkhir}
+            onChange={e => setModalAkhir(e.target.value)}
+            placeholder="0"
+          />
+          {modalAkhir && (
+            <div className={`p-3 rounded-xl ${parseFloat(modalAkhir) === expectedCash ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Selisih</p>
+              <p className={`text-lg font-bold ${parseFloat(modalAkhir) === expectedCash ? 'text-emerald-600' : 'text-red-600'}`}>
+                {formatRupiah(parseFloat(modalAkhir) - expectedCash)}
+              </p>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Add Expense Modal */}
+      <Modal
+        open={modal === 'expense'}
+        onClose={() => setModal(null)}
+        title="Tambah Pengeluaran"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto">Batal</Button>
+            <Button loading={loading} onClick={handleAddExpense} className="w-full sm:w-auto">Simpan</Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Input
+            label="Jumlah *"
+            type="number"
+            value={expense.jumlah}
+            onChange={e => setExpense(prev => ({ ...prev, jumlah: e.target.value }))}
+            placeholder="0"
+          />
+          <Input
+            label="Keterangan *"
+            value={expense.keterangan}
+            onChange={e => setExpense(prev => ({ ...prev, keterangan: e.target.value }))}
+            placeholder="Contoh: Beli pulsa, bayar listrik..."
+          />
+        </div>
+      </Modal>
+    </div>
+  )
+}
