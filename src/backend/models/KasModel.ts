@@ -30,12 +30,26 @@ export class KasModel {
   }
 
   static getActiveKas(username: string) {
-    return db.select().from(kasDrawer)
+    const kas = db.select().from(kasDrawer)
       .where(and(
         eq(kasDrawer.username, username),
         eq(kasDrawer.status, 'OPEN')
       ))
       .get()
+    
+    if (!kas) return null
+    
+    // Calculate total pemasukan manual from transactions
+    const transaksiMasuk = db.select().from(kasTransaksi)
+      .where(and(
+        eq(kasTransaksi.kd_kas, kas.kd_kas),
+        eq(kasTransaksi.jenis, 'MASUK')
+      ))
+      .all()
+    
+    const total_pemasukan = transaksiMasuk.reduce((sum, t) => sum + (t.jumlah || 0), 0)
+    
+    return { ...kas, total_pemasukan }
   }
 
   static getOpenKas(username: string) {

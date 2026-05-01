@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { DollarSign, TrendingUp, TrendingDown, Lock, Unlock } from 'lucide-react'
+import { DollarSign, TrendingUp, TrendingDown, Lock, Unlock, Trash2 } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -40,10 +40,11 @@ export default function Kas() {
   const [activeDrawer, setActiveDrawer] = useState<KasDrawer | null>(null)
   const [history, setHistory] = useState<KasDrawer[]>([])
   const [transactions, setTransactions] = useState<KasTransaksi[]>([])
-  const [modal, setModal] = useState<'open' | 'close' | 'expense' | null>(null)
+  const [modal, setModal] = useState<'open' | 'close' | 'expense' | 'income' | null>(null)
   const [modalAwal, setModalAwal] = useState('')
   const [modalAkhir, setModalAkhir] = useState('')
   const [expense, setExpense] = useState({ jumlah: '', keterangan: '' })
+  const [income, setIncome] = useState({ jumlah: '', keterangan: '' })
   const [loading, setLoading] = useState(false)
 
   const load = async () => {
@@ -118,15 +119,32 @@ export default function Kas() {
     }
   }
 
+  const handleAddIncome = async () => {
+    if (!income.jumlah || !income.keterangan) {
+      return toast('Jumlah dan keterangan wajib diisi', 'error')
+    }
+    setLoading(true)
+    const r = await api('kas:addPemasukan', activeDrawer!.kd_kas, parseFloat(income.jumlah), income.keterangan, user?.nama_pengguna)
+    setLoading(false)
+    if (r.success) {
+      toast(r.message as string)
+      setModal(null)
+      setIncome({ jumlah: '', keterangan: '' })
+      load()
+    } else {
+      toast(r.message as string, 'error')
+    }
+  }
+
   const expectedCash = activeDrawer
-    ? activeDrawer.modal_awal + activeDrawer.total_penjualan - activeDrawer.total_pengeluaran
+    ? activeDrawer.modal_awal + activeDrawer.total_penjualan + (activeDrawer.total_pemasukan || 0) - activeDrawer.total_pengeluaran
     : 0
 
   return (
     <div className="space-y-4">
       {/* Active Drawer Status */}
       {activeDrawer ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <Card title="Modal Awal" action={<DollarSign size={16} className="text-blue-500" />}>
             <p className="text-2xl font-bold text-slate-800 dark:text-white mt-2">{formatRupiah(activeDrawer.modal_awal)}</p>
             <p className="text-xs text-slate-400 mt-1">{formatDateTime(activeDrawer.tgl_buka)}</p>
@@ -135,13 +153,17 @@ export default function Kas() {
             <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">{formatRupiah(activeDrawer.total_penjualan)}</p>
             <p className="text-xs text-slate-400 mt-1">Dari transaksi hari ini</p>
           </Card>
+          <Card title="Pemasukan Lain" action={<TrendingUp size={16} className="text-teal-500" />}>
+            <p className="text-2xl font-bold text-teal-600 dark:text-teal-400 mt-2">{formatRupiah(activeDrawer.total_pemasukan || 0)}</p>
+            <p className="text-xs text-slate-400 mt-1">Pemasukan manual</p>
+          </Card>
           <Card title="Total Pengeluaran" action={<TrendingDown size={16} className="text-red-500" />}>
             <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">{formatRupiah(activeDrawer.total_pengeluaran)}</p>
             <p className="text-xs text-slate-400 mt-1">Pengeluaran operasional</p>
           </Card>
           <Card title="Kas Seharusnya" action={<DollarSign size={16} className="text-primary-500" />}>
             <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-2">{formatRupiah(expectedCash)}</p>
-            <p className="text-xs text-slate-400 mt-1">Modal + Penjualan - Pengeluaran</p>
+            <p className="text-xs text-slate-400 mt-1">Modal + Masuk - Keluar</p>
           </Card>
         </div>
       ) : (
@@ -158,6 +180,9 @@ export default function Kas() {
       {/* Actions */}
       {activeDrawer && (
         <div className="flex flex-col sm:flex-row gap-3">
+          <Button variant="secondary" icon={<TrendingUp size={16} />} onClick={() => setModal('income')} className="w-full sm:w-auto bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 border-emerald-200 dark:border-emerald-800">
+            Tambah Pemasukan
+          </Button>
           <Button variant="secondary" icon={<TrendingDown size={16} />} onClick={() => setModal('expense')} className="w-full sm:w-auto">
             Tambah Pengeluaran
           </Button>
@@ -172,16 +197,31 @@ export default function Kas() {
         <Card title="Transaksi Hari Ini">
           <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin">
             {transactions.map(t => (
-              <div key={t.kd_kas_transaksi} className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 dark:bg-slate-700/50">
+              <div key={t.kd_kas_transaksi} className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 dark:bg-slate-700/50 group">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t.keterangan}</p>
                   <p className="text-xs text-slate-400">{formatDateTime(t.tgl_transaksi)}</p>
                 </div>
-                <div className="text-right">
-                  <p className={`text-sm font-bold ${t.jenis === 'MASUK' ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {t.jenis === 'MASUK' ? '+' : '-'} {formatRupiah(t.jumlah)}
-                  </p>
-                  <Badge label={t.jenis} variant={t.jenis === 'MASUK' ? 'green' : 'red'} />
+                <div className="flex items-center gap-2">
+                  <div className="text-right">
+                    <p className={`text-sm font-bold ${t.jenis === 'MASUK' ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {t.jenis === 'MASUK' ? '+' : '-'} {formatRupiah(t.jumlah)}
+                    </p>
+                    <Badge label={t.jenis} variant={t.jenis === 'MASUK' ? 'green' : 'red'} />
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (confirm('Hapus transaksi ini?')) {
+                        const r = await api('kas:deleteTransaksi', t.kd_kas_transaksi)
+                        if (r.success) { toast('Transaksi dihapus'); load() }
+                        else toast(r.message as string, 'error')
+                      }
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-all"
+                    title="Hapus"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -322,6 +362,36 @@ export default function Kas() {
             value={expense.keterangan}
             onChange={e => setExpense(prev => ({ ...prev, keterangan: e.target.value }))}
             placeholder="Contoh: Beli pulsa, bayar listrik..."
+          />
+        </div>
+      </Modal>
+
+      {/* Add Income Modal */}
+      <Modal
+        open={modal === 'income'}
+        onClose={() => setModal(null)}
+        title="Tambah Pemasukan"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto">Batal</Button>
+            <Button loading={loading} onClick={handleAddIncome} className="w-full sm:w-auto">Simpan</Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Input
+            label="Jumlah *"
+            type="number"
+            value={income.jumlah}
+            onChange={e => setIncome(prev => ({ ...prev, jumlah: e.target.value }))}
+            placeholder="0"
+          />
+          <Input
+            label="Keterangan *"
+            value={income.keterangan}
+            onChange={e => setIncome(prev => ({ ...prev, keterangan: e.target.value }))}
+            placeholder="Contoh: Modal tambahan, pinjaman..."
           />
         </div>
       </Modal>

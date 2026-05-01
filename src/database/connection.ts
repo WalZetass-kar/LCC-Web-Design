@@ -1,3 +1,4 @@
+
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import path from 'path'
@@ -16,5 +17,68 @@ const sqlite = new Database(getDbPath())
 sqlite.pragma('journal_mode = WAL')
 sqlite.pragma('foreign_keys = ON')
 
+// Run migrations on startup
+function runMigrations() {
+  try {
+    // Check if password_hash_type column exists
+    const columns = sqlite.prepare("PRAGMA table_info(mediasoft_pengguna)").all() as Array<{ name: string }>
+    const hasPasswordHashType = columns.some(col => col.name === 'password_hash_type')
+    
+    if (!hasPasswordHashType) {
+      console.log('⚠️  CRITICAL: password_hash_type column is missing!')
+      console.log('Adding password_hash_type column...')
+      try {
+        sqlite.exec(`ALTER TABLE mediasoft_pengguna ADD COLUMN password_hash_type TEXT DEFAULT 'sha1';`)
+        sqlite.exec(`UPDATE mediasoft_pengguna SET password_hash_type = 'sha1' WHERE password_hash_type IS NULL;`)
+        console.log('✓ password_hash_type column added successfully')
+      } catch (err: any) {
+        if (err.message?.includes('duplicate column')) {
+          console.log('✓ password_hash_type column already exists')
+        } else {
+          console.error('❌ Failed to add password_hash_type column:', err.message)
+          console.error('Please close all database connections and restart the app')
+          throw new Error('Database migration failed: password_hash_type column is required but could not be added')
+        }
+      }
+    } else {
+      console.log('✓ password_hash_type column exists')
+    }
+    
+    const hasEmail = columns.some(col => col.name === 'email')
+    if (!hasEmail) {
+      console.log('Adding email column...')
+      try {
+        sqlite.exec(`ALTER TABLE mediasoft_pengguna ADD COLUMN email TEXT;`)
+        console.log('✓ email column added successfully')
+      } catch (err: any) {
+        if (!err.message?.includes('duplicate column')) {
+          console.error('Failed to add email column:', err.message)
+        }
+      }
+    }
+    
+    const hasNoTelp = columns.some(col => col.name === 'no_telp')
+    if (!hasNoTelp) {
+      console.log('Adding no_telp column...')
+      try {
+        sqlite.exec(`ALTER TABLE mediasoft_pengguna ADD COLUMN no_telp TEXT;`)
+        console.log('✓ no_telp column added successfully')
+      } catch (err: any) {
+        if (!err.message?.includes('duplicate column')) {
+          console.error('Failed to add no_telp column:', err.message)
+        }
+      }
+    }
+    
+  } catch (error: any) {
+    console.error('❌ Migration error:', error.message)
+    throw error // Throw critical errors to prevent app from starting with broken schema
+  }
+}
+
+// Run migrations before creating drizzle instance
+runMigrations()
+
 export const db = drizzle(sqlite, { schema })
 export type DB = typeof db
+export { sqlite }

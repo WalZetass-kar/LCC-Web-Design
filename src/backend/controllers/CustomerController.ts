@@ -138,4 +138,13 @@ export class CustomerController {
       return { success: false, message: 'Gagal mengambil data: ' + (error as Error).message }
     }
   }
+
+  static getRiwayatPembelian(kd_customer: string) {
+    try {
+      const riwayat = CustomerModel.getRiwayatPembelian(kd_customer)
+      return { success: true, data: riwayat }
+    } catch (error) {
+      return { success: false, message: 'Gagal mengambil riwayat: ' + (error as Error).message }
+    }
+  }
 }

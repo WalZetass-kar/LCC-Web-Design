@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sun, Moon, Palette, Store } from 'lucide-react'
+import { Sun, Moon, Palette, Store, Receipt } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -88,6 +88,38 @@ export default function Settings() {
         </div>
         <div className="mt-4 flex justify-end">
           <Button loading={loading} onClick={saveIdentitas} className="w-full sm:w-auto">Simpan Identitas</Button>
+        </div>
+      </Card>
+
+      {/* Pajak PPN */}
+      <Card title="Pengaturan Pajak (PPN)" action={<Receipt size={16} className="text-slate-400" />}>
+        <div className="mt-1 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <Input
+                label="Persentase PPN (%)"
+                type="number"
+                value={identitas.pajak_persen ?? 0}
+                onChange={e => f('pajak_persen', e.target.value)}
+                placeholder="0"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Isi 0 untuk menonaktifkan pajak. Contoh: isi 11 untuk PPN 11%.
+              </p>
+            </div>
+            <div className="shrink-0 text-center px-4 py-3 rounded-xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-700">
+              <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{identitas.pajak_persen ?? 0}%</p>
+              <p className="text-xs text-slate-500">PPN aktif</p>
+            </div>
+          </div>
+          {(identitas.pajak_persen ?? 0) > 0 && (
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-400">
+              Pajak PPN {identitas.pajak_persen}% akan ditambahkan ke setiap transaksi dan ditampilkan di struk.
+            </div>
+          )}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Button loading={loading} onClick={saveIdentitas} className="w-full sm:w-auto">Simpan Pengaturan Pajak</Button>
         </div>
       </Card>
 

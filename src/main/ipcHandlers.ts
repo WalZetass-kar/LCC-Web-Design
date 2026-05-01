@@ -64,10 +64,12 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   ipcMain.handle('user:update', (_e, username: string, data) => UserController.update(username, data))
   ipcMain.handle('user:changePassword', (_e, username: string, oldPass: string, newPass: string) => 
     UserController.changePassword(username, oldPass, newPass))
-  ipcMain.handle('user:resetPassword', (_e, username: string, newPass: string) => 
-    UserController.resetPassword(username, newPass))
-  ipcMain.handle('user:delete', (_e, username: string) => UserController.delete(username))
-  ipcMain.handle('user:toggleStatus', (_e, username: string) => UserController.toggleStatus(username))
+  ipcMain.handle('user:resetPassword', (_e, username: string, newPass: string, caller?: string) => 
+    UserController.resetPassword(username, newPass, caller))
+  ipcMain.handle('user:delete', (_e, username: string, caller?: string) => UserController.delete(username, caller))
+  ipcMain.handle('user:toggleStatus', (_e, username: string, caller?: string) => UserController.toggleStatus(username, caller))
+  ipcMain.handle('user:getPermissions', (_e, username: string) => UserController.getPermissions(username))
+  ipcMain.handle('user:savePermissions', (_e, username: string, permissions: Record<string, boolean>) => UserController.savePermissions(username, permissions))
 
   // Customer Management
   ipcMain.handle('customer:getAll', () => CustomerController.getAll())
@@ -79,6 +81,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   ipcMain.handle('customer:toggleStatus', (_e, kd: string) => CustomerController.toggleStatus(kd))
   ipcMain.handle('customer:addPoin', (_e, kd: string, poin: number) => CustomerController.addPoin(kd, poin))
   ipcMain.handle('customer:getBirthdayToday', () => CustomerController.getBirthdayToday())
+  ipcMain.handle('customer:getRiwayatPembelian', (_e, kd: string) => CustomerController.getRiwayatPembelian(kd))
 
   // Notifikasi
   ipcMain.handle('notifikasi:getAll', (_e, username?: string) => NotifikasiController.getAll(username))

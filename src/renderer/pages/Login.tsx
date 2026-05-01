@@ -90,81 +90,148 @@ export default function Login() {
   const fi = (k: string, v: string) => setIdentitas(prev => ({ ...prev, [k]: v }))
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-primary-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 p-4 relative overflow-hidden">
-      {/* Decorative elements */}
-      <div className="absolute top-0 left-0 w-96 h-96 bg-primary-500/10 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-0 right-0 w-96 h-96 bg-primary-600/10 rounded-full blur-3xl animate-pulse delay-1000" />
-      
-      <div className="w-full max-w-md relative z-10">
-        {/* Logo & Title */}
-        <div className="text-center mb-8 animate-in">
-          <div className="relative inline-block mb-4">
-            <div className="absolute inset-0 bg-gradient-to-r from-primary-500 to-primary-600 rounded-3xl blur-xl opacity-50 animate-pulse" />
-            <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-2xl shadow-primary-500/40">
-              <Store size={36} className="text-white" strokeWidth={2.5} />
-            </div>
+    <div className="min-h-screen flex bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 relative overflow-hidden">
+      {/* Background blobs */}
+      <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-primary-600/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-primary-500/10 rounded-full blur-3xl translate-x-1/3 translate-y-1/3" />
+      <div className="absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-violet-600/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+
+      {/* LEFT PANEL — branding, hidden on mobile */}
+      <div className="hidden lg:flex flex-col justify-between w-[48%] p-12 relative z-10">
+        {/* Logo */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary-500 flex items-center justify-center shadow-lg shadow-primary-500/30">
+            <Store size={20} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-transparent mb-2">
-            MediaSoft POS
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm flex items-center justify-center gap-2">
-            <Sparkles size={14} className="text-primary-500" />
-            by Ihwal — Masuk ke akun Anda
-          </p>
+          <div>
+            <span className="font-bold text-white text-lg block leading-tight">MediaSoft POS</span>
+            <span className="text-xs text-slate-500">by Ihwal</span>
+          </div>
         </div>
 
-        {/* Form Card */}
-        <form onSubmit={handleLogin} className="glass-card p-8 space-y-5 animate-in shadow-2xl">
-          <Input
-            ref={usernameRef}
-            label="Username"
-            placeholder="Masukkan username Anda"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            icon={<User size={18} />}
-            autoComplete="username"
-          />
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Password</label>
-            <div className="relative group">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors">
-                <Lock size={18} />
-              </span>
-              <input
-                type={showPass ? 'text' : 'password'}
-                placeholder="Masukkan password Anda"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                autoComplete="current-password"
-                className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800
-                  pl-10 pr-12 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400
-                  focus:outline-none focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-200"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPass(v => !v)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1"
-              >
-                {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+        {/* Center content */}
+        <div className="space-y-8">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 mb-4">
+              <Sparkles size={12} className="text-primary-400" />
+              <span className="text-xs text-primary-400 font-medium">Point of Sale System v2.0</span>
             </div>
+            <h2 className="text-4xl font-bold text-white leading-tight mb-4">
+              Kelola toko Anda<br />
+              <span className="bg-gradient-to-r from-primary-400 to-violet-400 bg-clip-text text-transparent">lebih cerdas</span><br />
+              & lebih cepat.
+            </h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              Sistem kasir modern dengan fitur lengkap — transaksi, stok, laporan, dan manajemen pelanggan dalam satu aplikasi desktop.
+            </p>
           </div>
 
-          {error && (
-            <div className="bg-gradient-to-r from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border-2 border-red-200 dark:border-red-800 rounded-xl px-4 py-3 animate-in">
-              <p className="text-sm text-red-700 dark:text-red-400 font-medium">{error}</p>
+          {/* Feature cards */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { icon: '💰', label: 'Kasir', desc: 'Transaksi real-time' },
+              { icon: '📦', label: 'Stok', desc: 'Manajemen produk' },
+              { icon: '📊', label: 'Laporan', desc: 'Laba rugi & penjualan' },
+              { icon: '👥', label: 'Customer', desc: 'Loyalty poin system' },
+              { icon: '🚚', label: 'Supplier', desc: 'Manajemen pembelian' },
+              { icon: '💾', label: 'Backup', desc: 'Keamanan data' },
+            ].map(f => (
+              <div key={f.label} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/8 transition-colors">
+                <span className="text-xl">{f.icon}</span>
+                <div>
+                  <p className="text-white text-xs font-semibold">{f.label}</p>
+                  <p className="text-slate-500 text-xs">{f.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <p className="text-slate-600 text-xs">© 2026 MediaSoft POS by Ihwal</p>
+      </div>
+
+      {/* RIGHT PANEL — form */}
+      <div className="flex-1 flex items-center justify-center p-6 relative z-10">
+        <div className="w-full max-w-sm">
+          {/* Mobile logo */}
+          <div className="lg:hidden text-center mb-8">
+            <div className="w-14 h-14 rounded-2xl bg-primary-500 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-primary-500/30">
+              <Store size={26} className="text-white" />
             </div>
-          )}
+            <p className="font-bold text-white text-xl">MediaSoft POS</p>
+            <p className="text-slate-500 text-xs mt-1">by Ihwal</p>
+          </div>
 
-          <Button type="submit" className="w-full" size="lg" loading={loading}>
-            {loading ? 'Memproses...' : 'Masuk Sekarang'}
-          </Button>
-        </form>
+          {/* Card */}
+          <div className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/40">
+            {/* Header */}
+            <div className="mb-7">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-violet-500 flex items-center justify-center mb-4 shadow-lg shadow-primary-500/30">
+                <Store size={22} className="text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-1">Selamat datang 👋</h3>
+              <p className="text-slate-400 text-sm">Masuk ke akun Anda untuk melanjutkan</p>
+            </div>
 
-        <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-6">
-          MediaSoft POS Ihwal v1.0.0 • Powered by Electron
-        </p>
+            <form onSubmit={handleLogin} className="space-y-4">
+              {/* Username */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Username</label>
+                <div className="relative group">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
+                    <User size={16} />
+                  </span>
+                  <input
+                    ref={usernameRef}
+                    placeholder="Masukkan username"
+                    value={username}
+                    onChange={e => setUsername(e.target.value)}
+                    autoComplete="username"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Password</label>
+                <div className="relative group">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
+                    <Lock size={16} />
+                  </span>
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    placeholder="Masukkan password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-12 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                  />
+                  <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1">
+                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                  <span className="text-red-400 mt-0.5 shrink-0">⚠️</span>
+                  <p className="text-sm text-red-400">{error}</p>
+                </div>
+              )}
+
+              <Button type="submit" className="w-full mt-1 bg-gradient-to-r from-primary-500 to-violet-500 hover:from-primary-600 hover:to-violet-600 border-0" size="lg" loading={loading}>
+                {loading ? 'Memproses...' : 'Masuk ke Dashboard'}
+              </Button>
+            </form>
+
+            <div className="mt-6 pt-5 border-t border-white/10 flex items-center justify-center gap-2 text-xs text-slate-500">
+              <Sparkles size={12} className="text-primary-500" />
+              Powered by Electron + React
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Identitas Toko Dialog */}

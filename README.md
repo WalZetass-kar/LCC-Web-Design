@@ -122,10 +122,24 @@ npx electron-rebuild
 ```
 
 4. **Setup database**
+
+⚠️ **IMPORTANT:** You will see "duplicate column name" errors - **THIS IS NORMAL!**
+See `SETUP_README.md` for explanation.
+
 ```bash
-# Jalankan SQL script untuk membuat tabel baru
-sqlite3 sistem_pos.db < CREATE_NEW_TABLES.sql
+# Automated setup (recommended)
+# Linux/Mac
+chmod +x setup.sh
+./setup.sh
+
+# Windows
+setup.bat
+
+# OR manual setup
+sqlite3 sistem_pos.db < SETUP_DATABASE.sql
 ```
+
+📖 **Read `SETUP_README.md` before running setup!**
 
 5. **Run development**
 ```bash
@@ -258,12 +272,29 @@ npx electron-rebuild
 
 ## 🔒 Security
 
-- Password hashing dengan SHA1
-- Session management
-- Protected routes
-- Role-based access control
-- Activity logging
-- Secure IPC communication
+- ✅ **Bcrypt password hashing** (cost factor 12) with SHA1 migration
+- ✅ **Rate limiting** - 5 attempts, 15-minute lockout
+- ✅ **Session management** - 30-minute inactivity timeout
+- ✅ **Input sanitization** - XSS & SQL injection prevention
+- ✅ **Password strength validation** - Min 8 chars, uppercase, lowercase, number
+- ✅ **Centralized error handling** - Structured logging with severity levels
+- ✅ **React Error Boundary** - Graceful error recovery
+- ✅ **AES-256 encryption** - For sensitive data
+- ✅ **Activity logging** - All auth attempts and data modifications
+- ✅ **Protected routes** - Role-based access control
+- ✅ **Secure IPC communication** - Input validation on all channels
+
+### Security Migration
+Run these commands to enable enhanced security:
+```bash
+# Add password_hash_type column
+sqlite3 sistem_pos.db < MIGRATION_PASSWORD_HASH_TYPE.sql
+
+# Create performance indexes
+sqlite3 sistem_pos.db < CREATE_INDEXES.sql
+```
+
+See `SECURITY_IMPLEMENTATION_GUIDE.md` for complete details.
 
 ---
 

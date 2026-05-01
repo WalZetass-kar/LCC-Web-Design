@@ -112,6 +112,7 @@ export interface KasDrawer {
   username: string
   modal_awal: number | null
   total_penjualan: number | null
+  total_pemasukan?: number | null
   total_pengeluaran: number | null
   saldo_akhir: number | null
   selisih: number | null
@@ -178,7 +179,7 @@ export interface Pengguna {
   nama_lengkap: string | null
   email: string | null
   no_telp: string | null
-  role: string | null
+  hak_akses: string | null // developer > superadmin > admin > operator > kasir
   status_user: string | null
   terakhir_login: string | null
   tgl_wkt_simpan: string | null
@@ -214,7 +215,7 @@ export interface IpcResponse<T = unknown> {
 export interface UserSession {
   nama_pengguna: string
   nama_lengkap: string | null
-  role: string | null
+  hak_akses: string | null
 }
 
 // Extend window with our API bridge

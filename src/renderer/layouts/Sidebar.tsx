@@ -1,22 +1,50 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Package, Tag, ShoppingCart, History, Settings, Store, LogOut, Truck, X,
-  Users, UserCircle, Wallet, FileText
+  Users, UserCircle, Wallet, FileText, BarChart2, Database, ShoppingBag, Activity
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/transaksi', icon: ShoppingCart, label: 'Kasir' },
-  { to: '/produk', icon: Package, label: 'Produk' },
-  { to: '/kategori', icon: Tag, label: 'Kategori' },
-  { to: '/supplier', icon: Truck, label: 'Supplier' },
-  { to: '/customer', icon: UserCircle, label: 'Customer' },
-  { to: '/kas', icon: Wallet, label: 'Kas' },
-  { to: '/riwayat', icon: History, label: 'Riwayat' },
-  { to: '/laporan', icon: FileText, label: 'Laporan' },
-  { to: '/users', icon: Users, label: 'Pengguna', adminOnly: true },
-  { to: '/settings', icon: Settings, label: 'Pengaturan' },
+export const MENU_GROUPS = [
+  {
+    label: 'Utama',
+    items: [
+      { to: '/', icon: LayoutDashboard, label: 'Dashboard', code: 'nav_dashboard' },
+      { to: '/transaksi', icon: ShoppingCart, label: 'Kasir', code: 'nav_penjualan' },
+      { to: '/riwayat', icon: History, label: 'Riwayat', code: 'nav_penjualan' },
+    ],
+  },
+  {
+    label: 'Inventaris',
+    items: [
+      { to: '/produk', icon: Package, label: 'Produk', code: 'nav_barang' },
+      { to: '/kategori', icon: Tag, label: 'Kategori', code: 'nav_barang' },
+      { to: '/pembelian', icon: ShoppingBag, label: 'Pembelian', code: 'nav_pembelian' },
+    ],
+  },
+  {
+    label: 'Relasi',
+    items: [
+      { to: '/supplier', icon: Truck, label: 'Supplier', code: 'nav_supplier' },
+      { to: '/customer', icon: UserCircle, label: 'Customer', code: 'nav_supplier' },
+    ],
+  },
+  {
+    label: 'Keuangan',
+    items: [
+      { to: '/kas', icon: Wallet, label: 'Kas', code: 'nav_pembelian' },
+      { to: '/laporan', icon: BarChart2, label: 'Laporan', code: 'nav_pembelian' },
+    ],
+  },
+  {
+    label: 'Administrasi',
+    items: [
+      { to: '/users', icon: Users, label: 'Pengguna', code: 'nav_pengguna', adminOnly: true },
+      { to: '/activity-log', icon: Activity, label: 'Activity Log', code: 'nav_activity_log', adminOnly: true },
+      { to: '/backup', icon: Database, label: 'Backup', code: 'nav_export_db', adminOnly: true },
+      { to: '/settings', icon: Settings, label: 'Pengaturan', code: 'nav_identitas' },
+    ],
+  },
 ]
 
 interface SidebarProps {
@@ -34,11 +62,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   }
 
   const handleNavClick = () => {
-    // Close sidebar on mobile after navigation
-    if (window.innerWidth < 1024) {
-      onClose()
-    }
+    if (window.innerWidth < 1024) onClose()
   }
+
+  const isAdmin = ['developer', 'superadmin'].includes(user?.hak_akses ?? '')
 
   return (
     <aside
@@ -61,7 +88,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             <p className="text-xs text-slate-500 dark:text-slate-400">by Ihwal</p>
           </div>
         </div>
-        {/* Close button for mobile */}
         <button
           onClick={onClose}
           className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
@@ -71,27 +97,41 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
-        {navItems
-          .filter(item => !item.adminOnly || user?.role === 'ADMIN')
-          .map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              onClick={handleNavClick}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
-                ${isActive
-                  ? 'bg-primary-500 text-white shadow-md shadow-primary-500/30'
-                  : 'text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-slate-700/50 hover:text-primary-600'
-                }`
-              }
-            >
-              <Icon size={18} />
-              {label}
-            </NavLink>
-          ))}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto scrollbar-thin space-y-4">
+        {MENU_GROUPS.map(group => {
+          const visibleItems = group.items.filter(item => {
+            if (item.adminOnly && !isAdmin) return false
+            return true
+          })
+          if (visibleItems.length === 0) return null
+          return (
+            <div key={group.label}>
+              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {visibleItems.map(({ to, icon: Icon, label }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={to === '/'}
+                    onClick={handleNavClick}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
+                      ${isActive
+                        ? 'bg-primary-500 text-white shadow-md shadow-primary-500/30'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-slate-700/50 hover:text-primary-600'
+                      }`
+                    }
+                  >
+                    <Icon size={18} />
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          )
+        })}
       </nav>
 
       {/* User + Logout */}
@@ -102,7 +142,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{user?.nama_lengkap ?? user?.nama_pengguna}</p>
-            <p className="text-xs text-slate-400 truncate">{user?.role ?? 'KASIR'}</p>
+            <p className="text-xs text-slate-400 truncate">{user?.hak_akses?.toUpperCase() ?? 'KASIR'}</p>
           </div>
         </div>
         <button

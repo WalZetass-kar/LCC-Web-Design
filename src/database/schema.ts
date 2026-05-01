@@ -8,9 +8,10 @@ export const pengguna = sqliteTable('mediasoft_pengguna', {
   tgl_wkt_edit: text('tgl_wkt_edit'),
   status_user: text('status_user').default('Aktif').notNull(),
   terakhir_login: text('terakhir_login'),
-  role: text('role').default('KASIR').notNull(), // ADMIN, KASIR, OWNER
+  hak_akses: text('hak_akses').default('kasir').notNull(), // developer, operator, kasir, superadmin, admin
   email: text('email'),
   no_telp: text('no_telp'),
+  password_hash_type: text('password_hash_type').default('sha1'), // sha1, bcrypt
 })
 
 export const satuan = sqliteTable('mediasoft_satuan', {

@@ -1,6 +1,7 @@
 import { db } from '../../database/connection.js'
 import { pengguna } from '../../database/schema.js'
 import { eq, and } from 'drizzle-orm'
+import { hashPassword } from '../services/crypto.js'
 
 export class PenggunaModel {
   static getAll() {
@@ -27,25 +28,85 @@ export class PenggunaModel {
       .get()
   }
 
-  static create(data: {
+  /**
+   * Find active user by username only (for password verification)
+   * @param nama_pengguna - Username
+   * @returns User object or undefined
+   */
+  static findActiveByUsername(nama_pengguna: string) {
+    return db
+      .select()
+      .from(pengguna)
+      .where(
+        and(
+          eq(pengguna.nama_pengguna, nama_pengguna),
+          eq(pengguna.status_user, 'Aktif')
+        )
+      )
+      .get()
+  }
+
+  /**
+   * Create new user with bcrypt password hash
+   * @param data - User data
+   * @returns Insert result
+   */
+  static async create(data: {
     nama_pengguna: string
     kata_sandi: string
     nama_lengkap: string
     email?: string
     no_telp?: string
-    role?: string
+    hak_akses?: string
   }) {
+    // Hash password with bcrypt
+    const hashedPassword = await hashPassword(data.kata_sandi)
+    
     return db.insert(pengguna).values({
       ...data,
+      kata_sandi: hashedPassword,
       tgl_wkt_simpan: new Date().toISOString(),
       status_user: 'Aktif',
-      role: data.role || 'KASIR',
+      hak_akses: data.hak_akses || 'kasir',
+      password_hash_type: 'bcrypt', // New users use bcrypt
     }).run()
   }
 
   static update(nama_pengguna: string, data: Partial<typeof pengguna.$inferInsert>) {
     return db.update(pengguna).set({
       ...data,
+      tgl_wkt_edit: new Date().toISOString(),
+    }).where(eq(pengguna.nama_pengguna, nama_pengguna)).run()
+  }
+
+  /**
+   * Update user password with bcrypt hash
+   * @param nama_pengguna - Username
+   * @param newPassword - New plain text password
+   * @returns Update result
+   */
+  static async updatePassword(nama_pengguna: string, newPassword: string) {
+    const hashedPassword = await hashPassword(newPassword)
+    
+    return db.update(pengguna).set({
+      kata_sandi: hashedPassword,
+      password_hash_type: 'bcrypt',
+      tgl_wkt_edit: new Date().toISOString(),
+    }).where(eq(pengguna.nama_pengguna, nama_pengguna)).run()
+  }
+
+  /**
+   * Migrate user password from SHA1 to bcrypt
+   * @param nama_pengguna - Username
+   * @param plainPassword - Plain text password (verified with SHA1)
+   * @returns Update result
+   */
+  static async migratePasswordToBcrypt(nama_pengguna: string, plainPassword: string) {
+    const hashedPassword = await hashPassword(plainPassword)
+    
+    return db.update(pengguna).set({
+      kata_sandi: hashedPassword,
+      password_hash_type: 'bcrypt',
       tgl_wkt_edit: new Date().toISOString(),
     }).where(eq(pengguna.nama_pengguna, nama_pengguna)).run()
   }
@@ -60,5 +121,25 @@ export class PenggunaModel {
       .set({ terakhir_login: now })
       .where(eq(pengguna.nama_pengguna, nama_pengguna))
       .run()
+  }
+
+  /**
+   * Check if user password is SHA1 format
+   * @param nama_pengguna - Username
+   * @returns True if password is SHA1 format
+   */
+  static isSHA1Password(nama_pengguna: string): boolean {
+    const user = this.findByUsername(nama_pengguna)
+    return user?.password_hash_type === 'sha1' || !user?.password_hash_type
+  }
+
+  /**
+   * Get password hash type for user
+   * @param nama_pengguna - Username
+   * @returns Hash type ('sha1' or 'bcrypt')
+   */
+  static getPasswordHashType(nama_pengguna: string): 'sha1' | 'bcrypt' | null {
+    const user = this.findByUsername(nama_pengguna)
+    return (user?.password_hash_type as 'sha1' | 'bcrypt') || null
   }
 }

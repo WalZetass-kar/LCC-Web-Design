@@ -1,35 +1,269 @@
 import { PenggunaModel } from '../models/PenggunaModel.js'
 import { IdentitasModel } from '../models/IdentitasModel.js'
-import { encryptPassword } from '../services/crypto.js'
+import { ActivityLogModel } from '../models/ActivityLogModel.js'
+import { encryptPassword, verifyPassword, isSHA1Hash } from '../services/crypto.js'
+import { rateLimiter } from '../services/rateLimiter.js'
+import { sanitizeString, validatePasswordStrength } from '../services/sanitizer.js'
 
 export class AuthController {
-  static login(username: string, password: string) {
-    if (!username?.trim() || !password?.trim()) {
+  /**
+   * Login with enhanced security
+   * - Rate limiting to prevent brute force
+   * - Support both SHA1 (legacy) and bcrypt
+   * - Auto-migrate SHA1 to bcrypt on successful login
+   * - Activity logging
+   */
+  static async login(username: string, password: string, ipAddress?: string) {
+    // Sanitize inputs
+    username = sanitizeString(username?.trim() || '')
+    
+    if (!username || !password?.trim()) {
       return { success: false, message: 'Username dan password tidak boleh kosong' }
     }
 
-    const encrypted = encryptPassword(password)
-    const user = PenggunaModel.findActive(username, encrypted)
-
-    if (!user) {
-      return { success: false, message: 'Username atau Password Salah! Atau akun tidak aktif.' }
+    // Check rate limiting
+    const lockStatus = rateLimiter.isLocked(username)
+    if (lockStatus.locked) {
+      const minutes = Math.ceil((lockStatus.remainingTime || 0) / 60)
+      ActivityLogModel.create({
+        username,
+        aktivitas: 'LOGIN_BLOCKED',
+        modul: 'AUTH',
+        tgl_aktivitas: new Date().toISOString(),
+        ip_address: ipAddress,
+        detail: `Login diblokir karena terlalu banyak percobaan gagal. Tersisa ${minutes} menit`,
+      })
+      
+      return {
+        success: false,
+        message: `Akun diblokir karena terlalu banyak percobaan login gagal. Coba lagi dalam ${minutes} menit.`,
+      }
     }
 
+    // Find active user
+    const user = PenggunaModel.findActiveByUsername(username)
+
+    if (!user) {
+      // Record failed attempt
+      const attemptResult = rateLimiter.recordFailedAttempt(username)
+      
+      ActivityLogModel.create({
+        username,
+        aktivitas: 'LOGIN_FAILED',
+        modul: 'AUTH',
+        tgl_aktivitas: new Date().toISOString(),
+        ip_address: ipAddress,
+        detail: `Username tidak ditemukan atau akun tidak aktif. Sisa percobaan: ${attemptResult.remainingAttempts}`,
+      })
+      
+      if (attemptResult.locked) {
+        return {
+          success: false,
+          message: 'Terlalu banyak percobaan login gagal. Akun diblokir selama 15 menit.',
+        }
+      }
+      
+      return {
+        success: false,
+        message: `Username atau Password Salah! Sisa percobaan: ${attemptResult.remainingAttempts}`,
+      }
+    }
+
+    // Verify password based on hash type
+    let passwordValid = false
+    const hashType = user.password_hash_type || 'sha1'
+
+    try {
+      if (hashType === 'bcrypt') {
+        // Verify with bcrypt
+        passwordValid = await verifyPassword(password, user.kata_sandi || '')
+      } else {
+        // Verify with SHA1 (legacy)
+        const sha1Hash = encryptPassword(password)
+        passwordValid = sha1Hash === user.kata_sandi
+        
+        // If valid, migrate to bcrypt
+        if (passwordValid) {
+          await PenggunaModel.migratePasswordToBcrypt(username, password)
+          ActivityLogModel.create({
+            username,
+            aktivitas: 'PASSWORD_MIGRATED',
+            modul: 'AUTH',
+            tgl_aktivitas: new Date().toISOString(),
+            ip_address: ipAddress,
+            detail: 'Password berhasil dimigrasikan dari SHA1 ke bcrypt',
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Password verification error:', error)
+      return { success: false, message: 'Terjadi kesalahan saat verifikasi password' }
+    }
+
+    if (!passwordValid) {
+      // Record failed attempt
+      const attemptResult = rateLimiter.recordFailedAttempt(username)
+      
+      ActivityLogModel.create({
+        username,
+        aktivitas: 'LOGIN_FAILED',
+        modul: 'AUTH',
+        tgl_aktivitas: new Date().toISOString(),
+        ip_address: ipAddress,
+        detail: `Password salah. Sisa percobaan: ${attemptResult.remainingAttempts}`,
+      })
+      
+      if (attemptResult.locked) {
+        return {
+          success: false,
+          message: 'Terlalu banyak percobaan login gagal. Akun diblokir selama 15 menit.',
+        }
+      }
+      
+      return {
+        success: false,
+        message: `Username atau Password Salah! Sisa percobaan: ${attemptResult.remainingAttempts}`,
+      }
+    }
+
+    // Login successful - reset rate limiter
+    rateLimiter.resetAttempts(username)
     PenggunaModel.updateLastLogin(username)
+
+    // Log successful login
+    ActivityLogModel.create({
+      username,
+      aktivitas: 'LOGIN',
+      modul: 'AUTH',
+      tgl_aktivitas: new Date().toISOString(),
+      ip_address: ipAddress,
+      detail: `Login berhasil dengan hash type: ${hashType}`,
+    })
 
     return {
       success: true,
       data: {
         nama_pengguna: user.nama_pengguna,
         nama_lengkap: user.nama_lengkap,
-        role: user.role || 'KASIR',
+        hak_akses: user.hak_akses || 'kasir',
       },
     }
   }
 
-  /** Check if store identity exists (for first-login prompt) */
+  /**
+   * Logout user
+   */
+  static logout(username: string, ipAddress?: string) {
+    ActivityLogModel.create({
+      username,
+      aktivitas: 'LOGOUT',
+      modul: 'AUTH',
+      tgl_aktivitas: new Date().toISOString(),
+      ip_address: ipAddress,
+      detail: 'Logout berhasil',
+    })
+
+    return { success: true, message: 'Logout berhasil' }
+  }
+
+  /**
+   * Change password with validation
+   */
+  static async changePassword(
+    username: string,
+    oldPassword: string,
+    newPassword: string,
+    ipAddress?: string
+  ) {
+    // Validate new password strength
+    const validation = validatePasswordStrength(newPassword)
+    if (!validation.valid) {
+      return { success: false, message: validation.message }
+    }
+
+    // Verify old password
+    const user = PenggunaModel.findActiveByUsername(username)
+    if (!user) {
+      return { success: false, message: 'User tidak ditemukan' }
+    }
+
+    const hashType = user.password_hash_type || 'sha1'
+    let oldPasswordValid = false
+
+    try {
+      if (hashType === 'bcrypt') {
+        oldPasswordValid = await verifyPassword(oldPassword, user.kata_sandi || '')
+      } else {
+        const sha1Hash = encryptPassword(oldPassword)
+        oldPasswordValid = sha1Hash === user.kata_sandi
+      }
+    } catch (error) {
+      console.error('Password verification error:', error)
+      return { success: false, message: 'Terjadi kesalahan saat verifikasi password lama' }
+    }
+
+    if (!oldPasswordValid) {
+      ActivityLogModel.create({
+        username,
+        aktivitas: 'CHANGE_PASSWORD_FAILED',
+        modul: 'AUTH',
+        tgl_aktivitas: new Date().toISOString(),
+        ip_address: ipAddress,
+        detail: 'Password lama salah',
+      })
+      
+      return { success: false, message: 'Password lama salah' }
+    }
+
+    // Update password
+    try {
+      await PenggunaModel.updatePassword(username, newPassword)
+      
+      ActivityLogModel.create({
+        username,
+        aktivitas: 'CHANGE_PASSWORD',
+        modul: 'AUTH',
+        tgl_aktivitas: new Date().toISOString(),
+        ip_address: ipAddress,
+        detail: `Password berhasil diubah. Strength: ${validation.strength}`,
+      })
+
+      return {
+        success: true,
+        message: 'Password berhasil diubah',
+        data: { strength: validation.strength },
+      }
+    } catch (error) {
+      console.error('Password update error:', error)
+      return { success: false, message: 'Gagal mengubah password' }
+    }
+  }
+
+  /**
+   * Check if store identity exists (for first-login prompt)
+   */
   static checkIdentitas() {
     const identitas = IdentitasModel.get()
     return { success: true, data: { hasIdentitas: !!identitas?.namatoko } }
+  }
+
+  /**
+   * Get password migration status
+   */
+  static getMigrationStatus() {
+    const allUsers = PenggunaModel.getAll()
+    const total = allUsers.length
+    const migrated = allUsers.filter(u => u.password_hash_type === 'bcrypt').length
+    const percentage = total > 0 ? Math.round((migrated / total) * 100) : 0
+
+    return {
+      success: true,
+      data: {
+        total,
+        migrated,
+        pending: total - migrated,
+        percentage,
+      },
+    }
   }
 }

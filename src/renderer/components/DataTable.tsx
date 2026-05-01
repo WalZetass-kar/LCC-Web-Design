@@ -82,8 +82,8 @@ export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari.
                   </td>
                 </tr>
               ) : (
-                table.getRowModel().rows.map(row => (
-                  <tr key={row.id} className="hover:bg-primary-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                table.getRowModel().rows.map((row, idx) => (
+                  <tr key={row.id} className={`transition-colors hover:bg-primary-50/70 dark:hover:bg-primary-900/20 ${idx % 2 === 0 ? 'bg-white/60 dark:bg-slate-800/30' : 'bg-slate-50/60 dark:bg-slate-800/60'}`}>
                     {row.getVisibleCells().map(cell => (
                       <td key={cell.id} className="px-3 sm:px-4 py-3 text-slate-700 dark:text-slate-300">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}

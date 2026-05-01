@@ -1,4 +1,5 @@
 import { PenjualanModel } from '../models/PenjualanModel.js'
+import { CustomerModel } from '../models/CustomerModel.js'
 
 interface CartItem {
   kd_barang: string
@@ -14,6 +15,8 @@ interface CreateTransaksiPayload {
   items: CartItem[]
   yang_dibayar: number
   jenis_pembayaran: string
+  kd_customer?: string
+  pajak?: number
 }
 
 export class PenjualanController {
@@ -40,7 +43,9 @@ export class PenjualanController {
       return sum + (item.harga_jual - disc_amount) * item.qty
     }, 0)
 
-    const kembalian = payload.yang_dibayar - sub_total
+    const pajak = payload.pajak ?? 0
+    const total_bayar = sub_total + pajak
+    const kembalian = payload.yang_dibayar - total_bayar
 
     const header = {
       kd_tansaksi_jual: kd_transaksi,
@@ -48,9 +53,11 @@ export class PenjualanController {
       username_transaksi: payload.username || 'KASIR',
       total_qty: payload.items.reduce((s, i) => s + i.qty, 0),
       sub_total,
+      pajak,
       yang_dibayar: payload.yang_dibayar,
       kembalian,
       jenis_pembayaran: payload.jenis_pembayaran || 'TUNAI',
+      kd_customer: payload.kd_customer || null,
     }
 
     const details = payload.items.map(item => {
@@ -72,6 +79,14 @@ export class PenjualanController {
     })
 
     PenjualanModel.create(header, details)
+
+    // Update customer poin & total_belanja if customer selected
+    if (payload.kd_customer) {
+      const poinEarned = Math.floor(sub_total / 10000) // 1 poin per Rp10.000
+      CustomerModel.addPoin(payload.kd_customer, poinEarned)
+      CustomerModel.updateTotalBelanja(payload.kd_customer, sub_total)
+    }
+
     return { success: true, message: 'Transaksi berhasil disimpan', kd_transaksi }
   }
 }

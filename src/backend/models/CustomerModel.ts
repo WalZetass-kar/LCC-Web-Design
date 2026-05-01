@@ -1,6 +1,6 @@
 import { db } from '../../database/connection.js'
-import { customer } from '../../database/schema.js'
-import { eq, like, or } from 'drizzle-orm'
+import { customer, penjualan } from '../../database/schema.js'
+import { eq, like, or, desc } from 'drizzle-orm'
 
 export class CustomerModel {
   static generateKode(): string {
@@ -91,6 +91,15 @@ export class CustomerModel {
       .select()
       .from(customer)
       .where(like(customer.tgl_lahir, pattern))
+      .all()
+  }
+
+  static getRiwayatPembelian(kd: string) {
+    return db
+      .select()
+      .from(penjualan)
+      .where(eq(penjualan.kd_customer, kd))
+      .orderBy(desc(penjualan.tgl_wkt_transaksi))
       .all()
   }
 }

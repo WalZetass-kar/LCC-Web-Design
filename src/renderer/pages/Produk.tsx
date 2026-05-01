@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Barcode, AlertTriangle } from 'lucide-react'
+import Barcode_ from 'react-barcode'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { api } from '../utils/api'
 import { formatRupiah } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -22,11 +24,24 @@ interface FormState {
   kd_kategori_barang: number
   kd_satuan: number
   deskripsi_barang: string
+  barcode: string
+  expired_date: string
 }
 
 const EMPTY: FormState = {
   kd_barang: '', nama_barang: '', stok: 0, harga_barang: 0, harga_modal: 0,
   potongan: 0, kd_kategori_barang: 0, kd_satuan: 0, deskripsi_barang: '',
+  barcode: '', expired_date: '',
+}
+
+function getExpiredStatus(expired_date: string | null) {
+  if (!expired_date) return null
+  const today = new Date()
+  const exp = new Date(expired_date)
+  const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  if (diffDays < 0) return 'expired'
+  if (diffDays <= 30) return 'soon'
+  return 'ok'
 }
 
 export default function Produk() {
@@ -34,7 +49,8 @@ export default function Produk() {
   const [data, setData] = useState<Barang[]>([])
   const [kategori, setKategori] = useState<Kategori[]>([])
   const [satuan, setSatuan] = useState<Satuan[]>([])
-  const [modal, setModal] = useState<'add' | 'edit' | 'delete' | null>(null)
+  const [modal, setModal] = useState<'add' | 'edit' | 'barcode' | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [form, setForm] = useState<FormState>({ ...EMPTY })
   const [selected, setSelected] = useState<Barang | null>(null)
   const [loading, setLoading] = useState(false)
@@ -65,10 +81,13 @@ export default function Produk() {
       kd_kategori_barang: row.kd_kategori_barang ?? 0,
       kd_satuan: row.kd_satuan ?? 0,
       deskripsi_barang: row.deskripsi_barang ?? '',
+      barcode: row.barcode ?? '',
+      expired_date: row.expired_date ?? '',
     })
     setModal('edit')
   }
-  const openDelete = (row: Barang) => { setSelected(row); setModal('delete') }
+  const openBarcode = (row: Barang) => { setSelected(row); setModal('barcode') }
+  const openDelete = (row: Barang) => { setSelected(row); setConfirmDelete(true) }
   const closeModal = () => { setModal(null); setSelected(null) }
 
   const handleSave = async () => {
@@ -85,7 +104,7 @@ export default function Produk() {
     setLoading(true)
     const r = await api('barang:delete', selected!.kd_barang)
     setLoading(false)
-    if (r.success) { toast(r.message as string); closeModal(); load() }
+    if (r.success) { toast(r.message as string); setConfirmDelete(false); setSelected(null); load() }
     else toast(r.message as string, 'error')
   }
 
@@ -108,9 +127,24 @@ export default function Produk() {
       },
     },
     {
+      accessorKey: 'expired_date', header: 'Expired',
+      cell: ({ getValue }) => {
+        const v = getValue() as string | null
+        if (!v) return <span className="text-slate-400 text-xs">-</span>
+        const status = getExpiredStatus(v)
+        const label = new Date(v).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+        if (status === 'expired') return <Badge label={`Expired: ${label}`} variant="red" />
+        if (status === 'soon') return <Badge label={`Segera: ${label}`} variant="yellow" />
+        return <span className="text-xs text-slate-500">{label}</span>
+      },
+    },
+    {
       id: 'actions', header: 'Aksi',
       cell: ({ row }) => (
         <div className="flex gap-1">
+          <button onClick={() => openBarcode(row.original)} title="Lihat Barcode" className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
+            <Barcode size={14} />
+          </button>
           <button onClick={() => openEdit(row.original)} className="p-1.5 rounded-lg hover:bg-primary-50 dark:hover:bg-slate-700 text-primary-500 transition-colors">
             <Pencil size={14} />
           </button>
@@ -125,8 +159,22 @@ export default function Produk() {
   const f = (k: keyof FormState, v: string | number) =>
     setForm(prev => ({ ...prev, [k]: v }))
 
+  // Count expired/soon products for alert banner
+  const expiredCount = data.filter(d => getExpiredStatus(d.expired_date) === 'expired').length
+  const soonCount = data.filter(d => getExpiredStatus(d.expired_date) === 'soon').length
+
   return (
     <div className="space-y-4">
+      {(expiredCount > 0 || soonCount > 0) && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 text-sm">
+          <AlertTriangle size={16} className="shrink-0" />
+          <span>
+            {expiredCount > 0 && <strong>{expiredCount} produk sudah expired. </strong>}
+            {soonCount > 0 && <strong>{soonCount} produk akan expired dalam 30 hari.</strong>}
+          </span>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} produk terdaftar</p>
         <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Produk</Button>
@@ -136,6 +184,7 @@ export default function Produk() {
         <DataTable data={data} columns={columns} searchPlaceholder="Cari produk..." />
       </Card>
 
+      {/* Add/Edit Modal */}
       <Modal
         open={modal === 'add' || modal === 'edit'}
         onClose={closeModal}
@@ -157,46 +206,56 @@ export default function Produk() {
           <Input label="Diskon (%)" type="number" value={form.potongan} onChange={e => f('potongan', +e.target.value)} />
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Kategori</label>
-            <select
-              value={form.kd_kategori_barang}
-              onChange={e => f('kd_kategori_barang', +e.target.value)}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400"
-            >
+            <select value={form.kd_kategori_barang} onChange={e => f('kd_kategori_barang', +e.target.value)}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400">
               <option value={0}>-- Pilih Kategori --</option>
               {kategori.map(k => <option key={k.kd_kategori_barang} value={k.kd_kategori_barang}>{k.kategori_barang}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Satuan</label>
-            <select
-              value={form.kd_satuan}
-              onChange={e => f('kd_satuan', +e.target.value)}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400"
-            >
+            <select value={form.kd_satuan} onChange={e => f('kd_satuan', +e.target.value)}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400">
               <option value={0}>-- Pilih Satuan --</option>
               {satuan.map(s => <option key={s.kd_satuan} value={s.kd_satuan}>{s.nama_satuan}</option>)}
             </select>
           </div>
-          <Input label="Deskripsi" value={form.deskripsi_barang} onChange={e => f('deskripsi_barang', e.target.value)} />
+          {/* Barcode field */}
+          <Input label="Barcode" value={form.barcode} onChange={e => f('barcode', e.target.value)} placeholder="Scan atau ketik barcode..." />
+          {/* Expired date field */}
+          <Input label="Tanggal Expired" type="date" value={form.expired_date} onChange={e => f('expired_date', e.target.value)} />
+          <div className="sm:col-span-2">
+            <Input label="Deskripsi" value={form.deskripsi_barang} onChange={e => f('deskripsi_barang', e.target.value)} />
+          </div>
         </div>
       </Modal>
 
-      <Modal
-        open={modal === 'delete'}
-        onClose={closeModal}
-        title="Hapus Produk"
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={closeModal} className="w-full sm:w-auto">Batal</Button>
-            <Button variant="danger" loading={loading} onClick={handleDelete} className="w-full sm:w-auto">Hapus</Button>
-          </>
-        }
-      >
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Yakin ingin menghapus produk <strong>{selected?.nama_barang}</strong>? Tindakan ini tidak dapat dibatalkan.
-        </p>
+      {/* Barcode Preview Modal */}
+      <Modal open={modal === 'barcode'} onClose={closeModal} title="Barcode Produk" size="sm">
+        <div className="flex flex-col items-center gap-3 py-2">
+          <p className="font-medium text-slate-700 dark:text-slate-200">{selected?.nama_barang}</p>
+          {selected?.barcode ? (
+            <div className="bg-white p-3 rounded-xl">
+              <Barcode_ value={selected.barcode} width={1.5} height={60} fontSize={12} />
+            </div>
+          ) : (
+            <div className="text-center py-6 text-slate-400">
+              <Barcode size={40} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Belum ada barcode untuk produk ini.</p>
+              <p className="text-xs mt-1">Edit produk untuk menambahkan barcode.</p>
+            </div>
+          )}
+        </div>
       </Modal>
+
+      {/* Confirm Delete */}
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => { setConfirmDelete(false); setSelected(null) }}
+        onConfirm={handleDelete}
+        loading={loading}
+        message={`Yakin ingin menghapus produk "${selected?.nama_barang}"? Tindakan ini tidak dapat dibatalkan.`}
+      />
     </div>
   )
 }

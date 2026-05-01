@@ -10,6 +10,7 @@ export class BarangModel {
         kd_barang: barang.kd_barang,
         nama_barang: barang.nama_barang,
         stok: barang.stok,
+        stok_minimum: barang.stok_minimum,
         foto_barang: barang.foto_barang,
         deskripsi_barang: barang.deskripsi_barang,
         kd_kategori_barang: barang.kd_kategori_barang,
@@ -19,6 +20,8 @@ export class BarangModel {
         potongan: harga.potongan,
         harga_modal: harga.harga_modal,
         kategori_barang: kategoriBarang.kategori_barang,
+        barcode: barang.barcode,
+        expired_date: barang.expired_date,
       })
       .from(barang)
       .leftJoin(harga, eq(barang.kd_barang, harga.kd_barang))

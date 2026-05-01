@@ -10,10 +10,21 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserSession | null>(null)
+  const [user, setUser] = useState<UserSession | null>(() => {
+    try {
+      const saved = localStorage.getItem('pos_session')
+      return saved ? JSON.parse(saved) : null
+    } catch { return null }
+  })
 
-  const login = (u: UserSession) => setUser(u)
-  const logout = () => setUser(null)
+  const login = (u: UserSession) => {
+    setUser(u)
+    localStorage.setItem('pos_session', JSON.stringify(u))
+  }
+  const logout = () => {
+    setUser(null)
+    localStorage.removeItem('pos_session')
+  }
 
   return (
     <AuthContext.Provider value={{ user, login, logout }}>

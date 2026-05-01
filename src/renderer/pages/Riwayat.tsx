@@ -1,17 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Eye } from 'lucide-react'
+import { Eye, Printer } from 'lucide-react'
 import Card from '../components/Card'
+import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
+import Struk from '../components/Struk'
 import { api } from '../utils/api'
 import { formatRupiah, formatDateTime } from '../utils/format'
+import { useReactToPrint } from 'react-to-print'
 import type { Penjualan, PenjualanDetailItem } from '../../shared/types'
 
 export default function Riwayat() {
   const [data, setData] = useState<Penjualan[]>([])
   const [detail, setDetail] = useState<{ header: Penjualan; details: PenjualanDetailItem[] } | null>(null)
+  const strukRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     api<Penjualan[]>('penjualan:getAll').then(r => {
@@ -23,6 +27,18 @@ export default function Riwayat() {
     const r = await api<{ header: Penjualan; details: PenjualanDetailItem[] }>('penjualan:getDetail', kd)
     if (r.success && r.data) setDetail(r.data)
   }
+
+  const handlePrint = useReactToPrint({ content: () => strukRef.current })
+
+  // Convert detail items to CartItem format for Struk
+  const cartItems = detail?.details.map(d => ({
+    kd_barang: d.kd_barang ?? '',
+    nama_barang: d.nama_barang ?? '',
+    harga_jual: d.harga_jual ?? 0,
+    harga_modal: 0,
+    qty: d.qty ?? 0,
+    disc: d.disc ?? 0,
+  })) ?? []
 
   const columns: ColumnDef<Penjualan>[] = [
     { accessorKey: 'kd_tansaksi_jual', header: 'No. Transaksi' },
@@ -57,7 +73,18 @@ export default function Riwayat() {
         <DataTable data={data} columns={columns} searchPlaceholder="Cari transaksi..." />
       </Card>
 
-      <Modal open={!!detail} onClose={() => setDetail(null)} title={`Detail: ${detail?.header.kd_tansaksi_jual}`} size="lg">
+      <Modal
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        title={`Detail: ${detail?.header.kd_tansaksi_jual}`}
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDetail(null)} className="w-full sm:w-auto">Tutup</Button>
+            <Button icon={<Printer size={14} />} onClick={handlePrint} className="w-full sm:w-auto">Cetak Ulang Struk</Button>
+          </>
+        }
+      >
         {detail && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -77,8 +104,8 @@ export default function Riwayat() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                  {detail.details.map(d => (
-                    <tr key={d.kd_trans_jual_detail}>
+                  {detail.details.map((d, i) => (
+                    <tr key={d.kd_trans_jual_detail} className={i % 2 === 1 ? 'bg-slate-50/50 dark:bg-slate-800/30' : ''}>
                       <td className="py-2 px-2 sm:px-0">{d.nama_barang ?? d.kd_barang}</td>
                       <td className="py-2 text-right px-2 sm:px-0">{formatRupiah(d.harga_jual)}</td>
                       <td className="py-2 text-right px-2 sm:px-0">{d.qty}</td>
@@ -93,6 +120,20 @@ export default function Riwayat() {
                   </tr>
                 </tfoot>
               </table>
+            </div>
+
+            {/* Hidden print target */}
+            <div className="hidden">
+              <div ref={strukRef}>
+                <Struk
+                  cart={cartItems}
+                  subTotal={detail.header.sub_total ?? 0}
+                  bayar={detail.header.yang_dibayar ?? 0}
+                  kembalian={detail.header.kembalian ?? 0}
+                  kdTransaksi={detail.header.kd_tansaksi_jual}
+                  jenisBayar={detail.header.jenis_pembayaran ?? 'TUNAI'}
+                />
+              </div>
             </div>
           </div>
         )}

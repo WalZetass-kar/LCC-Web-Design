@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
+import OfflineIndicator from '../components/OfflineIndicator'
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -26,6 +27,7 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <OfflineIndicator />
     </div>
   )
 }
