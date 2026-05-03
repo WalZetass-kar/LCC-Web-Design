@@ -20,10 +20,12 @@
 
 ### 💰 Transaksi Penjualan (POS)
 - Interface kasir yang intuitif
+- **Barcode Scanner Support** ⭐ NEW
 - Search produk real-time
 - Keranjang belanja dengan qty control
-- Metode pembayaran (Tunai/Transfer)
-- Perhitungan otomatis (subtotal, diskon, kembalian)
+- **Multi-Payment** (Tunai/Transfer/Kartu/E-Wallet/QRIS) ⭐ NEW
+- Perhitungan otomatis (subtotal, diskon, pajak, kembalian)
+- **Diskon per transaksi** ⭐ NEW
 - Cetak struk transaksi
 - Riwayat transaksi lengkap
 
@@ -33,31 +35,60 @@
 - Harga jual & harga modal
 - Diskon per produk
 - Stok management
-- Barcode support (coming soon)
-- Expired date tracking (coming soon)
+- **Barcode support** ⭐ NEW
+- **Expired date tracking** ⭐ NEW
+- **Image upload** ⭐ NEW
 - Search & filter advanced
 
-### 🚚 Supplier Management ⭐ NEW
+### 🚚 Supplier Management ⭐
 - CRUD supplier
 - Kontak supplier (telp, email, alamat)
 - Status aktif/nonaktif
 - Riwayat pembelian per supplier
 
-### 👥 Customer Management ⭐ NEW (Coming Soon)
+### 👥 Customer Management ⭐
 - CRUD customer
 - Loyalty poin system
 - Total belanja customer
 - Riwayat pembelian
 - Birthday reminder
 
-### 💵 Kas Management ⭐ NEW (Coming Soon)
+### 💵 Kas Management ⭐
 - Buka/tutup kas
 - Modal awal kasir
 - Pencatatan pengeluaran
 - Rekonsiliasi kas
 - Laporan selisih kas
 
-### 👤 User Management ⭐ NEW (Coming Soon)
+### ⏰ Shift Management ⭐ NEW
+- Buka/tutup shift kasir
+- Modal awal & akhir shift
+- Laporan penjualan per shift
+- Tracking selisih kas
+- Handover shift
+
+### 💸 Hutang & Piutang ⭐ NEW
+- Tracking hutang customer
+- Tracking piutang supplier
+- Cicilan & pembayaran
+- Reminder jatuh tempo
+- Laporan hutang/piutang
+
+### 🔄 Return & Refund ⭐ NEW
+- Return barang dari customer
+- Refund uang (tunai/transfer/store credit)
+- Approval system
+- Retur ke supplier
+- Laporan return
+
+### 📋 Stok Opname ⭐ NEW
+- Input stok fisik
+- Selisih stok (system vs fisik)
+- Adjustment otomatis
+- Approval system
+- Laporan opname
+
+### 👤 User Management ⭐
 - CRUD user
 - Role-based access (ADMIN, KASIR, OWNER)
 - Change password
@@ -65,7 +96,7 @@
 - Status aktif/nonaktif
 - Activity log
 
-### 📈 Laporan & Export ⭐ NEW (Coming Soon)
+### 📈 Laporan & Export ⭐
 - Laporan penjualan (harian, bulanan, tahunan)
 - Laporan laba rugi
 - Laporan stok barang
@@ -74,25 +105,56 @@
 - Export to PDF
 - Print laporan
 
-### 🔔 Notifikasi System ⭐ NEW (Coming Soon)
+### 🔔 Notifikasi System ⭐
 - Notifikasi stok menipis
 - Notifikasi produk expired
 - Notifikasi system
 - Badge unread count
 - Mark as read
 
-### 💾 Backup & Restore ⭐ NEW (Coming Soon)
+### 💾 Backup & Restore ⭐
 - Backup database manual
 - Auto backup scheduler
 - Restore dari backup
 - Download backup file
 - Riwayat backup
 
+### ⌨️ Keyboard Shortcuts ⭐ NEW
+- F1-F10 untuk navigasi cepat
+- Ctrl+K untuk quick search
+- ESC untuk close modal
+- Boost produktivitas kasir
+
+### 🔍 Quick Search ⭐ NEW
+- Command palette (Ctrl+K)
+- Search menu & fitur
+- Keyboard navigation
+- Quick actions
+
+### 🎓 Tutorial & Onboarding ⭐ NEW
+- Welcome wizard
+- Feature tour
+- Help tooltips
+- First-time user guide
+
+### 🔄 Auto Update ⭐ NEW
+- Check update otomatis
+- Download & install update
+- Release notes
+- Critical update notification
+
+### 📊 Dashboard Enhancements ⭐ NEW
+- Real-time statistics
+- Sales charts
+- Low stock alerts
+- Quick actions
+
 ### ⚙️ Settings
 - Identitas toko
 - Theme switcher (Light/Dark)
 - Color themes (Indigo, Emerald, Rose, Amber, Sky)
-- Pengaturan pajak (coming soon)
+- **Pengaturan pajak** ⭐ NEW
+- **Barcode settings** ⭐ NEW
 
 ---
 

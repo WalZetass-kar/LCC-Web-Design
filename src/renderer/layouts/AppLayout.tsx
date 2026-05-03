@@ -1,11 +1,29 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import OfflineIndicator from '../components/OfflineIndicator'
+import QuickSearch from '../components/QuickSearch'
+import Onboarding from '../components/Onboarding'
+import UpdateNotification from '../components/UpdateNotification'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [quickSearchOpen, setQuickSearchOpen] = useState(false)
+  
+  useKeyboardShortcuts()
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setQuickSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-primary-50/30 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
@@ -28,6 +46,9 @@ export default function AppLayout() {
         </main>
       </div>
       <OfflineIndicator />
+      <QuickSearch isOpen={quickSearchOpen} onClose={() => setQuickSearchOpen(false)} />
+      <Onboarding />
+      <UpdateNotification />
     </div>
   )
 }

@@ -21,6 +21,11 @@ import Laporan from './pages/Laporan'
 import Backup from './pages/Backup'
 import Pembelian from './pages/Pembelian'
 import ActivityLog from './pages/ActivityLog'
+import Returns from './pages/Returns'
+import Shifts from './pages/Shifts'
+import Debts from './pages/Debts'
+import StockOpname from './pages/StockOpname'
+import ErrorBoundary from './components/ErrorBoundary'
 import './styles/globals.css'
 
 /** Redirects to /login if not authenticated */
@@ -77,6 +82,10 @@ function App() {
           <Route path="/users" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><Users /></RequireExactRoles>} />
           <Route path="/backup" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><Backup /></RequireExactRoles>} />
           <Route path="/activity-log" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><ActivityLog /></RequireExactRoles>} />
+          <Route path="/returns" element={<Returns />} />
+          <Route path="/shifts" element={<Shifts />} />
+          <Route path="/debts" element={<Debts />} />
+          <Route path="/stock-opname" element={<StockOpname />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -87,12 +96,14 @@ function App() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <ToastProvider>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </ToastProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </ToastProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 )

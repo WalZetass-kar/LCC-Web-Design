@@ -1,7 +1,8 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Package, Tag, ShoppingCart, History, Settings, Store, LogOut, Truck, X,
-  Users, UserCircle, Wallet, FileText, BarChart2, Database, ShoppingBag, Activity
+  Users, UserCircle, Wallet, FileText, BarChart2, Database, ShoppingBag, Activity,
+  RotateCcw, Clock, DollarSign, ClipboardCheck
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -20,6 +21,7 @@ export const MENU_GROUPS = [
       { to: '/produk', icon: Package, label: 'Produk', code: 'nav_barang' },
       { to: '/kategori', icon: Tag, label: 'Kategori', code: 'nav_barang' },
       { to: '/pembelian', icon: ShoppingBag, label: 'Pembelian', code: 'nav_pembelian' },
+      { to: '/stock-opname', icon: ClipboardCheck, label: 'Stok Opname', code: 'nav_barang' },
     ],
   },
   {
@@ -33,6 +35,9 @@ export const MENU_GROUPS = [
     label: 'Keuangan',
     items: [
       { to: '/kas', icon: Wallet, label: 'Kas', code: 'nav_pembelian' },
+      { to: '/shifts', icon: Clock, label: 'Shift', code: 'nav_pembelian' },
+      { to: '/debts', icon: DollarSign, label: 'Hutang/Piutang', code: 'nav_pembelian' },
+      { to: '/returns', icon: RotateCcw, label: 'Return', code: 'nav_penjualan' },
       { to: '/laporan', icon: BarChart2, label: 'Laporan', code: 'nav_pembelian' },
     ],
   },

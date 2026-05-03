@@ -17,6 +17,10 @@ import { LaporanController } from '../backend/controllers/LaporanController.js'
 import { ActivityLogController } from '../backend/controllers/ActivityLogController.js'
 import { ExportController } from '../backend/controllers/ExportController.js'
 import { SchedulerService } from '../backend/services/scheduler.js'
+import { BarcodeController } from '../backend/controllers/BarcodeController.js'
+import { PaymentMethodController, TaxController, ReturnController, ShiftController, DebtController, StockOpnameController, ProductImageController } from '../backend/controllers/NewFeaturesController.js'
+import { UpdateService } from '../backend/services/updateService.js'
+import { ErrorLogService } from '../backend/services/errorLogService.js'
 
 export function registerIpcHandlers(ipcMain: IpcMain) {
   // Auth
@@ -172,4 +176,61 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   ipcMain.handle('scheduler:runExpiredCheck', () => SchedulerService.runExpiredCheck())
   ipcMain.handle('scheduler:runBackup', (_e, username: string) => SchedulerService.runBackup(username))
   ipcMain.handle('scheduler:runCleanLogs', (_e, days?: number) => SchedulerService.runCleanLogs(days))
+
+  // Barcode
+  ipcMain.handle('barcode:generate', () => BarcodeController.generateBarcode())
+  ipcMain.handle('barcode:search', (_e, barcode: string) => BarcodeController.searchByBarcode(barcode))
+  ipcMain.handle('barcode:getSettings', () => BarcodeController.getSettings())
+  ipcMain.handle('barcode:updateSettings', (_e, data) => BarcodeController.updateSettings(data))
+
+  // Payment Methods
+  ipcMain.handle('payment:getAll', () => PaymentMethodController.getAll())
+  ipcMain.handle('payment:create', (_e, data) => PaymentMethodController.create(data))
+  ipcMain.handle('payment:update', (_e, id: number, data) => PaymentMethodController.update(id, data))
+  ipcMain.handle('payment:delete', (_e, id: number) => PaymentMethodController.delete(id))
+
+  // Tax
+  ipcMain.handle('tax:getActive', () => TaxController.getActive())
+  ipcMain.handle('tax:getAll', () => TaxController.getAll())
+  ipcMain.handle('tax:setActive', (_e, id: number) => TaxController.setActive(id))
+  ipcMain.handle('tax:create', (_e, data) => TaxController.create(data))
+
+  // Returns
+  ipcMain.handle('return:create', (_e, data) => ReturnController.create(data))
+  ipcMain.handle('return:getAll', () => ReturnController.getAll())
+  ipcMain.handle('return:approve', (_e, id: number, userId: number) => ReturnController.approve(id, userId))
+
+  // Shifts
+  ipcMain.handle('shift:open', (_e, data) => ShiftController.open(data))
+  ipcMain.handle('shift:close', (_e, id: number, data) => ShiftController.close(id, data))
+  ipcMain.handle('shift:getCurrent', (_e, userId: number) => ShiftController.getCurrent(userId))
+  ipcMain.handle('shift:getAll', () => ShiftController.getAll())
+
+  // Debts
+  ipcMain.handle('debt:create', (_e, data) => DebtController.create(data))
+  ipcMain.handle('debt:addPayment', (_e, debtId: number, data) => DebtController.addPayment(debtId, data))
+  ipcMain.handle('debt:getAll', (_e, type?: string) => DebtController.getAll(type))
+  ipcMain.handle('debt:getPayments', (_e, debtId: number) => DebtController.getPayments(debtId))
+
+  // Stock Opname
+  ipcMain.handle('opname:create', (_e, data) => StockOpnameController.create(data))
+  ipcMain.handle('opname:approve', (_e, id: number, userId: number) => StockOpnameController.approve(id, userId))
+  ipcMain.handle('opname:getAll', () => StockOpnameController.getAll())
+  ipcMain.handle('opname:getDetails', (_e, id: number) => StockOpnameController.getDetails(id))
+
+  // Product Images
+  ipcMain.handle('productImage:add', (_e, barangId: number, imagePath: string, isPrimary: boolean) => ProductImageController.add(barangId, imagePath, isPrimary))
+  ipcMain.handle('productImage:getByProduct', (_e, barangId: number) => ProductImageController.getByProduct(barangId))
+  ipcMain.handle('productImage:delete', (_e, id: number) => ProductImageController.delete(id))
+  ipcMain.handle('productImage:setPrimary', (_e, id: number, barangId: number) => ProductImageController.setPrimary(id, barangId))
+
+  // Updates
+  ipcMain.handle('update:check', () => UpdateService.checkForUpdates())
+  ipcMain.handle('update:getHistory', () => UpdateService.getUpdateHistory())
+
+  // Error Logging
+  ipcMain.handle('errorLog:log', (_e, errorType: string, errorMessage: string, stackTrace?: string, userId?: number, context?: string) => ErrorLogService.log(errorType, errorMessage, stackTrace, userId, context))
+  ipcMain.handle('errorLog:getAll', (_e, limit?: number) => ErrorLogService.getAll(limit))
+  ipcMain.handle('errorLog:deleteOld', (_e, days?: number) => ErrorLogService.deleteOld(days))
+  ipcMain.handle('errorLog:clear', () => ErrorLogService.clear())
 }
