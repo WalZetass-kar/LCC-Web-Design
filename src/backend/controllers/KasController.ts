@@ -187,6 +187,29 @@ export class KasController {
       return { success: false, message: 'Gagal menghapus transaksi: ' + (error as Error).message }
     }
   }
+  
+  static deleteKas(kd_kas: string) {
+    try {
+      const kas = KasModel.getKasById(kd_kas)
+      if (!kas) {
+        return { success: false, message: 'Kas tidak ditemukan' }
+      }
+      
+      if (kas.status === 'OPEN') {
+        return { success: false, message: 'Tidak dapat menghapus kas yang masih terbuka' }
+      }
+      
+      // Hapus transaksi terkait dulu
+      KasModel.deleteTransaksiByKas(kd_kas)
+      
+      // Hapus kas
+      KasModel.deleteKas(kd_kas)
+      
+      return { success: true, message: 'Riwayat kas berhasil dihapus' }
+    } catch (error) {
+      return { success: false, message: 'Gagal menghapus kas: ' + (error as Error).message }
+    }
+  }
 
   static getLaporanKas(startDate: string, endDate: string) {
     try {

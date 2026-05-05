@@ -119,7 +119,9 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-        <span className="hidden md:inline text-xs text-slate-400 dark:text-slate-500 mr-1 truncate max-w-[140px]">{storeName}</span>
+        <div className="hidden sm:flex items-center gap-2 mr-2 px-3 py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">{storeName}</span>
+        </div>
 
         <button onClick={toggleMode} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title="Toggle dark mode">
           {mode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}

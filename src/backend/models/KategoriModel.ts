@@ -1,10 +1,14 @@
 import { db } from '../../database/connection.js'
-import { kategoriBarang } from '../../database/schema.js'
+import { kategoriBarang, barang } from '../../database/schema.js'
 import { eq } from 'drizzle-orm'
 
 export class KategoriModel {
   static getAll() {
-    return db.select().from(kategoriBarang).all()
+    const categories = db.select().from(kategoriBarang).all()
+    return categories.map(cat => {
+      const count = db.select().from(barang).where(eq(barang.kd_kategori_barang, cat.kd_kategori_barang)).all().length
+      return { ...cat, jumlah_produk: count }
+    })
   }
 
   static create(data: { kategori_barang: string }) {

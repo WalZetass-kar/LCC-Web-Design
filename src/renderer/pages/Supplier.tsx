@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, Building2, Mail, Phone } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
+import ConfirmDialog from '../components/ConfirmDialog'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
@@ -253,30 +254,16 @@ export default function SupplierPage() {
       </Modal>
 
       {/* Delete Modal */}
-      <Modal
+      <ConfirmDialog
         open={modal === 'delete'}
         onClose={closeModal}
-        title="🗑️ Hapus Supplier"
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={closeModal}>
-              Batal
-            </Button>
-            <Button variant="danger" loading={loading} onClick={handleDelete}>
-              Hapus
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Yakin ingin menghapus supplier <strong>{selected?.nama_suplier}</strong>?
-          <br />
-          <span className="text-red-600 dark:text-red-400 font-medium">
-            Tindakan ini tidak dapat dibatalkan.
-          </span>
-        </p>
-      </Modal>
+        onConfirm={handleDelete}
+        title="Hapus Supplier"
+        message={`Yakin ingin menghapus supplier "${selected?.nama_suplier}"? Tindakan ini tidak dapat dibatalkan.`}
+        confirmText="Hapus"
+        variant="danger"
+        loading={loading}
+      />
     </div>
   )
 }

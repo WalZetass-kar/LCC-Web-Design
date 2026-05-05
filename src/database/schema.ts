@@ -86,6 +86,14 @@ export const identitas = sqliteTable('mediasoft_identitas', {
   logo: text('logo'),
   npwp: text('npwp'),
   pajak_persen: real('pajak_persen').default(0),
+  auto_barcode: integer('auto_barcode').default(1),
+  barcode_prefix: text('barcode_prefix').default('POS'),
+  auto_print: integer('auto_print').default(0),
+  struk_footer: text('struk_footer').default('Terima kasih atas kunjungan Anda'),
+  auto_backup: integer('auto_backup').default(1),
+  backup_retention: integer('backup_retention').default(7),
+  notif_stok: integer('notif_stok').default(1),
+  min_stok: integer('min_stok').default(5),
 })
 
 export const supplier = sqliteTable('mediasoft_supplier', {
@@ -160,25 +168,31 @@ export const backup = sqliteTable('mediasoft_backup', {
 })
 
 export const pembelian = sqliteTable('mediasoft_pembelian', {
-  kd_pembelian: text('kd_pembelian').primaryKey(),
-  tgl_pembelian: text('tgl_pembelian').notNull(),
+  kd_pembelian: text('kd_tansaksi_beli').primaryKey(),
+  tgl_pembelian: text('tgl_wkt_transaksi'),
+  deskripsi: text('deskripsi'),
   kd_suplier: text('kd_suplier'),
+  username: text('username_transaksi'),
   total_qty: integer('total_qty').default(0),
   sub_total: real('sub_total').default(0),
   yang_dibayar: real('yang_dibayar').default(0),
+  kembalian: real('kembalian').default(0),
   sisa_hutang: real('sisa_hutang').default(0),
-  status: text('status').default('LUNAS'), // LUNAS, HUTANG
-  username: text('username'),
+  status: text('status').default('LUNAS'),
   catatan: text('catatan'),
 })
 
 export const pembelianDetail = sqliteTable('mediasoft_pembelian_detail', {
-  kd_pembelian_detail: integer('kd_pembelian_detail').primaryKey({ autoIncrement: true }),
-  kd_pembelian: text('kd_pembelian').notNull(),
+  kd_pembelian_detail: integer('kd_trans_beli_detail').primaryKey({ autoIncrement: true }),
+  kd_pembelian: text('kd_tansaksi_beli').notNull(),
   kd_barang: text('kd_barang').notNull(),
   qty: integer('qty').default(0),
-  harga_beli: real('harga_beli').default(0),
-  total: real('total').default(0),
+  harga_beli: integer('harga_beli').default(0),
+  disc: integer('disc').default(0),
+  harga_disc: real('harga_disc').default(0),
+  total: real('total_harga_beli').default(0),
+  nama_pengguna: text('nama_pengguna'),
+  tgl_waktu_input: text('tgl_waktu_input'),
 })
 
 export const activityLog = sqliteTable('mediasoft_activity_log', {

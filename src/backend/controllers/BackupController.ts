@@ -108,6 +108,33 @@ export class BackupController {
       return { success: false, message: 'Gagal menghapus backup: ' + (error as Error).message }
     }
   }
+  
+  static import(base64Data: string, fileName: string) {
+    try {
+      const dbPath = path.join(process.cwd(), 'sistem_pos.db')
+      const backupsDir = path.join(process.cwd(), 'backups')
+      
+      // Create backups directory if not exists
+      if (!fs.existsSync(backupsDir)) {
+        fs.mkdirSync(backupsDir, { recursive: true })
+      }
+      
+      // Backup current database before import
+      const currentBackupPath = path.join(backupsDir, `before_import_${Date.now()}.db`)
+      fs.copyFileSync(dbPath, currentBackupPath)
+      
+      // Write imported file
+      const buffer = Buffer.from(base64Data, 'base64')
+      fs.writeFileSync(dbPath, buffer)
+      
+      return {
+        success: true,
+        message: 'Database berhasil di-import. Aplikasi akan restart.',
+      }
+    } catch (error) {
+      return { success: false, message: 'Gagal import database: ' + (error as Error).message }
+    }
+  }
 
   static download(kd_backup: number) {
     try {

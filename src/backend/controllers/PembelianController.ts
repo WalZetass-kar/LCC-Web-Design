@@ -1,4 +1,4 @@
-import { db } from '../../database/connection.js'
+import { db, sqlite } from '../../database/connection.js'
 import { pembelian, pembelianDetail, barang, supplier } from '../../database/schema.js'
 import { eq, desc, and, gte, lte, sql } from 'drizzle-orm'
 import type { Pembelian, PembelianDetail } from '../../shared/types'
@@ -120,19 +120,13 @@ export class PembelianController {
       const sisa_hutang = sub_total - yang_dibayar
       const status = sisa_hutang > 0 ? 'HUTANG' : 'LUNAS'
 
-      // Insert header
-      db.insert(pembelian).values({
-        kd_pembelian,
-        tgl_pembelian,
-        kd_suplier: data.kd_suplier,
-        total_qty,
-        sub_total,
-        yang_dibayar,
-        sisa_hutang,
-        status,
-        username: data.username,
-        catatan: data.catatan || null,
-      }).run()
+      // Insert header - gunakan mapping kolom yang benar
+      const stmt = sqlite.prepare(`
+        INSERT INTO mediasoft_pembelian 
+        (kd_tansaksi_beli, tgl_wkt_transaksi, kd_suplier, total_qty, sub_total, yang_dibayar, sisa_hutang, status, username_transaksi, catatan)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      stmt.run(kd_pembelian, tgl_pembelian, data.kd_suplier, total_qty, sub_total, yang_dibayar, sisa_hutang, status, data.username, data.catatan || null)
 
       // Insert details and update stock
       for (const item of data.items) {

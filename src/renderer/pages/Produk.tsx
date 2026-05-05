@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, Pencil, Trash2, Barcode, AlertTriangle } from 'lucide-react'
+import { Plus, Pencil, Trash2, Barcode, AlertTriangle, Image, X } from 'lucide-react'
 import Barcode_ from 'react-barcode'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -26,12 +26,13 @@ interface FormState {
   deskripsi_barang: string
   barcode: string
   expired_date: string
+  foto_barang: string
 }
 
 const EMPTY: FormState = {
   kd_barang: '', nama_barang: '', stok: 0, harga_barang: 0, harga_modal: 0,
   potongan: 0, kd_kategori_barang: 0, kd_satuan: 0, deskripsi_barang: '',
-  barcode: '', expired_date: '',
+  barcode: '', expired_date: '', foto_barang: '',
 }
 
 function getExpiredStatus(expired_date: string | null) {
@@ -83,6 +84,7 @@ export default function Produk() {
       deskripsi_barang: row.deskripsi_barang ?? '',
       barcode: row.barcode ?? '',
       expired_date: row.expired_date ?? '',
+      foto_barang: row.foto_barang ?? '',
     })
     setModal('edit')
   }
@@ -110,6 +112,19 @@ export default function Produk() {
 
   const columns: ColumnDef<Barang>[] = [
     { accessorKey: 'kd_barang', header: 'Kode', size: 120 },
+    {
+      accessorKey: 'foto_barang', header: 'Foto', size: 80,
+      cell: ({ getValue }) => {
+        const foto = getValue() as string | null
+        return foto ? (
+          <img src={foto} alt="Produk" className="w-12 h-12 object-cover rounded-lg border border-slate-200 dark:border-slate-600" />
+        ) : (
+          <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+            <Image size={20} className="text-slate-400" />
+          </div>
+        )
+      }
+    },
     { accessorKey: 'nama_barang', header: 'Nama Produk' },
     {
       accessorKey: 'kategori_barang', header: 'Kategori',
@@ -158,6 +173,27 @@ export default function Produk() {
 
   const f = (k: keyof FormState, v: string | number) =>
     setForm(prev => ({ ...prev, [k]: v }))
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    if (!file.type.startsWith('image/')) {
+      toast('File harus berupa gambar', 'error')
+      return
+    }
+    
+    if (file.size > 2 * 1024 * 1024) {
+      toast('Ukuran gambar maksimal 2MB', 'error')
+      return
+    }
+    
+    const reader = new FileReader()
+    reader.onload = () => {
+      f('foto_barang', reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
 
   // Count expired/soon products for alert banner
   const expiredCount = data.filter(d => getExpiredStatus(d.expired_date) === 'expired').length
@@ -224,6 +260,49 @@ export default function Produk() {
           <Input label="Barcode" value={form.barcode} onChange={e => f('barcode', e.target.value)} placeholder="Scan atau ketik barcode..." />
           {/* Expired date field */}
           <Input label="Tanggal Expired" type="date" value={form.expired_date} onChange={e => f('expired_date', e.target.value)} />
+          
+          {/* Image Upload */}
+          <div className="sm:col-span-2">
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">Foto Produk</label>
+            <div className="flex gap-3 items-start">
+              {form.foto_barang ? (
+                <div className="relative group">
+                  <img src={form.foto_barang} alt="Preview" className="w-24 h-24 object-cover rounded-xl border-2 border-slate-200 dark:border-slate-600" />
+                  <button
+                    type="button"
+                    onClick={() => f('foto_barang', '')}
+                    className="absolute -top-2 -right-2 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center bg-slate-50 dark:bg-slate-800">
+                  <Image size={32} className="text-slate-400" />
+                </div>
+              )}
+              <div className="flex-1">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                  id="image-upload"
+                />
+                <label
+                  htmlFor="image-upload"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium text-slate-700 dark:text-slate-200 cursor-pointer transition-colors"
+                >
+                  <Image size={16} />
+                  {form.foto_barang ? 'Ganti Gambar' : 'Upload Gambar'}
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                  Format: JPG, PNG, GIF. Maksimal 2MB
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="sm:col-span-2">
             <Input label="Deskripsi" value={form.deskripsi_barang} onChange={e => f('deskripsi_barang', e.target.value)} />
           </div>

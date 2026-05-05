@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, Gift, ToggleLeft, ToggleRight, Minus, History } f
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
+import ConfirmDialog from '../components/ConfirmDialog'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
@@ -243,18 +244,16 @@ export default function CustomerPage() {
       </Modal>
 
       {/* Delete Modal */}
-      <Modal open={modal === 'delete'} onClose={closeModal} title="Hapus Customer" size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={closeModal} className="w-full sm:w-auto">Batal</Button>
-            <Button variant="danger" loading={loading} onClick={handleDelete} className="w-full sm:w-auto">Hapus</Button>
-          </>
-        }
-      >
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Yakin ingin menghapus customer <strong>{selected?.nama_customer}</strong>?
-        </p>
-      </Modal>
+      <ConfirmDialog
+        open={modal === 'delete'}
+        onClose={closeModal}
+        onConfirm={handleDelete}
+        title="Hapus Customer"
+        message={`Yakin ingin menghapus customer "${selected?.nama_customer}"?`}
+        confirmText="Hapus"
+        variant="danger"
+        loading={loading}
+      />
 
       {/* Riwayat Pembelian Modal */}
       <Modal open={modal === 'riwayat'} onClose={closeModal} title={`Riwayat Pembelian — ${selected?.nama_customer}`} size="lg"

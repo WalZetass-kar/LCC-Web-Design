@@ -21,6 +21,7 @@ export interface Barang {
 export interface Kategori {
   kd_kategori_barang: number
   kategori_barang: string | null
+  jumlah_produk?: number
 }
 
 export interface Satuan {
@@ -79,6 +80,14 @@ export interface Identitas {
   logo: string | null
   npwp: string | null
   pajak_persen: number | null
+  auto_barcode: number | null
+  barcode_prefix: string | null
+  auto_print: number | null
+  struk_footer: string | null
+  auto_backup: number | null
+  backup_retention: number | null
+  notif_stok: number | null
+  min_stok: number | null
 }
 
 export interface Supplier {

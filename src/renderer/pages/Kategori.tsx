@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
+import ConfirmDialog from '../components/ConfirmDialog'
 import Input from '../components/Input'
 import DataTable from '../components/DataTable'
 import { api } from '../utils/api'
@@ -51,6 +52,16 @@ export default function Kategori() {
   const columns: ColumnDef<Kategori>[] = [
     { accessorKey: 'kd_kategori_barang', header: 'ID', size: 60 },
     { accessorKey: 'kategori_barang', header: 'Nama Kategori' },
+    { 
+      accessorKey: 'jumlah_produk', 
+      header: 'Jumlah Produk',
+      size: 120,
+      cell: ({ row }) => (
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-primary-500 text-white">
+          {row.original.jumlah_produk || 0} produk
+        </span>
+      )
+    },
     {
       id: 'actions', header: 'Aksi',
       cell: ({ row }) => (
@@ -97,22 +108,16 @@ export default function Kategori() {
         />
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         open={modal === 'delete'}
         onClose={closeModal}
+        onConfirm={handleDelete}
         title="Hapus Kategori"
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={closeModal} className="w-full sm:w-auto">Batal</Button>
-            <Button variant="danger" loading={loading} onClick={handleDelete} className="w-full sm:w-auto">Hapus</Button>
-          </>
-        }
-      >
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Yakin ingin menghapus kategori <strong>{selected?.kategori_barang}</strong>?
-        </p>
-      </Modal>
+        message={`Yakin ingin menghapus kategori "${selected?.kategori_barang}"?`}
+        confirmText="Hapus"
+        variant="danger"
+        loading={loading}
+      />
     </div>
   )
 }

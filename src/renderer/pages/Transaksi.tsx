@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X } from 'lucide-react'
+import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X, Image } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -139,11 +139,22 @@ export default function Transaksi() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
             {filtered.slice(0, 30).map(p => (
               <button key={p.kd_barang} onClick={() => addToCart(p)} className="glass-card p-3 text-left hover:border-primary-300 hover:shadow-primary-100 dark:hover:border-primary-700 transition-all duration-200 active:scale-95">
-                <p className="font-medium text-sm text-slate-700 dark:text-slate-200 truncate">{p.nama_barang}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{p.kd_barang}</p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-primary-600 dark:text-primary-400 font-semibold text-sm">{formatRupiah(p.harga_barang)}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${(p.stok ?? 0) <= 5 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>{p.stok} stok</span>
+                <div className="flex gap-3">
+                  {p.foto_barang ? (
+                    <img src={p.foto_barang} alt={p.nama_barang ?? ''} className="w-16 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-600 shrink-0" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                      <Image size={24} className="text-slate-400" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm text-slate-700 dark:text-slate-200 truncate">{p.nama_barang}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{p.kd_barang}</p>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-primary-600 dark:text-primary-400 font-semibold text-sm">{formatRupiah(p.harga_barang)}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${(p.stok ?? 0) <= 5 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>{p.stok} stok</span>
+                    </div>
+                  </div>
                 </div>
               </button>
             ))}

@@ -113,6 +113,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   ipcMain.handle('kas:addPemasukan', (_e, kd: string, jumlah: number, keterangan: string, username: string) => 
     KasController.addPemasukan(kd, jumlah, keterangan, username))
   ipcMain.handle('kas:deleteTransaksi', (_e, kd: number) => KasController.deleteTransaksi(kd))
+  ipcMain.handle('kas:deleteKas', (_e, kd_kas: string) => KasController.deleteKas(kd_kas))
   ipcMain.handle('kas:getLaporan', (_e, startDate: string, endDate: string) => 
     KasController.getLaporanKas(startDate, endDate))
 
@@ -133,6 +134,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   ipcMain.handle('backup:restore', (_e, kd: number) => BackupController.restore(kd))
   ipcMain.handle('backup:delete', (_e, kd: number) => BackupController.delete(kd))
   ipcMain.handle('backup:download', (_e, kd: number) => BackupController.download(kd))
+  ipcMain.handle('backup:import', (_e, base64Data: string, fileName: string) => BackupController.import(base64Data, fileName))
 
   // Laporan
   ipcMain.handle('laporan:penjualan', (_e, startDate: string, endDate: string) => 
@@ -199,24 +201,31 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   ipcMain.handle('return:create', (_e, data) => ReturnController.create(data))
   ipcMain.handle('return:getAll', () => ReturnController.getAll())
   ipcMain.handle('return:approve', (_e, id: number, userId: number) => ReturnController.approve(id, userId))
+  ipcMain.handle('return:reject', (_e, id: number, userId: number) => ReturnController.reject(id, userId))
+  ipcMain.handle('return:delete', (_e, id: number) => ReturnController.delete(id))
 
   // Shifts
   ipcMain.handle('shift:open', (_e, data) => ShiftController.open(data))
   ipcMain.handle('shift:close', (_e, id: number, data) => ShiftController.close(id, data))
   ipcMain.handle('shift:getCurrent', (_e, userId: number) => ShiftController.getCurrent(userId))
   ipcMain.handle('shift:getAll', () => ShiftController.getAll())
+  ipcMain.handle('shift:delete', (_e, id: number) => ShiftController.delete(id))
 
   // Debts
   ipcMain.handle('debt:create', (_e, data) => DebtController.create(data))
   ipcMain.handle('debt:addPayment', (_e, debtId: number, data) => DebtController.addPayment(debtId, data))
   ipcMain.handle('debt:getAll', (_e, type?: string) => DebtController.getAll(type))
   ipcMain.handle('debt:getPayments', (_e, debtId: number) => DebtController.getPayments(debtId))
+  ipcMain.handle('debt:delete', (_e, id: number) => DebtController.delete(id))
 
   // Stock Opname
   ipcMain.handle('opname:create', (_e, data) => StockOpnameController.create(data))
   ipcMain.handle('opname:approve', (_e, id: number, userId: number) => StockOpnameController.approve(id, userId))
   ipcMain.handle('opname:getAll', () => StockOpnameController.getAll())
   ipcMain.handle('opname:getDetails', (_e, id: number) => StockOpnameController.getDetails(id))
+  ipcMain.handle('opname:delete', (_e, id: number) => StockOpnameController.delete(id))
+  ipcMain.handle('opname:addItem', (_e, data) => StockOpnameController.addItem(data))
+  ipcMain.handle('opname:getItems', (_e, opnameId: number) => StockOpnameController.getItems(opnameId))
 
   // Product Images
   ipcMain.handle('productImage:add', (_e, barangId: number, imagePath: string, isPrimary: boolean) => ProductImageController.add(barangId, imagePath, isPrimary))
@@ -229,7 +238,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   ipcMain.handle('update:getHistory', () => UpdateService.getUpdateHistory())
 
   // Error Logging
-  ipcMain.handle('errorLog:log', (_e, errorType: string, errorMessage: string, stackTrace?: string, userId?: number, context?: string) => ErrorLogService.log(errorType, errorMessage, stackTrace, userId, context))
+  ipcMain.handle('errorLog:log', (_e, errorType: string, errorMessage: string, stackTrace?: string, userId?: string, context?: string) => ErrorLogService.log(errorType, errorMessage, stackTrace, userId, context))
   ipcMain.handle('errorLog:getAll', (_e, limit?: number) => ErrorLogService.getAll(limit))
   ipcMain.handle('errorLog:deleteOld', (_e, days?: number) => ErrorLogService.deleteOld(days))
   ipcMain.handle('errorLog:clear', () => ErrorLogService.clear())

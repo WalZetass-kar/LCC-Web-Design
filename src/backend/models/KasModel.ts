@@ -152,6 +152,14 @@ export class KasModel {
   static deleteTransaksi(kd: number) {
     return db.delete(kasTransaksi).where(eq(kasTransaksi.kd_kas_transaksi, kd)).run()
   }
+  
+  static deleteTransaksiByKas(kd_kas: string) {
+    return db.delete(kasTransaksi).where(eq(kasTransaksi.kd_kas, kd_kas)).run()
+  }
+  
+  static deleteKas(kd_kas: string) {
+    return db.delete(kasDrawer).where(eq(kasDrawer.kd_kas, kd_kas)).run()
+  }
 
   static getLaporanKas(startDate: string, endDate: string) {
     return db.select().from(kasDrawer)

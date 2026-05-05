@@ -11,6 +11,7 @@ import { SkeletonCard } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah, formatDate } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
+import { useAuth } from '../contexts/AuthContext'
 import type { Pembelian, PembelianDetail, Supplier } from '../../shared/types'
 
 interface FormState {
@@ -22,6 +23,7 @@ interface FormState {
 
 export default function PembelianPage() {
   const toast = useToast()
+  const { user } = useAuth()
   const [data, setData] = useState<Pembelian[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,6 +33,13 @@ export default function PembelianPage() {
   const [modal, setModal] = useState<'detail' | 'delete' | 'create' | 'bayar' | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [bayarAmount, setBayarAmount] = useState('')
+  
+  // Form create pembelian
+  const [form, setForm] = useState<FormState>({ kd_suplier: '', yang_dibayar: '', catatan: '', items: [] })
+  const [products, setProducts] = useState<any[]>([])
+  const [selectedProduct, setSelectedProduct] = useState<string>('')
+  const [itemQty, setItemQty] = useState('1')
+  const [itemHarga, setItemHarga] = useState('')
 
   // Summary stats
   const totalHutang = data.reduce((s, p) => s + (p.sisa_hutang ?? 0), 0)
@@ -39,12 +48,14 @@ export default function PembelianPage() {
 
   const load = async () => {
     setLoading(true)
-    const [r1, r2] = await Promise.all([
+    const [r1, r2, r3] = await Promise.all([
       api<Pembelian[]>('pembelian:getAll'),
       api<Supplier[]>('supplier:getAll'),
+      api<any[]>('barang:getAll'),
     ])
     if (r1.success) setData(r1.data ?? [])
     if (r2.success) setSuppliers(r2.data ?? [])
+    if (r3.success) setProducts(r3.data ?? [])
     setLoading(false)
   }
 
@@ -55,6 +66,60 @@ export default function PembelianPage() {
     const r = await api<{ header: Pembelian; details: PembelianDetail[] }>('pembelian:getById', row.kd_pembelian)
     if (r.success && r.data) setDetailItems(r.data.details ?? [])
     setModal('detail')
+  }
+  
+  const openCreate = () => {
+    setForm({ kd_suplier: '', yang_dibayar: '', catatan: '', items: [] })
+    setSelectedProduct('')
+    setItemQty('1')
+    setItemHarga('')
+    setModal('create')
+  }
+  
+  const addItem = () => {
+    if (!selectedProduct || !itemQty || !itemHarga) return toast('Lengkapi data item', 'error')
+    const product = products.find(p => p.kd_barang === selectedProduct)
+    if (!product) return
+    
+    const existing = form.items.find(i => i.kd_barang === selectedProduct)
+    if (existing) return toast('Produk sudah ada di list', 'error')
+    
+    setForm(prev => ({
+      ...prev,
+      items: [...prev.items, {
+        kd_barang: product.kd_barang,
+        nama_barang: product.nama_barang,
+        qty: parseInt(itemQty),
+        harga_beli: parseFloat(itemHarga)
+      }]
+    }))
+    setSelectedProduct('')
+    setItemQty('1')
+    setItemHarga('')
+  }
+  
+  const removeItem = (kd: string) => {
+    setForm(prev => ({ ...prev, items: prev.items.filter(i => i.kd_barang !== kd) }))
+  }
+  
+  const handleCreate = async () => {
+    if (!form.kd_suplier) return toast('Pilih supplier', 'error')
+    if (form.items.length === 0) return toast('Tambahkan minimal 1 item', 'error')
+    
+    setActionLoading(true)
+    const r = await api('pembelian:create', {
+      ...form,
+      username: user?.nama_pengguna ?? 'ADMIN',
+      yang_dibayar: parseFloat(form.yang_dibayar) || 0
+    })
+    setActionLoading(false)
+    if (r.success) {
+      toast(r.message as string)
+      setModal(null)
+      load()
+    } else {
+      toast(r.message as string, 'error')
+    }
   }
 
   const handleDelete = async () => {
@@ -154,6 +219,11 @@ export default function PembelianPage() {
       </div>
 
       {/* Filter + Table */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+        <p className="text-sm text-slate-500 dark:text-slate-400">{filtered.length} pembelian ditemukan</p>
+        <Button icon={<Plus size={16} />} onClick={openCreate} className="w-full sm:w-auto">Tambah Pembelian</Button>
+      </div>
+
       <Card
         title="Daftar Purchase Order"
         action={
@@ -279,6 +349,107 @@ export default function PembelianPage() {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Create Pembelian Modal */}
+      <Modal open={modal === 'create'} onClose={() => setModal(null)} title="Tambah Pembelian" size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto">Batal</Button>
+            <Button loading={actionLoading} onClick={handleCreate} className="w-full sm:w-auto">Simpan</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {/* Supplier */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Supplier *</label>
+            <select value={form.kd_suplier} onChange={e => setForm(prev => ({ ...prev, kd_suplier: e.target.value }))}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400">
+              <option value="">-- Pilih Supplier --</option>
+              {suppliers.filter(s => s.status === 'Aktif').map(s => (
+                <option key={s.kd_suplier} value={s.kd_suplier}>{s.nama_suplier}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Add Item Section */}
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 space-y-3">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Tambah Item</p>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)}
+                className="sm:col-span-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400">
+                <option value="">-- Pilih Produk --</option>
+                {products.map(p => (
+                  <option key={p.kd_barang} value={p.kd_barang}>{p.nama_barang} ({p.kd_barang})</option>
+                ))}
+              </select>
+              <input type="number" placeholder="Qty" value={itemQty} onChange={e => setItemQty(e.target.value)}
+                className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400" />
+              <input type="number" placeholder="Harga Beli" value={itemHarga} onChange={e => setItemHarga(e.target.value)}
+                className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400" />
+            </div>
+            <Button size="sm" onClick={addItem} icon={<Plus size={14} />} className="w-full sm:w-auto">Tambah ke List</Button>
+          </div>
+
+          {/* Items List */}
+          {form.items.length > 0 && (
+            <div className="border border-slate-200 dark:border-slate-600 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100 dark:bg-slate-700">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 dark:text-slate-300">Produk</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 dark:text-slate-300">Qty</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 dark:text-slate-300">Harga</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-slate-600 dark:text-slate-300">Total</th>
+                    <th className="px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                  {form.items.map(item => (
+                    <tr key={item.kd_barang}>
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{item.nama_barang}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{item.qty}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{formatRupiah(item.harga_beli)}</td>
+                      <td className="px-3 py-2 font-semibold text-primary-600 dark:text-primary-400">{formatRupiah(item.qty * item.harga_beli)}</td>
+                      <td className="px-3 py-2 text-center">
+                        <button onClick={() => removeItem(item.kd_barang)} className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500">
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Summary */}
+          {form.items.length > 0 && (
+            <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-700 dark:text-slate-300 font-medium">Total Item</span>
+                <span className="font-semibold text-slate-900 dark:text-slate-100">{form.items.reduce((s, i) => s + i.qty, 0)} pcs</span>
+              </div>
+              <div className="flex justify-between text-lg">
+                <span className="font-bold text-slate-900 dark:text-slate-100">Sub Total</span>
+                <span className="font-bold text-primary-600 dark:text-primary-400">
+                  {formatRupiah(form.items.reduce((s, i) => s + (i.qty * i.harga_beli), 0))}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Payment & Notes */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input label="Dibayar (opsional)" type="number" value={form.yang_dibayar} 
+              onChange={e => setForm(prev => ({ ...prev, yang_dibayar: e.target.value }))} 
+              placeholder="0 = Hutang semua" />
+            <Input label="Catatan (opsional)" value={form.catatan} 
+              onChange={e => setForm(prev => ({ ...prev, catatan: e.target.value }))} 
+              placeholder="Catatan pembelian..." />
+          </div>
+        </div>
       </Modal>
     </div>
   )

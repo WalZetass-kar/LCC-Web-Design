@@ -19,6 +19,10 @@ export class KategoriController {
   }
 
   static delete(id: number) {
+    const kategori = KategoriModel.getAll().find(k => k.kd_kategori_barang === id)
+    if (kategori && kategori.jumlah_produk > 0) {
+      return { success: false, message: `Tidak dapat menghapus kategori yang masih memiliki ${kategori.jumlah_produk} produk` }
+    }
     KategoriModel.delete(id)
     return { success: true, message: 'Kategori berhasil dihapus' }
   }

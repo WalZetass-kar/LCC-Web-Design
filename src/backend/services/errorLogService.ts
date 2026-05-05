@@ -1,7 +1,7 @@
 import { sqlite } from '../../database/connection.js'
 
 export class ErrorLogService {
-  static log(errorType: string, errorMessage: string, stackTrace?: string, userId?: number, context?: string) {
+  static log(errorType: string, errorMessage: string, stackTrace?: string, userId?: string, context?: string) {
     try {
       sqlite.prepare('INSERT INTO mediasoft_error_logs (error_type, error_message, stack_trace, user_id, context) VALUES (?, ?, ?, ?, ?)').run(errorType, errorMessage, stackTrace, userId, context)
     } catch (err) {

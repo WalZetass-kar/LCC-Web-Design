@@ -46,6 +46,7 @@ export default function Kas() {
   const [expense, setExpense] = useState({ jumlah: '', keterangan: '' })
   const [income, setIncome] = useState({ jumlah: '', keterangan: '' })
   const [loading, setLoading] = useState(false)
+  const [deleteKas, setDeleteKas] = useState<KasDrawer | null>(null)
 
   const load = async () => {
     const [r1, r2] = await Promise.all([
@@ -130,6 +131,20 @@ export default function Kas() {
       toast(r.message as string)
       setModal(null)
       setIncome({ jumlah: '', keterangan: '' })
+      load()
+    } else {
+      toast(r.message as string, 'error')
+    }
+  }
+  
+  const handleDeleteKas = async () => {
+    if (!deleteKas) return
+    setLoading(true)
+    const r = await api('kas:deleteKas', deleteKas.kd_kas)
+    setLoading(false)
+    if (r.success) {
+      toast(r.message as string)
+      setDeleteKas(null)
       load()
     } else {
       toast(r.message as string, 'error')
@@ -243,12 +258,13 @@ export default function Kas() {
                   <th className="px-3 sm:px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Modal Akhir</th>
                   <th className="px-3 sm:px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Selisih</th>
                   <th className="px-3 sm:px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Status</th>
+                  <th className="px-3 sm:px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {history.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 sm:px-4 py-10 text-center text-slate-400 text-sm">
+                    <td colSpan={8} className="px-3 sm:px-4 py-10 text-center text-slate-400 text-sm">
                       Belum ada riwayat kas
                     </td>
                   </tr>
@@ -265,6 +281,17 @@ export default function Kas() {
                       </td>
                       <td className="px-3 sm:px-4 py-3 text-center">
                         <Badge label={h.status} variant={h.status === 'OPEN' ? 'green' : 'blue'} />
+                      </td>
+                      <td className="px-3 sm:px-4 py-3 text-center">
+                        {h.status === 'CLOSED' && (
+                          <button 
+                            onClick={() => setDeleteKas(h)} 
+                            className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors"
+                            title="Hapus"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -394,6 +421,40 @@ export default function Kas() {
             placeholder="Contoh: Modal tambahan, pinjaman..."
           />
         </div>
+      </Modal>
+
+      {/* Delete Kas Modal */}
+      <Modal
+        open={!!deleteKas}
+        onClose={() => setDeleteKas(null)}
+        title="Hapus Riwayat Kas"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeleteKas(null)} className="w-full sm:w-auto">Batal</Button>
+            <Button variant="danger" loading={loading} onClick={handleDeleteKas} className="w-full sm:w-auto">Hapus</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+          Yakin ingin menghapus riwayat kas ini?
+        </p>
+        {deleteKas && (
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Kasir:</span>
+              <span className="font-medium text-slate-700 dark:text-slate-200">{deleteKas.username}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Waktu Buka:</span>
+              <span className="font-medium text-slate-700 dark:text-slate-200">{formatDateTime(deleteKas.tgl_buka)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Modal Awal:</span>
+              <span className="font-medium text-slate-700 dark:text-slate-200">{formatRupiah(deleteKas.modal_awal)}</span>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

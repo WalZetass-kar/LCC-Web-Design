@@ -2,8 +2,7 @@ import { sqlite } from '../../database/connection.js'
 
 export class PaymentMethodController {
   static getAll() {
-    const data = sqlite.prepare('SELECT * FROM mediasoft_payment_methods WHERE is_active = 1 ORDER BY name').all()
-    return { success: true, data }
+    return sqlite.prepare('SELECT * FROM mediasoft_payment_methods WHERE is_active = 1 ORDER BY name').all()
   }
 
   static create(data: any) {
@@ -28,8 +27,7 @@ export class TaxController {
   }
 
   static getAll() {
-    const data = sqlite.prepare('SELECT * FROM mediasoft_tax_settings ORDER BY name').all()
-    return { success: true, data }
+    return sqlite.prepare('SELECT * FROM mediasoft_tax_settings ORDER BY name').all()
   }
 
   static setActive(id: number) {
@@ -55,27 +53,15 @@ export class ReturnController {
       sqlite.prepare('UPDATE mediasoft_barang SET stok = stok + ? WHERE kd_barang = ?').run(item.quantity, item.barang_id)
     }
     
-    return { success: true, data: { id: returnId, return_number: returnNumber } }
+    return { id: returnId, return_number: returnNumber }
   }
 
   static getAll() {
-    const data = sqlite.prepare('SELECT r.*, p.kd_tansaksi_jual as nomor_transaksi, c.nama_customer as customer_name FROM mediasoft_returns r LEFT JOIN mediasoft_penjualan p ON r.penjualan_id = p.kd_tansaksi_jual LEFT JOIN mediasoft_customer c ON r.customer_id = c.kd_customer ORDER BY r.created_at DESC').all()
-    return { success: true, data }
+    return sqlite.prepare('SELECT r.*, p.kd_tansaksi_jual as nomor_transaksi, c.nama_customer as customer_name FROM mediasoft_returns r LEFT JOIN mediasoft_penjualan p ON r.penjualan_id = p.kd_tansaksi_jual LEFT JOIN mediasoft_customer c ON r.customer_id = c.kd_customer ORDER BY r.created_at DESC').all()
   }
 
   static approve(id: number, userId: number) {
     sqlite.prepare('UPDATE mediasoft_returns SET status = ?, approved_by = ? WHERE id = ?').run('APPROVED', userId, id)
-    return { success: true }
-  }
-  
-  static reject(id: number, userId: number) {
-    sqlite.prepare('UPDATE mediasoft_returns SET status = ?, approved_by = ? WHERE id = ?').run('REJECTED', userId, id)
-    return { success: true }
-  }
-  
-  static delete(id: number) {
-    sqlite.prepare('DELETE FROM mediasoft_return_details WHERE return_id = ?').run(id)
-    sqlite.prepare('DELETE FROM mediasoft_returns WHERE id = ?').run(id)
     return { success: true }
   }
 }
@@ -88,7 +74,7 @@ export class ShiftController {
   }
 
   static close(id: number, data: any) {
-    const sales = sqlite.prepare('SELECT COUNT(*) as count, COALESCE(SUM(yang_dibayar), 0) as total FROM mediasoft_penjualan WHERE shift_id = ?').get(id) as any
+    const sales = sqlite.prepare('SELECT COUNT(*) as count, COALESCE(SUM(total_bayar), 0) as total FROM mediasoft_penjualan WHERE shift_id = ?').get(id) as any
     const expected = data.opening_balance + sales.total
     const difference = data.closing_balance - expected
     
@@ -97,26 +83,11 @@ export class ShiftController {
   }
 
   static getCurrent(userId: number) {
-    const data = sqlite.prepare('SELECT * FROM mediasoft_shifts WHERE user_id = ? AND status = ? ORDER BY start_time DESC LIMIT 1').get(userId, 'OPEN')
-    return { success: true, data }
+    return sqlite.prepare('SELECT * FROM mediasoft_shifts WHERE user_id = ? AND status = ? ORDER BY start_time DESC LIMIT 1').get(userId, 'OPEN')
   }
 
   static getAll() {
-    const data = sqlite.prepare('SELECT s.*, u.nama_lengkap FROM mediasoft_shifts s LEFT JOIN mediasoft_pengguna u ON s.user_id = u.nama_pengguna ORDER BY s.start_time DESC').all()
-    return { success: true, data }
-  }
-  
-  static delete(id: number) {
-    const shift = sqlite.prepare('SELECT status FROM mediasoft_shifts WHERE id = ?').get(id) as any
-    if (!shift) {
-      return { success: false, error: 'Shift tidak ditemukan' }
-    }
-    if (shift.status === 'OPEN') {
-      return { success: false, error: 'Tidak dapat menghapus shift yang masih terbuka' }
-    }
-    
-    sqlite.prepare('DELETE FROM mediasoft_shifts WHERE id = ?').run(id)
-    return { success: true }
+    return sqlite.prepare('SELECT s.*, u.nama_lengkap FROM mediasoft_shifts s LEFT JOIN mediasoft_pengguna u ON s.user_id = u.nama_pengguna ORDER BY s.start_time DESC').all()
   }
 }
 
@@ -144,23 +115,13 @@ export class DebtController {
 
   static getAll(type?: string) {
     if (type) {
-      const data = sqlite.prepare('SELECT d.*, c.nama_customer as customer_name, s.nama_suplier as supplier_name FROM mediasoft_debts d LEFT JOIN mediasoft_customer c ON d.customer_id = c.kd_customer LEFT JOIN mediasoft_supplier s ON d.supplier_id = s.kd_suplier WHERE d.type = ? ORDER BY d.created_at DESC').all(type)
-    return { success: true, data }
+      return sqlite.prepare('SELECT d.*, c.nama_customer as customer_name, s.nama_suplier as supplier_name FROM mediasoft_debts d LEFT JOIN mediasoft_customer c ON d.customer_id = c.kd_customer LEFT JOIN mediasoft_supplier s ON d.supplier_id = s.kd_suplier WHERE d.type = ? ORDER BY d.created_at DESC').all(type)
     }
-    const data = sqlite.prepare('SELECT d.*, c.nama_customer as customer_name, s.nama_suplier as supplier_name FROM mediasoft_debts d LEFT JOIN mediasoft_customer c ON d.customer_id = c.kd_customer LEFT JOIN mediasoft_supplier s ON d.supplier_id = s.kd_suplier ORDER BY d.created_at DESC').all()
-    return { success: true, data }
+    return sqlite.prepare('SELECT d.*, c.nama_customer as customer_name, s.nama_suplier as supplier_name FROM mediasoft_debts d LEFT JOIN mediasoft_customer c ON d.customer_id = c.kd_customer LEFT JOIN mediasoft_supplier s ON d.supplier_id = s.kd_suplier ORDER BY d.created_at DESC').all()
   }
 
   static getPayments(debtId: number) {
     return sqlite.prepare('SELECT dp.*, u.nama_lengkap FROM mediasoft_debt_payments dp LEFT JOIN mediasoft_pengguna u ON dp.created_by = u.id WHERE dp.debt_id = ? ORDER BY dp.created_at DESC').all(debtId)
-  }
-  
-  static delete(id: number) {
-    // Delete payments first
-    sqlite.prepare('DELETE FROM mediasoft_debt_payments WHERE debt_id = ?').run(id)
-    // Delete debt
-    sqlite.prepare('DELETE FROM mediasoft_debts WHERE id = ?').run(id)
-    return { success: true }
   }
 }
 
@@ -201,37 +162,6 @@ export class StockOpnameController {
 
   static getDetails(id: number) {
     return sqlite.prepare('SELECT sod.*, b.nama_barang FROM mediasoft_stock_opname_details sod LEFT JOIN mediasoft_barang b ON sod.barang_id = b.kd_barang WHERE sod.opname_id = ?').all(id)
-  }
-  
-  static delete(id: number) {
-    const opname = sqlite.prepare('SELECT status FROM mediasoft_stock_opname WHERE id = ?').get(id) as any
-    if (!opname) {
-      return { success: false, error: 'Opname tidak ditemukan' }
-    }
-    if (opname.status === 'APPROVED') {
-      return { success: false, error: 'Tidak dapat menghapus opname yang sudah diapprove' }
-    }
-    
-    sqlite.prepare('DELETE FROM mediasoft_stock_opname_details WHERE opname_id = ?').run(id)
-    sqlite.prepare('DELETE FROM mediasoft_stock_opname WHERE id = ?').run(id)
-    
-    return { success: true }
-  }
-  
-  static addItem(data: any) {
-    const diff = data.stok_fisik - data.stok_sistem
-    sqlite.prepare('INSERT INTO mediasoft_stock_opname_details (opname_id, barang_id, system_stock, physical_stock, difference) VALUES (?, ?, ?, ?, ?)').run(data.opname_id, data.kd_barang, data.stok_sistem, data.stok_fisik, diff)
-    
-    // Update total items dan total difference
-    const totals = sqlite.prepare('SELECT COUNT(*) as total_items, SUM(ABS(difference)) as total_diff FROM mediasoft_stock_opname_details WHERE opname_id = ?').get(data.opname_id) as any
-    sqlite.prepare('UPDATE mediasoft_stock_opname SET total_items = ?, total_difference = ? WHERE id = ?').run(totals.total_items, totals.total_diff || 0, data.opname_id)
-    
-    return { success: true }
-  }
-  
-  static getItems(opnameId: number) {
-    const items = sqlite.prepare('SELECT sod.*, b.nama_barang FROM mediasoft_stock_opname_details sod LEFT JOIN mediasoft_barang b ON sod.barang_id = b.kd_barang WHERE sod.opname_id = ?').all(opnameId)
-    return { success: true, data: items }
   }
 }
 
