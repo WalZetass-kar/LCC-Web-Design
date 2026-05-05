@@ -188,7 +188,7 @@ export interface Pengguna {
   nama_lengkap: string | null
   email: string | null
   no_telp: string | null
-  hak_akses: string | null // developer > superadmin > admin > operator > kasir
+  hak_akses: string | null // demo > developer > superadmin > admin > operator > kasir
   status_user: string | null
   terakhir_login: string | null
   tgl_wkt_simpan: string | null

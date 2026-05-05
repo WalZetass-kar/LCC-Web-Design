@@ -1,5 +1,6 @@
 import { PenjualanModel } from '../models/PenjualanModel.js'
 import { CustomerModel } from '../models/CustomerModel.js'
+import { validateDemoMode } from '../utils/demoMode.js'
 
 interface CartItem {
   kd_barang: string
@@ -29,6 +30,10 @@ export class PenjualanController {
   }
 
   static create(payload: CreateTransaksiPayload) {
+    // Block demo user
+    const demoError = validateDemoMode(payload.username)
+    if (demoError) return demoError
+
     if (!payload.items?.length) {
       return { success: false, message: 'Keranjang kosong' }
     }

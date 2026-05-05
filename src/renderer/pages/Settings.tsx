@@ -45,7 +45,19 @@ export default function Settings() {
         <Card title="Tema Warna" action={<Palette size={16} className="text-slate-400" />}>
           <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-3 flex-wrap mt-1">
             {COLORS.map(c => (
-              <button key={c.key} onClick={() => setColor(c.key)} className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 transition-all text-sm font-medium ${color === c.key ? 'border-current shadow-md scale-105' : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'}`} style={{ color: c.hex }}>
+              <button 
+                key={c.key} 
+                onClick={() => setColor(c.key)} 
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 transition-all text-sm font-medium ${
+                  color === c.key 
+                    ? 'shadow-md scale-105' 
+                    : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
+                }`}
+                style={{ 
+                  color: c.hex,
+                  borderColor: color === c.key ? c.hex : undefined
+                }}
+              >
                 <span className="w-4 h-4 rounded-full" style={{ backgroundColor: c.hex }} />
                 {c.label}
               </button>

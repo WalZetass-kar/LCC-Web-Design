@@ -1,5 +1,6 @@
 import { KasModel } from '../models/KasModel.js'
 import type { KasDrawer, KasTransaksi } from '../../shared/types'
+import { validateDemoMode } from '../utils/demoMode.js'
 
 export class KasController {
   // Kas Drawer Management
@@ -34,6 +35,9 @@ export class KasController {
   }
 
   static bukaKas(username: string, modal_awal: number, catatan?: string) {
+    const demoError = validateDemoMode(username)
+    if (demoError) return demoError
+
     try {
       // Check if user already has active kas
       const activeKas = KasModel.getActiveKas(username)

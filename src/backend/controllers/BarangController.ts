@@ -1,4 +1,5 @@
 import { BarangModel } from '../models/BarangModel.js'
+import { validateDemoMode } from '../utils/demoMode.js'
 
 export class BarangController {
   static getAll() {
@@ -10,6 +11,9 @@ export class BarangController {
   }
 
   static create(data: Record<string, unknown>) {
+    const demoError = validateDemoMode(data.nama_pengguna as string)
+    if (demoError) return demoError
+
     if (!data.kd_barang || !data.nama_barang) {
       return { success: false, message: 'Kode dan nama barang wajib diisi' }
     }
@@ -20,6 +24,9 @@ export class BarangController {
   }
 
   static update(kd: string, data: Record<string, unknown>) {
+    const demoError = validateDemoMode(data.nama_pengguna as string)
+    if (demoError) return demoError
+
     const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
     const enriched = { ...data, tgl_wkt_ubah: now }
     BarangModel.update(kd, enriched as Parameters<typeof BarangModel.update>[1])
@@ -27,6 +34,7 @@ export class BarangController {
   }
 
   static delete(kd: string) {
+    // Note: delete doesn't receive username, will be blocked by api.ts wrapper
     BarangModel.delete(kd)
     return { success: true, message: 'Produk berhasil dihapus' }
   }

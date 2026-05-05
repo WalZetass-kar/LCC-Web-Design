@@ -4,6 +4,7 @@ import { Sun, Moon, Bell, Menu, ChevronRight, Home, Check, CheckCheck, Trash2 } 
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../utils/api'
+import { isDemoMode } from '../utils/demo'
 import type { Identitas, Notifikasi } from '../../shared/types'
 
 const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
@@ -122,6 +123,12 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         <div className="hidden sm:flex items-center gap-2 mr-2 px-3 py-1.5 rounded-lg bg-white/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50">
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">{storeName}</span>
         </div>
+
+        {isDemoMode() && (
+          <div className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold shadow-lg animate-pulse">
+            🔒 DEMO
+          </div>
+        )}
 
         <button onClick={toggleMode} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title="Toggle dark mode">
           {mode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}

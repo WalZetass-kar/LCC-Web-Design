@@ -217,10 +217,19 @@ npm run build
 
 ## 🔐 Default Login
 
-**Username:** `admin`  
-**Password:** `admin`
+**Admin Account:**
+- **Username:** `admin`  
+- **Password:** `admin`
 
-> ⚠️ **PENTING:** Segera ubah password default setelah login pertama kali!
+**Demo Account (Read-Only):**
+- **Username:** `demo`  
+- **Password:** `demo`
+
+> ⚠️ **PENTING:** 
+> - Segera ubah password default setelah login pertama kali!
+> - Akun **demo** dapat melihat semua fitur dan menu, tetapi **tidak dapat melakukan perubahan data** (read-only mode)
+> - Semua tombol tambah/edit/hapus/simpan akan diblokir dengan pesan error
+> - Cocok untuk presentasi, demo produk, atau testing UI tanpa khawatir merusak data
 
 ---
 
@@ -436,7 +445,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **MediaSoft POS by Ihwal**
 
-Developed with ❤️ using Kiro AI Assistant
+Developed with ❤️ by Ihwal Development Team
 
 ---
 
