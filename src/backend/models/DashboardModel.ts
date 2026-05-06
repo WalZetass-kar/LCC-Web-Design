@@ -37,12 +37,13 @@ export class DashboardModel {
       try {
         topProducts = db.select({
           kd_barang: penjualanDetail.kd_barang,
-          nama_barang: penjualanDetail.nama_barang,
+          nama_barang: barang.nama_barang,
           total_qty: sql<number>`SUM(${penjualanDetail.qty})`,
           total_revenue: sql<number>`SUM(${penjualanDetail.harga_jual} * ${penjualanDetail.qty})`,
         })
           .from(penjualanDetail)
-          .groupBy(penjualanDetail.kd_barang, penjualanDetail.nama_barang)
+          .leftJoin(barang, sql`${penjualanDetail.kd_barang} = ${barang.kd_barang}`)
+          .groupBy(penjualanDetail.kd_barang, barang.nama_barang)
           .orderBy(sql`total_qty DESC`)
           .limit(5)
           .all()

@@ -164,10 +164,10 @@ export default function Login() {
           </div>
 
           {/* Card */}
-          <div className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/40">
+          <div className="bg-white/[0.06] backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/40 hover:border-white/20 transition-all duration-300">
             {/* Header */}
             <div className="mb-7">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center mb-4 shadow-lg shadow-primary-500/30">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center mb-4 shadow-lg shadow-primary-500/30 animate-pulse">
                 <Store size={22} className="text-white" />
               </div>
               <h3 className="text-2xl font-bold text-white mb-1">Selamat datang 👋</h3>
