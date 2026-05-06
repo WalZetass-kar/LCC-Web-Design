@@ -145,7 +145,7 @@ export default function CustomerPage() {
           <button onClick={() => openPoin(row.original)} className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-500 transition-colors" title="Kelola Poin">
             <Gift size={14} />
           </button>
-          <button onClick={() => openRiwayat(row.original)} className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 transition-colors" title="Riwayat Pembelian">
+          <button onClick={() => openRiwayat(row.original)} className="p-1.5 rounded-lg hover:bg-pink-50 dark:hover:bg-pink-900/20 text-pink-500 transition-colors" title="Riwayat Pembelian">
             <History size={14} />
           </button>
           <button onClick={() => openDelete(row.original)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors" title="Hapus">

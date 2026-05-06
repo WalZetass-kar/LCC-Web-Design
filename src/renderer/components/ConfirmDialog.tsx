@@ -30,8 +30,8 @@ const variants = {
   },
   info: {
     icon: Info,
-    iconBg: 'bg-blue-100 dark:bg-blue-900/30',
-    iconColor: 'text-blue-600 dark:text-blue-400',
+    iconBg: 'bg-pink-100 dark:bg-pink-900/30',
+    iconColor: 'text-pink-600 dark:text-pink-400',
     buttonVariant: 'primary' as const
   },
   success: {

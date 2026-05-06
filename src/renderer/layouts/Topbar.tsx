@@ -16,18 +16,22 @@ const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   '/supplier': { label: 'Supplier', parent: 'Relasi' },
   '/customer': { label: 'Customer', parent: 'Relasi' },
   '/kas': { label: 'Kas', parent: 'Keuangan' },
+  '/shifts': { label: 'Shift', parent: 'Keuangan' },
+  '/debts': { label: 'Hutang/Piutang', parent: 'Keuangan' },
+  '/returns': { label: 'Return', parent: 'Keuangan' },
   '/laporan': { label: 'Laporan', parent: 'Keuangan' },
   '/users': { label: 'Pengguna', parent: 'Administrasi' },
   '/activity-log': { label: 'Activity Log', parent: 'Administrasi' },
   '/settings': { label: 'Pengaturan', parent: 'Administrasi' },
   '/pembelian': { label: 'Pembelian', parent: 'Inventaris' },
+  '/stock-opname': { label: 'Stok Opname', parent: 'Inventaris' },
   '/backup': { label: 'Backup', parent: 'Administrasi' },
 }
 
 const JENIS_COLOR: Record<string, string> = {
   STOK: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   EXPIRED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  SYSTEM: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  SYSTEM: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
   INFO: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
 }
 
@@ -51,10 +55,26 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
       if (r.success && r.data?.namatoko) setStoreName(r.data.namatoko)
     })
     loadNotifs()
-    // Poll every 30s
-    const interval = setInterval(loadNotifs, 30000)
-    return () => clearInterval(interval)
-  }, [])
+
+    // Smart polling: 90s interval, pauses when tab not visible
+    let interval: ReturnType<typeof setInterval>
+    const startPolling = () => {
+      interval = setInterval(() => {
+        if (!document.hidden && user?.nama_pengguna) loadNotifs()
+      }, 90000)
+    }
+    startPolling()
+
+    const handleVisibility = () => {
+      if (!document.hidden && user?.nama_pengguna) loadNotifs()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [user?.nama_pengguna])
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -105,7 +125,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           <Menu size={20} />
         </button>
         <nav className="flex items-center gap-1 text-sm min-w-0">
-          <button onClick={() => navigate('/')} className="text-slate-400 hover:text-primary-500 transition-colors shrink-0" title="Dashboard">
+          <button onClick={() => navigate('/')} className="text-slate-400 hover:text-pink-500 transition-colors shrink-0" title="Dashboard">
             <Home size={14} />
           </button>
           {parentLabel && (
@@ -125,7 +145,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         </div>
 
         {isDemoMode() && (
-          <div className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold shadow-lg animate-pulse">
+          <div className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-primary-500 to-primary-400 text-white text-xs font-bold shadow-lg shadow-primary-500/30 animate-pulse">
             🔒 DEMO
           </div>
         )}
@@ -204,7 +224,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           )}
         </div>
 
-        <div className="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs font-bold ml-1 cursor-default select-none" title={user?.nama_lengkap ?? user?.nama_pengguna ?? ''}>
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center text-white text-xs font-bold ml-1 cursor-default select-none shadow-md shadow-primary-500/20" title={user?.nama_lengkap ?? user?.nama_pengguna ?? ''}>
           {initials}
         </div>
       </div>

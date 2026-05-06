@@ -24,7 +24,7 @@ export default function UpdateNotification() {
 
   return (
     <div className={`fixed bottom-4 right-4 max-w-md p-4 rounded-lg shadow-lg ${
-      updateInfo.isCritical ? 'bg-red-500' : 'bg-indigo-500'
+      updateInfo.isCritical ? 'bg-red-500' : 'bg-pink-500'
     } text-white z-50`}>
       <div className="flex items-start gap-3">
         {updateInfo.isCritical && <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />}

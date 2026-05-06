@@ -77,7 +77,7 @@ export default function Dashboard() {
             <StatCard icon={<TrendingUp size={20} />} label="Pendapatan Bulan Ini"
               value={summary.month.total} sub={`${summary.month.count} transaksi`} color="bg-emerald-500" isCurrency />
             <StatCard icon={<Package size={20} />} label="Total Produk"
-              value={summary.totalBarang} sub="produk terdaftar" color="bg-sky-500" />
+              value={summary.totalBarang} sub="produk terdaftar" color="bg-pink-400" />
             <StatCard icon={<AlertTriangle size={20} />} label="Stok Menipis"
               value={summary.lowStockCount} sub="produk ≤ 5 unit" color="bg-amber-500" />
           </>
@@ -94,8 +94,8 @@ export default function Dashboard() {
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false}
                   tickFormatter={v => v >= 1000000 ? `${(v / 1000000).toFixed(0)}jt` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(99,102,241,0.08)' }} />
-                <Bar dataKey="total" fill="rgb(99,102,241)" radius={[6, 6, 0, 0]} maxBarSize={48} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(var(--glass-shadow-rgb,236,72,153),0.08)' }} />
+                <Bar dataKey="total" fill="var(--chart-bar-color, #ec4899)" radius={[6, 6, 0, 0]} maxBarSize={48} />
               </BarChart>
             </ResponsiveContainer>
           </Card>

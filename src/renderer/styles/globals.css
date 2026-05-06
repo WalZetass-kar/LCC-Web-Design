@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ══════════════════════════════════════════════════════════════════════
+   🎨 THEME SYSTEM — CSS Custom Properties
+   All shadow/glow colors derive from these so every theme works fully.
+   ══════════════════════════════════════════════════════════════════════ */
+
 /* ── Default theme: Pink Soft ── */
 :root {
   --color-primary-50: #fdf2f8;
@@ -14,6 +19,13 @@
   --color-primary-700: #be185d;
   --color-primary-800: #9d174d;
   --color-primary-900: #831843;
+  /* Derived tokens — used by glass/glow/shadows */
+  --glass-shadow-rgb: 236, 72, 153;
+  --scrollbar-thumb: #fbcfe8;
+  --scrollbar-thumb-hover: #f9a8d4;
+  --scrollbar-thumb-dark: #831843;
+  --scrollbar-thumb-dark-hover: #9d174d;
+  --chart-bar-color: #ec4899;
 }
 
 /* ── Theme: Emerald ── */
@@ -28,6 +40,12 @@
   --color-primary-700: #047857;
   --color-primary-800: #065f46;
   --color-primary-900: #064e3b;
+  --glass-shadow-rgb: 16, 185, 129;
+  --scrollbar-thumb: #a7f3d0;
+  --scrollbar-thumb-hover: #6ee7b7;
+  --scrollbar-thumb-dark: #064e3b;
+  --scrollbar-thumb-dark-hover: #065f46;
+  --chart-bar-color: #10b981;
 }
 
 /* ── Theme: Rose ── */
@@ -42,6 +60,12 @@
   --color-primary-700: #be123c;
   --color-primary-800: #9f1239;
   --color-primary-900: #881337;
+  --glass-shadow-rgb: 244, 63, 94;
+  --scrollbar-thumb: #fecdd3;
+  --scrollbar-thumb-hover: #fda4af;
+  --scrollbar-thumb-dark: #881337;
+  --scrollbar-thumb-dark-hover: #9f1239;
+  --chart-bar-color: #f43f5e;
 }
 
 /* ── Theme: Amber ── */
@@ -56,6 +80,12 @@
   --color-primary-700: #b45309;
   --color-primary-800: #92400e;
   --color-primary-900: #78350f;
+  --glass-shadow-rgb: 245, 158, 11;
+  --scrollbar-thumb: #fde68a;
+  --scrollbar-thumb-hover: #fcd34d;
+  --scrollbar-thumb-dark: #78350f;
+  --scrollbar-thumb-dark-hover: #92400e;
+  --chart-bar-color: #f59e0b;
 }
 
 /* ── Theme: Sky ── */
@@ -70,9 +100,15 @@
   --color-primary-700: #0369a1;
   --color-primary-800: #075985;
   --color-primary-900: #0c4a6e;
+  --glass-shadow-rgb: 14, 165, 233;
+  --scrollbar-thumb: #bae6fd;
+  --scrollbar-thumb-hover: #7dd3fc;
+  --scrollbar-thumb-dark: #0c4a6e;
+  --scrollbar-thumb-dark-hover: #075985;
+  --chart-bar-color: #0ea5e9;
 }
 
-/* ── Theme: Pink Soft ── */
+/* ── Theme: Pink Soft (explicit) ── */
 [data-theme="pink"] {
   --color-primary-50: #fdf2f8;
   --color-primary-100: #fce7f3;
@@ -84,32 +120,122 @@
   --color-primary-700: #be185d;
   --color-primary-800: #9d174d;
   --color-primary-900: #831843;
+  --glass-shadow-rgb: 236, 72, 153;
+  --scrollbar-thumb: #fbcfe8;
+  --scrollbar-thumb-hover: #f9a8d4;
+  --scrollbar-thumb-dark: #831843;
+  --scrollbar-thumb-dark-hover: #9d174d;
+  --chart-bar-color: #ec4899;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   BASE STYLES
+   ══════════════════════════════════════════════════════════════════════ */
 
 @layer base {
   body {
-    @apply bg-gradient-to-br from-slate-50 via-slate-100 to-slate-200 text-slate-800 antialiased;
+    @apply bg-gradient-to-br from-slate-50 via-slate-50 to-slate-100 text-slate-800 antialiased;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   .dark body {
-    @apply bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-slate-100;
+    @apply bg-gradient-to-br from-[#1a1a2e] via-slate-900 to-[#16213e] text-slate-100;
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY SCALE — Consistent heading hierarchy
+   ══════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+  .heading-1 { @apply text-xl sm:text-2xl font-bold text-slate-800 dark:text-white; }
+  .heading-2 { @apply text-lg font-bold text-slate-800 dark:text-slate-100; }
+  .heading-3 { @apply text-sm font-semibold text-slate-700 dark:text-slate-200; }
+  .text-body { @apply text-sm text-slate-600 dark:text-slate-300; }
+  .text-caption { @apply text-xs text-slate-500 dark:text-slate-400; }
+  .text-label { @apply text-sm font-semibold text-slate-700 dark:text-slate-300; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   GLASSMORPHISM UTILITIES — Theme-aware glass effects
+   ══════════════════════════════════════════════════════════════════════ */
+
 @layer utilities {
+  /* Glass effect — uses theme-aware shadow color */
   .glass {
-    @apply bg-white/80 backdrop-blur-xl border border-white/60 shadow-2xl shadow-slate-900/10;
+    @apply bg-white/80 backdrop-blur-xl border border-white/60;
+    box-shadow:
+      0 8px 32px rgba(var(--glass-shadow-rgb), 0.06),
+      0 2px 8px rgba(0, 0, 0, 0.04);
   }
   .dark .glass {
-    @apply bg-slate-800/80 border-slate-700/60 shadow-slate-950/50;
+    @apply bg-slate-800/70 border-slate-700/40;
+    box-shadow:
+      0 8px 32px rgba(var(--glass-shadow-rgb), 0.08),
+      0 2px 8px rgba(0, 0, 0, 0.3);
   }
   .glass-card {
     @apply glass rounded-2xl;
+    transition: box-shadow 0.3s ease, transform 0.2s ease;
   }
+  .glass-card:hover {
+    box-shadow:
+      0 12px 40px rgba(var(--glass-shadow-rgb), 0.1),
+      0 4px 12px rgba(0, 0, 0, 0.06);
+  }
+  .dark .glass-card:hover {
+    box-shadow:
+      0 12px 40px rgba(var(--glass-shadow-rgb), 0.12),
+      0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Glow effect — theme-aware */
+  .glow-primary {
+    box-shadow: 0 0 20px rgba(var(--glass-shadow-rgb), 0.3);
+  }
+  .glow-primary-lg {
+    box-shadow: 0 0 40px rgba(var(--glass-shadow-rgb), 0.25), 0 0 80px rgba(var(--glass-shadow-rgb), 0.1);
+  }
+  .glow-primary-subtle {
+    box-shadow: 0 0 15px rgba(var(--glass-shadow-rgb), 0.15);
+  }
+
+  /* Gradient background — theme-aware */
+  .bg-primary-glass {
+    background: linear-gradient(135deg, rgba(var(--glass-shadow-rgb), 0.08), rgba(168,85,247,0.05));
+  }
+  .dark .bg-primary-glass {
+    background: linear-gradient(135deg, rgba(var(--glass-shadow-rgb), 0.12), rgba(168,85,247,0.08));
+  }
+
+  /* Scrollbar — theme-aware */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: #cbd5e1 transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
+  .dark .scrollbar-thin {
+    scrollbar-color: var(--scrollbar-thumb-dark) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-dark);
+  }
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-dark-hover);
+  }
+
+  /* Animations */
   .animate-in {
     animation: slideIn 0.3s ease-out;
   }
@@ -117,6 +243,34 @@
     animation: zoomIn 0.2s ease-out;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   COMPONENT OVERRIDES — Theme-aware focus & selection
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Focus rings — use primary color from theme */
+*:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
+/* Selection highlight — theme-aware */
+::selection {
+  background: rgba(var(--glass-shadow-rgb), 0.2);
+  color: inherit;
+}
+
+/* Input focus glow — theme-aware */
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--color-primary-400) !important;
+  box-shadow: 0 0 0 3px rgba(var(--glass-shadow-rgb), 0.1) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   KEYFRAME ANIMATIONS
+   ══════════════════════════════════════════════════════════════════════ */
 
 @keyframes slideIn {
   from {
@@ -137,5 +291,173 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes primaryPulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(var(--glass-shadow-rgb), 0.2);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(var(--glass-shadow-rgb), 0.35);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   DEMO MODE STYLES
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Top banner gradient with animation */
+.demo-banner-gradient {
+  background: linear-gradient(90deg, #dc2626, #ea580c, #dc2626, #ea580c);
+  background-size: 300% 100%;
+  animation: demoBannerShift 4s ease infinite;
+}
+
+@keyframes demoBannerShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Watermark pattern — diagonal "DEMO" text repeated across screen */
+.demo-watermark-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 120px,
+    rgba(220, 38, 38, 0.03) 120px,
+    rgba(220, 38, 38, 0.03) 122px
+  );
+  overflow: hidden;
+}
+
+.demo-watermark-pattern::before {
+  content: 'DEMO MODE ● READ ONLY ● DEMO MODE ● READ ONLY ● DEMO MODE ● READ ONLY ● DEMO MODE ● READ ONLY ● DEMO MODE ● READ ONLY ● DEMO MODE ● READ ONLY ● DEMO MODE ● READ ONLY ● DEMO MODE ● READ ONLY ● DEMO MODE ● READ ONLY ● DEMO MODE ● READ ONLY ● DEMO MODE ● READ ONLY ● DEMO MODE ● READ ONLY ●';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-35deg);
+  font-size: 48px;
+  font-weight: 900;
+  color: rgba(220, 38, 38, 0.035);
+  white-space: nowrap;
+  letter-spacing: 16px;
+  line-height: 180px;
+  width: 400%;
+  text-align: center;
+  word-break: break-all;
+  white-space: pre-wrap;
+  user-select: none;
+  pointer-events: none;
+}
+
+.dark .demo-watermark-pattern::before {
+  color: rgba(248, 113, 113, 0.04);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PRICING POPUP ANIMATIONS
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Backdrop fade-in with subtle blur ramp */
+.pricing-backdrop-animate {
+  animation: pricingBackdropIn 0.4s ease-out;
+}
+
+@keyframes pricingBackdropIn {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to   { opacity: 1; backdrop-filter: blur(16px); }
+}
+
+/* Modal entrance — scale + slide up */
+.pricing-modal-enter {
+  animation: pricingModalIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pricingModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Icon rocket pulse */
+.pricing-icon-pulse {
+  animation: pricingIconPulse 2s ease-in-out infinite;
+}
+
+@keyframes pricingIconPulse {
+  0%, 100% {
+    box-shadow: 0 8px 30px rgba(139, 92, 246, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 12px 40px rgba(139, 92, 246, 0.5);
+    transform: scale(1.05);
+  }
+}
+
+/* Pricing card shine sweep on hover */
+.pricing-card-shine {
+  position: relative;
+  overflow: hidden;
+}
+.pricing-card-shine::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.08) 50%,
+    transparent 60%
+  );
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+.pricing-card-shine:hover::after {
+  transform: translateX(100%);
+}
+
+/* Upgrade button shimmer */
+.pricing-cta-shimmer {
+  background-size: 200% 100%;
+  animation: pricingCtaShimmer 3s ease-in-out infinite;
+}
+
+@keyframes pricingCtaShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Demo upgrade badge in sidebar */
+.demo-upgrade-badge {
+  animation: demoUpgradePulse 3s ease-in-out infinite;
+}
+
+@keyframes demoUpgradePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(139, 92, 246, 0);
   }
 }

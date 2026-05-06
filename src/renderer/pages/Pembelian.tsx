@@ -319,9 +319,9 @@ export default function PembelianPage() {
               <p className="font-medium text-slate-700 dark:text-slate-200">{selected.nama_suplier}</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20">
+              <div className="p-3 rounded-xl bg-pink-50 dark:bg-pink-900/20">
                 <p className="text-xs text-slate-500">Total Pembelian</p>
-                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatRupiah(selected.sub_total)}</p>
+                <p className="text-lg font-bold text-pink-600 dark:text-pink-400">{formatRupiah(selected.sub_total)}</p>
               </div>
               <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20">
                 <p className="text-xs text-slate-500">Sudah Dibayar</p>

@@ -3,7 +3,7 @@ import {
   getSortedRowModel, flexRender,
   type ColumnDef, type SortingState, type ColumnFiltersState,
 } from '@tanstack/react-table'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import Input from './Input'
 import { Search } from 'lucide-react'
@@ -13,12 +13,26 @@ interface DataTableProps<T> {
   columns: ColumnDef<T>[]
   searchPlaceholder?: string
   searchKey?: string
+  defaultPageSize?: number
 }
 
-export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari...', searchKey }: DataTableProps<T>) {
+/** Debounce hook for search performance */
+function useDebounce(value: string, delay: number) {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+  return debounced
+}
+
+const PAGE_SIZES = [10, 25, 50, 100]
+
+export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari...', searchKey, defaultPageSize = 10 }: DataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [globalFilter, setGlobalFilter] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const globalFilter = useDebounce(searchInput, 300)
 
   const table = useReactTable({
     data,
@@ -26,26 +40,45 @@ export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari.
     state: { sorting, columnFilters, globalFilter },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
+    onGlobalFilterChange: () => {}, // Controlled via debounce
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 10 } },
+    initialState: { pagination: { pageSize: defaultPageSize } },
+    globalFilterFn: 'includesString',
   })
+
+  // Sync debounced value to table
+  useEffect(() => {
+    table.setGlobalFilter(globalFilter)
+  }, [globalFilter, table])
+
+  const totalFiltered = table.getFilteredRowModel().rows.length
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Search */}
+      {/* Search + Page Size */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <Input
           placeholder={searchPlaceholder}
-          value={globalFilter}
-          onChange={e => setGlobalFilter(e.target.value)}
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
           icon={<Search size={14} />}
           className="w-full sm:max-w-xs"
         />
-        <span className="text-xs text-slate-400 text-center sm:text-left">{table.getFilteredRowModel().rows.length} data</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-400">{totalFiltered} data</span>
+          <select
+            value={table.getState().pagination.pageSize}
+            onChange={e => table.setPageSize(Number(e.target.value))}
+            className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+          >
+            {PAGE_SIZES.map(size => (
+              <option key={size} value={size}>{size} / halaman</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Table - Horizontal scroll on mobile */}
@@ -100,7 +133,7 @@ export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari.
       {/* Pagination */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
         <span className="order-2 sm:order-1">
-          Halaman {table.getState().pagination.pageIndex + 1} dari {table.getPageCount()}
+          Halaman {table.getState().pagination.pageIndex + 1} dari {table.getPageCount() || 1}
         </span>
         <div className="flex items-center gap-1 order-1 sm:order-2">
           <button
@@ -110,6 +143,34 @@ export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari.
           >
             <ChevronLeft size={14} />
           </button>
+          {/* Page number buttons */}
+          {Array.from({ length: Math.min(table.getPageCount(), 5) }, (_, i) => {
+            const currentPage = table.getState().pagination.pageIndex
+            const totalPages = table.getPageCount()
+            let pageNum: number
+            if (totalPages <= 5) {
+              pageNum = i
+            } else if (currentPage < 3) {
+              pageNum = i
+            } else if (currentPage > totalPages - 4) {
+              pageNum = totalPages - 5 + i
+            } else {
+              pageNum = currentPage - 2 + i
+            }
+            return (
+              <button
+                key={pageNum}
+                onClick={() => table.setPageIndex(pageNum)}
+                className={`w-7 h-7 rounded-lg text-xs font-medium transition-colors
+                  ${pageNum === currentPage
+                    ? 'bg-primary-500 text-white shadow-sm'
+                    : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500'
+                  }`}
+              >
+                {pageNum + 1}
+              </button>
+            )
+          })}
           <button
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}

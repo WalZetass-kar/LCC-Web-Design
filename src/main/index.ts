@@ -1,14 +1,30 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * MAIN PROCESS — Electron Entry Point with DEMO MODE Hardening
+ * ═══════════════════════════════════════════════════════════════════════
+ * 
+ * Security hardening applied:
+ * 1. contextIsolation: true (already set)
+ * 2. nodeIntegration: false (already set)
+ * 3. DevTools disabled for demo users
+ * 4. IPC handlers wrapped with demo guard
+ * 5. Server-side session management
+ */
+
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
 import { registerIpcHandlers } from './ipcHandlers.js'
 import { SchedulerService } from '../backend/services/scheduler.js'
+import { demoSession } from '../backend/services/demoSessionManager.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+
+let mainWindow: BrowserWindow | null = null
 
 function createWindow() {
   // Preload script path - use .cjs file (CommonJS) because package.json has "type": "module"
@@ -26,15 +42,17 @@ function createWindow() {
     minHeight: 600,
     webPreferences: {
       preload: preloadPath,
-      contextIsolation: true,
-      nodeIntegration: false,
+      contextIsolation: true,      // SECURITY: Isolate renderer from Node.js
+      nodeIntegration: false,       // SECURITY: No Node.js in renderer
       sandbox: false,
-      webSecurity: isDev ? false : true, // Disable web security in dev mode
+      webSecurity: true,                   // SECURITY: Always enforce web security
     },
     titleBarStyle: 'default',
     show: false,
     backgroundColor: '#f8fafc',
   })
+
+  mainWindow = win
 
   if (isDev) {
     win.loadURL('http://localhost:5173')
@@ -60,6 +78,30 @@ function createWindow() {
       })
   })
 
+  // ═══════════════════════════════════════════════════════════════════
+  // DEMO MODE HARDENING: Disable DevTools for demo users
+  // ═══════════════════════════════════════════════════════════════════
+  win.webContents.on('devtools-opened', () => {
+    if (demoSession.isDemoMode()) {
+      console.warn('🚫 DevTools blocked for demo user')
+      win.webContents.closeDevTools()
+    }
+  })
+
+  // Block keyboard shortcut for DevTools in demo mode
+  win.webContents.on('before-input-event', (event, input) => {
+    if (demoSession.isDemoMode()) {
+      // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C
+      if (
+        input.key === 'F12' ||
+        (input.control && input.shift && ['I', 'i', 'J', 'j', 'C', 'c'].includes(input.key))
+      ) {
+        event.preventDefault()
+        console.warn('🚫 DevTools shortcut blocked for demo user')
+      }
+    }
+  })
+
   win.once('ready-to-show', () => win.show())
 }
 
@@ -80,10 +122,16 @@ app.on('window-all-closed', () => {
   // Stop scheduler before quit
   SchedulerService.stop()
   
+  // Clear demo session
+  demoSession.clearSession()
+  
   if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('before-quit', () => {
   // Stop scheduler before quit
   SchedulerService.stop()
+  
+  // Clear demo session
+  demoSession.clearSession()
 })

@@ -94,7 +94,7 @@ export default function Login() {
       {/* Background blobs */}
       <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-primary-600/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
       <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-primary-500/10 rounded-full blur-3xl translate-x-1/3 translate-y-1/3" />
-      <div className="absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-violet-600/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-pink-600/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
 
       {/* LEFT PANEL — branding, hidden on mobile */}
       <div className="hidden lg:flex flex-col justify-between w-[48%] p-12 relative z-10">
@@ -118,7 +118,7 @@ export default function Login() {
             </div>
             <h2 className="text-4xl font-bold text-white leading-tight mb-4">
               Kelola toko Anda<br />
-              <span className="bg-gradient-to-r from-primary-400 to-violet-400 bg-clip-text text-transparent">lebih cerdas</span><br />
+              <span className="bg-gradient-to-r from-primary-400 to-rose-300 bg-clip-text text-transparent">lebih cerdas</span><br />
               & lebih cepat.
             </h2>
             <p className="text-slate-400 text-sm leading-relaxed">
@@ -167,7 +167,7 @@ export default function Login() {
           <div className="bg-white/[0.04] backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/40">
             {/* Header */}
             <div className="mb-7">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-violet-500 flex items-center justify-center mb-4 shadow-lg shadow-primary-500/30">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center mb-4 shadow-lg shadow-primary-500/30">
                 <Store size={22} className="text-white" />
               </div>
               <h3 className="text-2xl font-bold text-white mb-1">Selamat datang 👋</h3>
@@ -221,12 +221,44 @@ export default function Login() {
                 </div>
               )}
 
-              <Button type="submit" className="w-full mt-1 bg-gradient-to-r from-primary-500 to-violet-500 hover:from-primary-600 hover:to-violet-600 border-0" size="lg" loading={loading}>
+              <Button type="submit" className="w-full mt-1 bg-gradient-to-r from-primary-500 to-primary-400 hover:from-primary-600 hover:to-primary-500 border-0" size="lg" loading={loading}>
                 {loading ? 'Memproses...' : 'Masuk ke Dashboard'}
               </Button>
             </form>
 
-            <div className="mt-6 pt-5 border-t border-white/10 flex items-center justify-center gap-2 text-xs text-slate-500">
+            {/* Demo Login Section */}
+            <div className="mt-5 pt-5 border-t border-white/10">
+              <button
+                type="button"
+                onClick={async () => {
+                  setError('')
+                  setLoading(true)
+                  try {
+                    const r = await api<UserSession>('auth:login', 'demo', 'demo')
+                    if (r.success && r.data) {
+                      login(r.data)
+                      toast('🔒 Mode Demo aktif — semua aksi tulis diblokir', 'info')
+                      navigate('/', { replace: true })
+                    } else {
+                      setError(r.message ?? 'Akun demo belum tersedia. Hubungi administrator.')
+                    }
+                  } catch (err) {
+                    setError('Akun demo belum tersedia')
+                  }
+                  setLoading(false)
+                }}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 hover:from-amber-500/20 hover:to-orange-500/20 transition-all group"
+              >
+                <span className="text-lg">🔒</span>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-amber-400 group-hover:text-amber-300 transition-colors">Coba Demo Mode</p>
+                  <p className="text-[10px] text-slate-500">Jelajahi semua fitur — read only</p>
+                </div>
+              </button>
+            </div>
+
+            <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500">
               <Sparkles size={12} className="text-primary-500" />
               Powered by Electron + React
             </div>

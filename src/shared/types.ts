@@ -227,6 +227,18 @@ export interface UserSession {
   hak_akses: string | null
 }
 
+export interface SubscriptionPlan {
+  id: number
+  name: string
+  price: number
+  duration_days: number
+  features: string[]
+  is_active: boolean
+  is_recommended: boolean
+  created_at: string
+  updated_at: string | null
+}
+
 // Extend window with our API bridge
 declare global {
   interface Window {

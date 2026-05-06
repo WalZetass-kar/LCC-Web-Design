@@ -69,7 +69,7 @@ export default function QuickSearch({ isOpen, onClose }: QuickSearchProps) {
             onChange={e => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Quick search... (Ctrl+K)"
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
           />
         </div>
 
@@ -81,7 +81,7 @@ export default function QuickSearch({ isOpen, onClose }: QuickSearchProps) {
                 key={item.path}
                 onClick={() => handleSelect(item.path)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  idx === selected ? 'bg-indigo-50 text-indigo-600' : 'hover:bg-gray-50'
+                  idx === selected ? 'bg-pink-50 text-pink-600' : 'hover:bg-gray-50'
                 }`}
               >
                 <Icon className="w-5 h-5" />

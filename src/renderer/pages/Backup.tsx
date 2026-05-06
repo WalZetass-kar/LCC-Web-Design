@@ -16,6 +16,7 @@ import { SkeletonCard } from "../components/Skeleton";
 import { api } from "../utils/api";
 import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useDemoGuard } from "../hooks/useDemoGuard";
 import type { Backup } from "../../shared/types";
 
 const fmt = (bytes: number | null) => {
@@ -36,6 +37,7 @@ const fmtDate = (d: string) =>
 export default function BackupPage() {
   const toast = useToast();
   const { user } = useAuth();
+  const { guardPremiumFeature } = useDemoGuard();
   const [backups, setBackups] = useState<Backup[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -58,6 +60,7 @@ export default function BackupPage() {
   }, []);
 
   const handleCreate = async () => {
+    if (guardPremiumFeature('backup_restore', 'Backup Database')) return;
     setCreating(true);
     const r = await api(
       "backup:create",
@@ -73,6 +76,7 @@ export default function BackupPage() {
 
   const handleRestore = async () => {
     if (!selected) return;
+    if (guardPremiumFeature('backup_restore', 'Restore Database')) return;
     setActionLoading(true);
     const r = await api("backup:restore", selected.kd_backup);
     setActionLoading(false);
@@ -103,6 +107,7 @@ export default function BackupPage() {
 
   const handleImport = async () => {
     if (!importFile) return toast("Pilih file backup", "error");
+    if (guardPremiumFeature('backup_restore', 'Import Database')) return;
 
     // Read file as base64
     const reader = new FileReader();
@@ -162,7 +167,7 @@ export default function BackupPage() {
               </div>
             </Card>
             <Card className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-violet-500 flex items-center justify-center text-white shrink-0 shadow-lg">
+              <div className="w-12 h-12 rounded-2xl bg-pink-500 flex items-center justify-center text-white shrink-0 shadow-lg">
                 <Clock size={20} />
               </div>
               <div>

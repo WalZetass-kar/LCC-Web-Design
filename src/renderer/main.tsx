@@ -4,6 +4,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ToastProvider } from './contexts/ToastContext'
 import { AuthProvider } from './contexts/AuthContext'
+import { DemoProvider } from './contexts/DemoContext'
 import { useAuth } from './contexts/AuthContext'
 import AppLayout from './layouts/AppLayout'
 import Login from './pages/Login'
@@ -25,6 +26,7 @@ import Returns from './pages/Returns'
 import Shifts from './pages/Shifts'
 import Debts from './pages/Debts'
 import StockOpname from './pages/StockOpname'
+import SubscriptionPlans from './pages/SubscriptionPlans'
 import ErrorBoundary from './components/ErrorBoundary'
 import './styles/globals.css'
 
@@ -38,6 +40,9 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 function RequireRole({ children, minRole }: { children: React.ReactNode; minRole: string }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
+  
+  // Demo users can ACCESS all pages (read-only) — security is in IPC layer
+  if (user.hak_akses === 'demo') return <>{children}</>
   
   // Hierarchy: developer > superadmin > admin > operator > kasir
   const hierarchy = ['developer', 'superadmin', 'admin', 'operator', 'kasir']
@@ -53,6 +58,8 @@ function RequireRole({ children, minRole }: { children: React.ReactNode; minRole
 function RequireExactRoles({ children, allowedRoles }: { children: React.ReactNode; allowedRoles: string[] }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
+  // Demo users can ACCESS all pages (read-only) — security is in IPC layer
+  if (user.hak_akses === 'demo') return <>{children}</>
   if (!allowedRoles.includes(user.hak_akses ?? '')) return <Navigate to="/" replace />
   return <>{children}</>
 }
@@ -86,6 +93,7 @@ function App() {
           <Route path="/shifts" element={<Shifts />} />
           <Route path="/debts" element={<Debts />} />
           <Route path="/stock-opname" element={<StockOpname />} />
+          <Route path="/subscription-plans" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><SubscriptionPlans /></RequireExactRoles>} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -100,7 +108,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            <App />
+            <DemoProvider>
+              <App />
+            </DemoProvider>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>

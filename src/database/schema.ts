@@ -204,3 +204,15 @@ export const activityLog = sqliteTable('mediasoft_activity_log', {
   ip_address: text('ip_address'),
   detail: text('detail'),
 })
+
+export const subscriptionPlans = sqliteTable('mediasoft_subscription_plans', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  price: integer('price').notNull(),
+  duration_days: integer('duration_days').notNull(),
+  features: text('features').default('[]'), // JSON array of strings
+  is_active: integer('is_active').default(1), // 1 = active, 0 = inactive
+  is_recommended: integer('is_recommended').default(0),
+  created_at: text('created_at').notNull(),
+  updated_at: text('updated_at'),
+})

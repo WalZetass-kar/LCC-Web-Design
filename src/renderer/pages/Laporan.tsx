@@ -7,6 +7,7 @@ import Badge from '../components/Badge'
 import { api } from '../utils/api'
 import { formatRupiah } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
+import { useDemoGuard } from '../hooks/useDemoGuard'
 import type { Penjualan } from '../../shared/types'
 
 interface LabaRugi {
@@ -46,6 +47,7 @@ const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).to
 
 export default function Laporan() {
   const toast = useToast()
+  const { guardPremiumFeature } = useDemoGuard()
   const [tab, setTab] = useState<TabType>('penjualan')
   const [dateRange, setDateRange] = useState({ start: firstDay, end: today })
   const [loading, setLoading] = useState(false)
@@ -91,6 +93,10 @@ export default function Laporan() {
   }
 
   const handleExport = async (format: 'excel' | 'pdf') => {
+    // Block demo users from exporting — trigger pricing popup
+    const featureKey = format === 'excel' ? 'export_excel' : 'export_pdf'
+    if (guardPremiumFeature(featureKey, `Export ${format.toUpperCase()}`)) return
+
     const key = `${tab}-${format}`
     setExportLoading(key)
     let r: any
@@ -244,7 +250,7 @@ export default function Laporan() {
             { label: 'Total Penjualan', value: labaRugiData.total_penjualan, currency: true, color: 'text-primary-600 dark:text-primary-400' },
             { label: 'Total Modal', value: labaRugiData.total_modal, currency: true, color: 'text-amber-600 dark:text-amber-400' },
             { label: 'Laba Kotor', value: labaRugiData.laba_kotor, currency: true, color: labaRugiData.laba_kotor >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400' },
-            { label: 'Margin', value: labaRugiData.margin_persen, currency: false, suffix: '%', color: 'text-violet-600 dark:text-violet-400' },
+            { label: 'Margin', value: labaRugiData.margin_persen, currency: false, suffix: '%', color: 'text-pink-600 dark:text-pink-400' },
           ].map(s => (
             <Card key={s.label} className="text-center">
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{s.label}</p>

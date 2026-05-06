@@ -8,6 +8,8 @@ import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
+import Select from '../components/Select'
+import Textarea from '../components/Textarea'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { api } from '../utils/api'
 import { formatRupiah } from '../utils/format'
@@ -240,22 +242,20 @@ export default function Produk() {
           <Input label="Harga Modal" type="number" value={form.harga_modal} onChange={e => f('harga_modal', +e.target.value)} />
           <Input label="Stok" type="number" value={form.stok} onChange={e => f('stok', +e.target.value)} />
           <Input label="Diskon (%)" type="number" value={form.potongan} onChange={e => f('potongan', +e.target.value)} />
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Kategori</label>
-            <select value={form.kd_kategori_barang} onChange={e => f('kd_kategori_barang', +e.target.value)}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400">
-              <option value={0}>-- Pilih Kategori --</option>
-              {kategori.map(k => <option key={k.kd_kategori_barang} value={k.kd_kategori_barang}>{k.kategori_barang}</option>)}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Satuan</label>
-            <select value={form.kd_satuan} onChange={e => f('kd_satuan', +e.target.value)}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400">
-              <option value={0}>-- Pilih Satuan --</option>
-              {satuan.map(s => <option key={s.kd_satuan} value={s.kd_satuan}>{s.nama_satuan}</option>)}
-            </select>
-          </div>
+          <Select
+            label="Kategori"
+            value={form.kd_kategori_barang}
+            onChange={e => f('kd_kategori_barang', +e.target.value)}
+            placeholder="-- Pilih Kategori --"
+            options={kategori.map(k => ({ value: k.kd_kategori_barang, label: k.kategori_barang ?? '' }))}
+          />
+          <Select
+            label="Satuan"
+            value={form.kd_satuan}
+            onChange={e => f('kd_satuan', +e.target.value)}
+            placeholder="-- Pilih Satuan --"
+            options={satuan.map(s => ({ value: s.kd_satuan, label: s.nama_satuan ?? '' }))}
+          />
           {/* Barcode field */}
           <Input label="Barcode" value={form.barcode} onChange={e => f('barcode', e.target.value)} placeholder="Scan atau ketik barcode..." />
           {/* Expired date field */}
@@ -304,7 +304,7 @@ export default function Produk() {
           </div>
 
           <div className="sm:col-span-2">
-            <Input label="Deskripsi" value={form.deskripsi_barang} onChange={e => f('deskripsi_barang', e.target.value)} />
+            <Textarea label="Deskripsi" rows={3} value={form.deskripsi_barang} onChange={e => f('deskripsi_barang', e.target.value)} placeholder="Deskripsi produk..." />
           </div>
         </div>
       </Modal>

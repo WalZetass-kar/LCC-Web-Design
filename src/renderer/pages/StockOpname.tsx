@@ -178,7 +178,7 @@ export default function StockOpname() {
                     <td className="p-3">
                       <span className={`px-2 py-1 rounded text-xs ${
                         opname.status === 'APPROVED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        opname.status === 'COMPLETED' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        opname.status === 'COMPLETED' ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400' :
                         'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                       }`}>{opname.status}</span>
                     </td>
@@ -189,7 +189,7 @@ export default function StockOpname() {
                         </button>
                         {opname.status === 'PENDING' && (
                           <>
-                            <button onClick={() => openInputStok(opname)} className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 transition-colors" title="Input Stok">
+                            <button onClick={() => openInputStok(opname)} className="p-1.5 rounded-lg hover:bg-pink-50 dark:hover:bg-pink-900/20 text-pink-500 transition-colors" title="Input Stok">
                               <Package size={14} />
                             </button>
                             <button onClick={() => { setSelectedOpname(opname); setModal('approve') }} className="p-1.5 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-green-500 transition-colors" title="Approve">
@@ -286,7 +286,7 @@ export default function StockOpname() {
         }
       >
         <div className="space-y-4">
-          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-sm text-blue-700 dark:text-blue-300">
+          <div className="p-3 rounded-xl bg-pink-50 dark:bg-pink-900/20 text-sm text-pink-700 dark:text-pink-300">
             <strong>Opname:</strong> {selectedOpname?.opname_number}
           </div>
           

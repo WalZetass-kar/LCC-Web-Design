@@ -160,7 +160,7 @@ export default function Kas() {
       {/* Active Drawer Status */}
       {activeDrawer ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <Card title="Modal Awal" action={<DollarSign size={16} className="text-blue-500" />}>
+          <Card title="Modal Awal" action={<DollarSign size={16} className="text-pink-500" />}>
             <p className="text-2xl font-bold text-slate-800 dark:text-white mt-2">{formatRupiah(activeDrawer.modal_awal)}</p>
             <p className="text-xs text-slate-400 mt-1">{formatDateTime(activeDrawer.tgl_buka)}</p>
           </Card>

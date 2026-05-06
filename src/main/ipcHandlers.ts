@@ -1,3 +1,13 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * IPC HANDLERS — All IPC channels with DEMO GUARD protection
+ * ═══════════════════════════════════════════════════════════════════════
+ * 
+ * SECURITY: Every handler is wrapped with withDemoGuard().
+ * Mutation channels are automatically blocked for demo users.
+ * The guard checks the server-side session — NOT client data.
+ */
+
 import type { IpcMain } from 'electron'
 import { BarangController } from '../backend/controllers/BarangController.js'
 import { KategoriController } from '../backend/controllers/KategoriController.js'
@@ -21,225 +31,281 @@ import { BarcodeController } from '../backend/controllers/BarcodeController.js'
 import { PaymentMethodController, TaxController, ReturnController, ShiftController, DebtController, StockOpnameController, ProductImageController } from '../backend/controllers/NewFeaturesController.js'
 import { UpdateService } from '../backend/services/updateService.js'
 import { ErrorLogService } from '../backend/services/errorLogService.js'
+import { demoSession } from '../backend/services/demoSessionManager.js'
+import { withDemoGuard, DEMO_BLOCKED_RESPONSE } from '../backend/middleware/demoGuardV2.js'
+import { PlanController } from '../backend/controllers/PlanController.js'
+
+/**
+ * Helper to register an IPC handler with automatic demo guard.
+ * Every channel goes through withDemoGuard which checks the server-side session.
+ */
+function handle(ipcMain: IpcMain, channel: string, handler: (...args: any[]) => any) {
+  const guarded = withDemoGuard(channel, (_e: any, ...args: any[]) => handler(...args))
+  ipcMain.handle(channel, guarded)
+}
 
 export function registerIpcHandlers(ipcMain: IpcMain) {
-  // Auth
-  ipcMain.handle('auth:login', (_e, username: string, password: string) => AuthController.login(username, password))
+  // ─── AUTH (always allowed — no demo guard needed) ───────────────────
+  ipcMain.handle('auth:login', async (_e, username: string, password: string) => {
+    const result = await AuthController.login(username, password)
+    
+    // CRITICAL: Set the server-side session on successful login
+    if (result.success && result.data) {
+      const userData = result.data as { nama_pengguna: string; hak_akses: string }
+      demoSession.setSession(userData.nama_pengguna, userData.hak_akses || 'kasir')
+    }
+    
+    return result
+  })
+  
   ipcMain.handle('auth:checkIdentitas', () => AuthController.checkIdentitas())
   
-  // Barang (Produk)
-  ipcMain.handle('barang:getAll', () => BarangController.getAll())
-  ipcMain.handle('barang:search', (_e, q: string) => BarangController.search(q))
-  ipcMain.handle('barang:create', (_e, data) => BarangController.create(data))
-  ipcMain.handle('barang:update', (_e, kd: string, data) => BarangController.update(kd, data))
-  ipcMain.handle('barang:delete', (_e, kd: string) => BarangController.delete(kd))
+  // Auth logout — clear the session
+  ipcMain.handle('auth:logout', (_e, username: string) => {
+    demoSession.clearSession()
+    return { success: true, message: 'Logged out' }
+  })
 
-  // Kategori
-  ipcMain.handle('kategori:getAll', () => KategoriController.getAll())
-  ipcMain.handle('kategori:create', (_e, data) => KategoriController.create(data))
-  ipcMain.handle('kategori:update', (_e, id: number, data) => KategoriController.update(id, data))
-  ipcMain.handle('kategori:delete', (_e, id: number) => KategoriController.delete(id))
+  // ─── DEMO STATUS (always allowed) ──────────────────────────────────
+  ipcMain.handle('demo:getStatus', () => {
+    return {
+      success: true,
+      data: {
+        isDemo: demoSession.isDemoMode(),
+        username: demoSession.getUsername(),
+        role: demoSession.getRole(),
+        violationCount: demoSession.getViolationCount(),
+      },
+    }
+  })
 
-  // Satuan
-  ipcMain.handle('satuan:getAll', () => SatuanController.getAll())
+  ipcMain.handle('demo:getViolationLog', () => {
+    return {
+      success: true,
+      data: demoSession.getViolationLog(),
+    }
+  })
 
-  // Penjualan (Transaksi)
-  ipcMain.handle('penjualan:getAll', () => PenjualanController.getAll())
-  ipcMain.handle('penjualan:getDetail', (_e, kd: string) => PenjualanController.getDetail(kd))
-  ipcMain.handle('penjualan:create', (_e, data) => PenjualanController.create(data))
+  // ─── BARANG (Products) ─────────────────────────────────────────────
+  handle(ipcMain, 'barang:getAll', () => BarangController.getAll())
+  handle(ipcMain, 'barang:search', (q: string) => BarangController.search(q))
+  handle(ipcMain, 'barang:create', (data: any) => BarangController.create(data))
+  handle(ipcMain, 'barang:update', (kd: string, data: any) => BarangController.update(kd, data))
+  handle(ipcMain, 'barang:delete', (kd: string) => BarangController.delete(kd))
 
-  // Dashboard
-  ipcMain.handle('dashboard:getSummary', () => DashboardController.getSummary())
+  // ─── KATEGORI ──────────────────────────────────────────────────────
+  handle(ipcMain, 'kategori:getAll', () => KategoriController.getAll())
+  handle(ipcMain, 'kategori:create', (data: any) => KategoriController.create(data))
+  handle(ipcMain, 'kategori:update', (id: number, data: any) => KategoriController.update(id, data))
+  handle(ipcMain, 'kategori:delete', (id: number) => KategoriController.delete(id))
 
-  // Identitas Toko
-  ipcMain.handle('identitas:get', () => IdentitasController.get())
-  ipcMain.handle('identitas:save', (_e, data) => IdentitasController.save(data))
+  // ─── SATUAN ────────────────────────────────────────────────────────
+  handle(ipcMain, 'satuan:getAll', () => SatuanController.getAll())
 
-  // Supplier
-  ipcMain.handle('supplier:getAll', () => SupplierController.getAll())
-  ipcMain.handle('supplier:getById', (_e, kd: string) => SupplierController.getById(kd))
-  ipcMain.handle('supplier:create', (_e, data) => SupplierController.create(data))
-  ipcMain.handle('supplier:update', (_e, kd: string, data) => SupplierController.update(kd, data))
-  ipcMain.handle('supplier:delete', (_e, kd: string) => SupplierController.delete(kd))
+  // ─── PENJUALAN (Transactions) ──────────────────────────────────────
+  handle(ipcMain, 'penjualan:getAll', () => PenjualanController.getAll())
+  handle(ipcMain, 'penjualan:getDetail', (kd: string) => PenjualanController.getDetail(kd))
+  handle(ipcMain, 'penjualan:create', (data: any) => PenjualanController.create(data))
 
-  // User Management
-  ipcMain.handle('user:getAll', () => UserController.getAll())
-  ipcMain.handle('user:create', (_e, data) => UserController.create(data))
-  ipcMain.handle('user:update', (_e, username: string, data) => UserController.update(username, data))
-  ipcMain.handle('user:changePassword', (_e, username: string, oldPass: string, newPass: string) => 
+  // ─── DASHBOARD ─────────────────────────────────────────────────────
+  handle(ipcMain, 'dashboard:getSummary', () => DashboardController.getSummary())
+
+  // ─── IDENTITAS TOKO ────────────────────────────────────────────────
+  handle(ipcMain, 'identitas:get', () => IdentitasController.get())
+  handle(ipcMain, 'identitas:save', (data: any) => IdentitasController.save(data))
+
+  // ─── SUPPLIER ──────────────────────────────────────────────────────
+  handle(ipcMain, 'supplier:getAll', () => SupplierController.getAll())
+  handle(ipcMain, 'supplier:getById', (kd: string) => SupplierController.getById(kd))
+  handle(ipcMain, 'supplier:create', (data: any) => SupplierController.create(data))
+  handle(ipcMain, 'supplier:update', (kd: string, data: any) => SupplierController.update(kd, data))
+  handle(ipcMain, 'supplier:delete', (kd: string) => SupplierController.delete(kd))
+
+  // ─── USER MANAGEMENT ──────────────────────────────────────────────
+  handle(ipcMain, 'user:getAll', () => UserController.getAll())
+  handle(ipcMain, 'user:create', (data: any) => UserController.create(data))
+  handle(ipcMain, 'user:update', (username: string, data: any) => UserController.update(username, data))
+  handle(ipcMain, 'user:changePassword', (username: string, oldPass: string, newPass: string) => 
     UserController.changePassword(username, oldPass, newPass))
-  ipcMain.handle('user:resetPassword', (_e, username: string, newPass: string, caller?: string) => 
+  handle(ipcMain, 'user:resetPassword', (username: string, newPass: string, caller?: string) => 
     UserController.resetPassword(username, newPass, caller))
-  ipcMain.handle('user:delete', (_e, username: string, caller?: string) => UserController.delete(username, caller))
-  ipcMain.handle('user:toggleStatus', (_e, username: string, caller?: string) => UserController.toggleStatus(username, caller))
-  ipcMain.handle('user:getPermissions', (_e, username: string) => UserController.getPermissions(username))
-  ipcMain.handle('user:savePermissions', (_e, username: string, permissions: Record<string, boolean>) => UserController.savePermissions(username, permissions))
+  handle(ipcMain, 'user:delete', (username: string, caller?: string) => UserController.delete(username, caller))
+  handle(ipcMain, 'user:toggleStatus', (username: string, caller?: string) => UserController.toggleStatus(username, caller))
+  handle(ipcMain, 'user:getPermissions', (username: string) => UserController.getPermissions(username))
+  handle(ipcMain, 'user:savePermissions', (username: string, permissions: Record<string, boolean>) => UserController.savePermissions(username, permissions))
 
-  // Customer Management
-  ipcMain.handle('customer:getAll', () => CustomerController.getAll())
-  ipcMain.handle('customer:getById', (_e, kd: string) => CustomerController.getById(kd))
-  ipcMain.handle('customer:search', (_e, query: string) => CustomerController.search(query))
-  ipcMain.handle('customer:create', (_e, data) => CustomerController.create(data))
-  ipcMain.handle('customer:update', (_e, kd: string, data) => CustomerController.update(kd, data))
-  ipcMain.handle('customer:delete', (_e, kd: string) => CustomerController.delete(kd))
-  ipcMain.handle('customer:toggleStatus', (_e, kd: string) => CustomerController.toggleStatus(kd))
-  ipcMain.handle('customer:addPoin', (_e, kd: string, poin: number) => CustomerController.addPoin(kd, poin))
-  ipcMain.handle('customer:getBirthdayToday', () => CustomerController.getBirthdayToday())
-  ipcMain.handle('customer:getRiwayatPembelian', (_e, kd: string) => CustomerController.getRiwayatPembelian(kd))
+  // ─── CUSTOMER ──────────────────────────────────────────────────────
+  handle(ipcMain, 'customer:getAll', () => CustomerController.getAll())
+  handle(ipcMain, 'customer:getById', (kd: string) => CustomerController.getById(kd))
+  handle(ipcMain, 'customer:search', (query: string) => CustomerController.search(query))
+  handle(ipcMain, 'customer:create', (data: any) => CustomerController.create(data))
+  handle(ipcMain, 'customer:update', (kd: string, data: any) => CustomerController.update(kd, data))
+  handle(ipcMain, 'customer:delete', (kd: string) => CustomerController.delete(kd))
+  handle(ipcMain, 'customer:toggleStatus', (kd: string) => CustomerController.toggleStatus(kd))
+  handle(ipcMain, 'customer:addPoin', (kd: string, poin: number) => CustomerController.addPoin(kd, poin))
+  handle(ipcMain, 'customer:getBirthdayToday', () => CustomerController.getBirthdayToday())
+  handle(ipcMain, 'customer:getRiwayatPembelian', (kd: string) => CustomerController.getRiwayatPembelian(kd))
 
-  // Notifikasi
-  ipcMain.handle('notifikasi:getAll', (_e, username?: string) => NotifikasiController.getAll(username))
-  ipcMain.handle('notifikasi:getUnread', (_e, username?: string) => NotifikasiController.getUnread(username))
-  ipcMain.handle('notifikasi:getUnreadCount', (_e, username?: string) => NotifikasiController.getUnreadCount(username))
-  ipcMain.handle('notifikasi:create', (_e, data) => NotifikasiController.create(data))
-  ipcMain.handle('notifikasi:markAsRead', (_e, kd: number) => NotifikasiController.markAsRead(kd))
-  ipcMain.handle('notifikasi:markAllAsRead', (_e, username?: string) => NotifikasiController.markAllAsRead(username))
-  ipcMain.handle('notifikasi:delete', (_e, kd: number) => NotifikasiController.delete(kd))
-  ipcMain.handle('notifikasi:deleteAll', (_e, username?: string) => NotifikasiController.deleteAll(username))
-  ipcMain.handle('notifikasi:checkStokMinimum', () => NotifikasiController.checkStokMinimum())
-  ipcMain.handle('notifikasi:checkExpiredProducts', () => NotifikasiController.checkExpiredProducts())
+  // ─── NOTIFIKASI ────────────────────────────────────────────────────
+  handle(ipcMain, 'notifikasi:getAll', (username?: string) => NotifikasiController.getAll(username))
+  handle(ipcMain, 'notifikasi:getUnread', (username?: string) => NotifikasiController.getUnread(username))
+  handle(ipcMain, 'notifikasi:getUnreadCount', (username?: string) => NotifikasiController.getUnreadCount(username))
+  handle(ipcMain, 'notifikasi:create', (data: any) => NotifikasiController.create(data))
+  handle(ipcMain, 'notifikasi:markAsRead', (kd: number) => NotifikasiController.markAsRead(kd))
+  handle(ipcMain, 'notifikasi:markAllAsRead', (username?: string) => NotifikasiController.markAllAsRead(username))
+  handle(ipcMain, 'notifikasi:delete', (kd: number) => NotifikasiController.delete(kd))
+  handle(ipcMain, 'notifikasi:deleteAll', (username?: string) => NotifikasiController.deleteAll(username))
+  handle(ipcMain, 'notifikasi:checkStokMinimum', () => NotifikasiController.checkStokMinimum())
+  handle(ipcMain, 'notifikasi:checkExpiredProducts', () => NotifikasiController.checkExpiredProducts())
 
-  // Kas Management
-  ipcMain.handle('kas:getActiveKas', (_e, username: string) => KasController.getActiveKas(username))
-  ipcMain.handle('kas:getAllKas', () => KasController.getAllKas())
-  ipcMain.handle('kas:getKasById', (_e, kd: string) => KasController.getKasById(kd))
-  ipcMain.handle('kas:bukaKas', (_e, username: string, modal: number, catatan?: string) => 
+  // ─── KAS (Cash Drawer) ────────────────────────────────────────────
+  handle(ipcMain, 'kas:getActiveKas', (username: string) => KasController.getActiveKas(username))
+  handle(ipcMain, 'kas:getAllKas', () => KasController.getAllKas())
+  handle(ipcMain, 'kas:getKasById', (kd: string) => KasController.getKasById(kd))
+  handle(ipcMain, 'kas:bukaKas', (username: string, modal: number, catatan?: string) => 
     KasController.bukaKas(username, modal, catatan))
-  ipcMain.handle('kas:tutupKas', (_e, kd: string, saldo: number, catatan?: string) => 
+  handle(ipcMain, 'kas:tutupKas', (kd: string, saldo: number, catatan?: string) => 
     KasController.tutupKas(kd, saldo, catatan))
-  ipcMain.handle('kas:getTransaksi', (_e, kd: string) => KasController.getTransaksiByKas(kd))
-  ipcMain.handle('kas:addPengeluaran', (_e, kd: string, jumlah: number, keterangan: string, username: string) => 
+  handle(ipcMain, 'kas:getTransaksi', (kd: string) => KasController.getTransaksiByKas(kd))
+  handle(ipcMain, 'kas:addPengeluaran', (kd: string, jumlah: number, keterangan: string, username: string) => 
     KasController.addPengeluaran(kd, jumlah, keterangan, username))
-  ipcMain.handle('kas:addPemasukan', (_e, kd: string, jumlah: number, keterangan: string, username: string) => 
+  handle(ipcMain, 'kas:addPemasukan', (kd: string, jumlah: number, keterangan: string, username: string) => 
     KasController.addPemasukan(kd, jumlah, keterangan, username))
-  ipcMain.handle('kas:deleteTransaksi', (_e, kd: number) => KasController.deleteTransaksi(kd))
-  ipcMain.handle('kas:deleteKas', (_e, kd_kas: string) => KasController.deleteKas(kd_kas))
-  ipcMain.handle('kas:getLaporan', (_e, startDate: string, endDate: string) => 
+  handle(ipcMain, 'kas:deleteTransaksi', (kd: number) => KasController.deleteTransaksi(kd))
+  handle(ipcMain, 'kas:deleteKas', (kd_kas: string) => KasController.deleteKas(kd_kas))
+  handle(ipcMain, 'kas:getLaporan', (startDate: string, endDate: string) => 
     KasController.getLaporanKas(startDate, endDate))
 
-  // Pembelian
-  ipcMain.handle('pembelian:getAll', () => PembelianController.getAll())
-  ipcMain.handle('pembelian:getById', (_e, kd: string) => PembelianController.getById(kd))
-  ipcMain.handle('pembelian:create', (_e, data) => PembelianController.create(data))
-  ipcMain.handle('pembelian:updateStatus', (_e, kd: string, bayar: number) => 
+  // ─── PEMBELIAN (Purchases) ─────────────────────────────────────────
+  handle(ipcMain, 'pembelian:getAll', () => PembelianController.getAll())
+  handle(ipcMain, 'pembelian:getById', (kd: string) => PembelianController.getById(kd))
+  handle(ipcMain, 'pembelian:create', (data: any) => PembelianController.create(data))
+  handle(ipcMain, 'pembelian:updateStatus', (kd: string, bayar: number) => 
     PembelianController.updateStatus(kd, bayar))
-  ipcMain.handle('pembelian:delete', (_e, kd: string) => PembelianController.delete(kd))
-  ipcMain.handle('pembelian:getLaporan', (_e, startDate: string, endDate: string) => 
+  handle(ipcMain, 'pembelian:delete', (kd: string) => PembelianController.delete(kd))
+  handle(ipcMain, 'pembelian:getLaporan', (startDate: string, endDate: string) => 
     PembelianController.getLaporanPembelian(startDate, endDate))
 
-  // Backup & Restore
-  ipcMain.handle('backup:getAll', () => BackupController.getAll())
-  ipcMain.handle('backup:create', (_e, username: string, keterangan?: string) => 
+  // ─── BACKUP & RESTORE ─────────────────────────────────────────────
+  handle(ipcMain, 'backup:getAll', () => BackupController.getAll())
+  handle(ipcMain, 'backup:create', (username: string, keterangan?: string) => 
     BackupController.create(username, keterangan))
-  ipcMain.handle('backup:restore', (_e, kd: number) => BackupController.restore(kd))
-  ipcMain.handle('backup:delete', (_e, kd: number) => BackupController.delete(kd))
-  ipcMain.handle('backup:download', (_e, kd: number) => BackupController.download(kd))
-  ipcMain.handle('backup:import', (_e, base64Data: string, fileName: string) => BackupController.import(base64Data, fileName))
+  handle(ipcMain, 'backup:restore', (kd: number) => BackupController.restore(kd))
+  handle(ipcMain, 'backup:delete', (kd: number) => BackupController.delete(kd))
+  handle(ipcMain, 'backup:download', (kd: number) => BackupController.download(kd))
+  handle(ipcMain, 'backup:import', (base64Data: string, fileName: string) => BackupController.import(base64Data, fileName))
 
-  // Laporan
-  ipcMain.handle('laporan:penjualan', (_e, startDate: string, endDate: string) => 
+  // ─── LAPORAN (Reports) ─────────────────────────────────────────────
+  handle(ipcMain, 'laporan:penjualan', (startDate: string, endDate: string) => 
     LaporanController.getLaporanPenjualan(startDate, endDate))
-  ipcMain.handle('laporan:labaRugi', (_e, startDate: string, endDate: string) => 
+  handle(ipcMain, 'laporan:labaRugi', (startDate: string, endDate: string) => 
     LaporanController.getLaporanLabaRugi(startDate, endDate))
-  ipcMain.handle('laporan:produkTerlaris', (_e, startDate: string, endDate: string, limit?: number) => 
+  handle(ipcMain, 'laporan:produkTerlaris', (startDate: string, endDate: string, limit?: number) => 
     LaporanController.getLaporanProdukTerlaris(startDate, endDate, limit))
-  ipcMain.handle('laporan:stok', () => LaporanController.getLaporanStok())
-  ipcMain.handle('laporan:kas', (_e, startDate: string, endDate: string) => 
+  handle(ipcMain, 'laporan:stok', () => LaporanController.getLaporanStok())
+  handle(ipcMain, 'laporan:kas', (startDate: string, endDate: string) => 
     LaporanController.getLaporanKas(startDate, endDate))
-  ipcMain.handle('laporan:customer', () => LaporanController.getLaporanCustomer())
+  handle(ipcMain, 'laporan:customer', () => LaporanController.getLaporanCustomer())
 
-  // Activity Log
-  ipcMain.handle('activityLog:getAll', () => ActivityLogController.getAll())
-  ipcMain.handle('activityLog:getByUsername', (_e, username: string) => 
+  // ─── ACTIVITY LOG ──────────────────────────────────────────────────
+  handle(ipcMain, 'activityLog:getAll', () => ActivityLogController.getAll())
+  handle(ipcMain, 'activityLog:getByUsername', (username: string) => 
     ActivityLogController.getByUsername(username))
-  ipcMain.handle('activityLog:getByModul', (_e, modul: string) => 
+  handle(ipcMain, 'activityLog:getByModul', (modul: string) => 
     ActivityLogController.getByModul(modul))
-  ipcMain.handle('activityLog:search', (_e, filters) => ActivityLogController.search(filters))
-  ipcMain.handle('activityLog:log', (_e, username: string, aktivitas: string, modul: string, detail?: string) => 
+  handle(ipcMain, 'activityLog:search', (filters: any) => ActivityLogController.search(filters))
+  handle(ipcMain, 'activityLog:log', (username: string, aktivitas: string, modul: string, detail?: string) => 
     ActivityLogController.log(username, aktivitas, modul, detail))
-  ipcMain.handle('activityLog:delete', (_e, kd: number) => ActivityLogController.delete(kd))
-  ipcMain.handle('activityLog:deleteOldLogs', (_e, days?: number) => 
+  handle(ipcMain, 'activityLog:delete', (kd: number) => ActivityLogController.delete(kd))
+  handle(ipcMain, 'activityLog:deleteOldLogs', (days?: number) => 
     ActivityLogController.deleteOldLogs(days))
 
-  // Export
-  ipcMain.handle('export:penjualanExcel', (_e, startDate: string, endDate: string) => 
+  // ─── EXPORT ────────────────────────────────────────────────────────
+  handle(ipcMain, 'export:penjualanExcel', (startDate: string, endDate: string) => 
     ExportController.exportPenjualanExcel(startDate, endDate))
-  ipcMain.handle('export:penjualanPDF', (_e, startDate: string, endDate: string) => 
+  handle(ipcMain, 'export:penjualanPDF', (startDate: string, endDate: string) => 
     ExportController.exportPenjualanPDF(startDate, endDate))
-  ipcMain.handle('export:stokExcel', () => ExportController.exportStokExcel())
-  ipcMain.handle('export:stokPDF', () => ExportController.exportStokPDF())
-  ipcMain.handle('export:toExcel', (_e, data: any[], filename: string, sheetName?: string) => 
+  handle(ipcMain, 'export:stokExcel', () => ExportController.exportStokExcel())
+  handle(ipcMain, 'export:stokPDF', () => ExportController.exportStokPDF())
+  handle(ipcMain, 'export:toExcel', (data: any[], filename: string, sheetName?: string) => 
     ExportController.exportToExcel(data, filename, sheetName))
-  ipcMain.handle('export:toPDF', (_e, title: string, headers: string[], data: any[][], filename: string, orientation?: 'portrait' | 'landscape') => 
+  handle(ipcMain, 'export:toPDF', (title: string, headers: string[], data: any[][], filename: string, orientation?: 'portrait' | 'landscape') => 
     ExportController.exportToPDF(title, headers, data, filename, orientation))
 
-  // Scheduler Manual Triggers
-  ipcMain.handle('scheduler:runStokCheck', () => SchedulerService.runStokCheck())
-  ipcMain.handle('scheduler:runExpiredCheck', () => SchedulerService.runExpiredCheck())
-  ipcMain.handle('scheduler:runBackup', (_e, username: string) => SchedulerService.runBackup(username))
-  ipcMain.handle('scheduler:runCleanLogs', (_e, days?: number) => SchedulerService.runCleanLogs(days))
+  // ─── SCHEDULER ─────────────────────────────────────────────────────
+  handle(ipcMain, 'scheduler:runStokCheck', () => SchedulerService.runStokCheck())
+  handle(ipcMain, 'scheduler:runExpiredCheck', () => SchedulerService.runExpiredCheck())
+  handle(ipcMain, 'scheduler:runBackup', (username: string) => SchedulerService.runBackup(username))
+  handle(ipcMain, 'scheduler:runCleanLogs', (days?: number) => SchedulerService.runCleanLogs(days))
 
-  // Barcode
-  ipcMain.handle('barcode:generate', () => BarcodeController.generateBarcode())
-  ipcMain.handle('barcode:search', (_e, barcode: string) => BarcodeController.searchByBarcode(barcode))
-  ipcMain.handle('barcode:getSettings', () => BarcodeController.getSettings())
-  ipcMain.handle('barcode:updateSettings', (_e, data) => BarcodeController.updateSettings(data))
+  // ─── BARCODE ───────────────────────────────────────────────────────
+  handle(ipcMain, 'barcode:generate', () => BarcodeController.generateBarcode())
+  handle(ipcMain, 'barcode:search', (barcode: string) => BarcodeController.searchByBarcode(barcode))
+  handle(ipcMain, 'barcode:getSettings', () => BarcodeController.getSettings())
+  handle(ipcMain, 'barcode:updateSettings', (data: any) => BarcodeController.updateSettings(data))
 
-  // Payment Methods
-  ipcMain.handle('payment:getAll', () => PaymentMethodController.getAll())
-  ipcMain.handle('payment:create', (_e, data) => PaymentMethodController.create(data))
-  ipcMain.handle('payment:update', (_e, id: number, data) => PaymentMethodController.update(id, data))
-  ipcMain.handle('payment:delete', (_e, id: number) => PaymentMethodController.delete(id))
+  // ─── PAYMENT METHODS ──────────────────────────────────────────────
+  handle(ipcMain, 'payment:getAll', () => PaymentMethodController.getAll())
+  handle(ipcMain, 'payment:create', (data: any) => PaymentMethodController.create(data))
+  handle(ipcMain, 'payment:update', (id: number, data: any) => PaymentMethodController.update(id, data))
+  handle(ipcMain, 'payment:delete', (id: number) => PaymentMethodController.delete(id))
 
-  // Tax
-  ipcMain.handle('tax:getActive', () => TaxController.getActive())
-  ipcMain.handle('tax:getAll', () => TaxController.getAll())
-  ipcMain.handle('tax:setActive', (_e, id: number) => TaxController.setActive(id))
-  ipcMain.handle('tax:create', (_e, data) => TaxController.create(data))
+  // ─── TAX ───────────────────────────────────────────────────────────
+  handle(ipcMain, 'tax:getActive', () => TaxController.getActive())
+  handle(ipcMain, 'tax:getAll', () => TaxController.getAll())
+  handle(ipcMain, 'tax:setActive', (id: number) => TaxController.setActive(id))
+  handle(ipcMain, 'tax:create', (data: any) => TaxController.create(data))
 
-  // Returns
-  ipcMain.handle('return:create', (_e, data) => ReturnController.create(data))
-  ipcMain.handle('return:getAll', () => ReturnController.getAll())
-  ipcMain.handle('return:approve', (_e, id: number, userId: number) => ReturnController.approve(id, userId))
-  ipcMain.handle('return:reject', (_e, id: number, userId: number) => ReturnController.reject(id, userId))
-  ipcMain.handle('return:delete', (_e, id: number) => ReturnController.delete(id))
+  // ─── RETURNS ───────────────────────────────────────────────────────
+  handle(ipcMain, 'return:create', (data: any) => ReturnController.create(data))
+  handle(ipcMain, 'return:getAll', () => ReturnController.getAll())
+  handle(ipcMain, 'return:approve', (id: number, userId: number) => ReturnController.approve(id, userId))
+  handle(ipcMain, 'return:reject', (id: number, userId: number) => ReturnController.reject(id, userId))
+  handle(ipcMain, 'return:delete', (id: number) => ReturnController.delete(id))
 
-  // Shifts
-  ipcMain.handle('shift:open', (_e, data) => ShiftController.open(data))
-  ipcMain.handle('shift:close', (_e, id: number, data) => ShiftController.close(id, data))
-  ipcMain.handle('shift:getCurrent', (_e, userId: number) => ShiftController.getCurrent(userId))
-  ipcMain.handle('shift:getAll', () => ShiftController.getAll())
-  ipcMain.handle('shift:delete', (_e, id: number) => ShiftController.delete(id))
+  // ─── SHIFTS ────────────────────────────────────────────────────────
+  handle(ipcMain, 'shift:open', (data: any) => ShiftController.open(data))
+  handle(ipcMain, 'shift:close', (id: number, data: any) => ShiftController.close(id, data))
+  handle(ipcMain, 'shift:getCurrent', (userId: number) => ShiftController.getCurrent(userId))
+  handle(ipcMain, 'shift:getAll', () => ShiftController.getAll())
+  handle(ipcMain, 'shift:delete', (id: number) => ShiftController.delete(id))
 
-  // Debts
-  ipcMain.handle('debt:create', (_e, data) => DebtController.create(data))
-  ipcMain.handle('debt:addPayment', (_e, debtId: number, data) => DebtController.addPayment(debtId, data))
-  ipcMain.handle('debt:getAll', (_e, type?: string) => DebtController.getAll(type))
-  ipcMain.handle('debt:getPayments', (_e, debtId: number) => DebtController.getPayments(debtId))
-  ipcMain.handle('debt:delete', (_e, id: number) => DebtController.delete(id))
+  // ─── DEBTS ─────────────────────────────────────────────────────────
+  handle(ipcMain, 'debt:create', (data: any) => DebtController.create(data))
+  handle(ipcMain, 'debt:addPayment', (debtId: number, data: any) => DebtController.addPayment(debtId, data))
+  handle(ipcMain, 'debt:getAll', (type?: string) => DebtController.getAll(type))
+  handle(ipcMain, 'debt:getPayments', (debtId: number) => DebtController.getPayments(debtId))
+  handle(ipcMain, 'debt:delete', (id: number) => DebtController.delete(id))
 
-  // Stock Opname
-  ipcMain.handle('opname:create', (_e, data) => StockOpnameController.create(data))
-  ipcMain.handle('opname:approve', (_e, id: number, userId: number) => StockOpnameController.approve(id, userId))
-  ipcMain.handle('opname:getAll', () => StockOpnameController.getAll())
-  ipcMain.handle('opname:getDetails', (_e, id: number) => StockOpnameController.getDetails(id))
-  ipcMain.handle('opname:delete', (_e, id: number) => StockOpnameController.delete(id))
-  ipcMain.handle('opname:addItem', (_e, data) => StockOpnameController.addItem(data))
-  ipcMain.handle('opname:getItems', (_e, opnameId: number) => StockOpnameController.getItems(opnameId))
+  // ─── STOCK OPNAME ──────────────────────────────────────────────────
+  handle(ipcMain, 'opname:create', (data: any) => StockOpnameController.create(data))
+  handle(ipcMain, 'opname:approve', (id: number, userId: number) => StockOpnameController.approve(id, userId))
+  handle(ipcMain, 'opname:getAll', () => StockOpnameController.getAll())
+  handle(ipcMain, 'opname:getDetails', (id: number) => StockOpnameController.getDetails(id))
+  handle(ipcMain, 'opname:delete', (id: number) => StockOpnameController.delete(id))
+  handle(ipcMain, 'opname:addItem', (data: any) => StockOpnameController.addItem(data))
+  handle(ipcMain, 'opname:getItems', (opnameId: number) => StockOpnameController.getItems(opnameId))
 
-  // Product Images
-  ipcMain.handle('productImage:add', (_e, barangId: number, imagePath: string, isPrimary: boolean) => ProductImageController.add(barangId, imagePath, isPrimary))
-  ipcMain.handle('productImage:getByProduct', (_e, barangId: number) => ProductImageController.getByProduct(barangId))
-  ipcMain.handle('productImage:delete', (_e, id: number) => ProductImageController.delete(id))
-  ipcMain.handle('productImage:setPrimary', (_e, id: number, barangId: number) => ProductImageController.setPrimary(id, barangId))
+  // ─── PRODUCT IMAGES ────────────────────────────────────────────────
+  handle(ipcMain, 'productImage:add', (barangId: number, imagePath: string, isPrimary: boolean) => ProductImageController.add(barangId, imagePath, isPrimary))
+  handle(ipcMain, 'productImage:getByProduct', (barangId: number) => ProductImageController.getByProduct(barangId))
+  handle(ipcMain, 'productImage:delete', (id: number) => ProductImageController.delete(id))
+  handle(ipcMain, 'productImage:setPrimary', (id: number, barangId: number) => ProductImageController.setPrimary(id, barangId))
 
-  // Updates
-  ipcMain.handle('update:check', () => UpdateService.checkForUpdates())
-  ipcMain.handle('update:getHistory', () => UpdateService.getUpdateHistory())
+  // ─── UPDATES ───────────────────────────────────────────────────────
+  handle(ipcMain, 'update:check', () => UpdateService.checkForUpdates())
+  handle(ipcMain, 'update:getHistory', () => UpdateService.getUpdateHistory())
 
-  // Error Logging
-  ipcMain.handle('errorLog:log', (_e, errorType: string, errorMessage: string, stackTrace?: string, userId?: string, context?: string) => ErrorLogService.log(errorType, errorMessage, stackTrace, userId, context))
-  ipcMain.handle('errorLog:getAll', (_e, limit?: number) => ErrorLogService.getAll(limit))
-  ipcMain.handle('errorLog:deleteOld', (_e, days?: number) => ErrorLogService.deleteOld(days))
-  ipcMain.handle('errorLog:clear', () => ErrorLogService.clear())
+  // ─── ERROR LOGGING ─────────────────────────────────────────────────
+  handle(ipcMain, 'errorLog:log', (errorType: string, errorMessage: string, stackTrace?: string, userId?: string, context?: string) => ErrorLogService.log(errorType, errorMessage, stackTrace, userId, context))
+  handle(ipcMain, 'errorLog:getAll', (limit?: number) => ErrorLogService.getAll(limit))
+  handle(ipcMain, 'errorLog:deleteOld', (days?: number) => ErrorLogService.deleteOld(days))
+  handle(ipcMain, 'errorLog:clear', () => ErrorLogService.clear())
+
+  // ─── SUBSCRIPTION PLANS ─────────────────────────────────────────────
+  handle(ipcMain, 'plan:getAll', () => PlanController.getAll())
+  handle(ipcMain, 'plan:getActive', () => PlanController.getActive())
+  handle(ipcMain, 'plan:create', (data: any) => PlanController.create(data))
+  handle(ipcMain, 'plan:update', (id: number, data: any) => PlanController.update(id, data))
+  handle(ipcMain, 'plan:deactivate', (id: number) => PlanController.deactivate(id))
 }

@@ -8,6 +8,7 @@ import { api } from '../utils/api'
 import { formatRupiah } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useDemoGuard } from '../hooks/useDemoGuard'
 import type { Barang, CartItem, Customer, Identitas } from '../../shared/types'
 import Struk from '../components/Struk'
 import { useReactToPrint } from 'react-to-print'
@@ -15,6 +16,7 @@ import { useReactToPrint } from 'react-to-print'
 export default function Transaksi() {
   const toast = useToast()
   const { user } = useAuth()
+  const { trackUsage, isOverLimit, remainingUsage, isDemo } = useDemoGuard()
   const [products, setProducts] = useState<Barang[]>([])
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
@@ -69,16 +71,42 @@ export default function Transaksi() {
   )
 
   const addToCart = (p: Barang) => {
+    const maxStok = p.stok ?? 0
+    if (maxStok <= 0) {
+      toast('Stok produk habis', 'error')
+      return
+    }
     setCart(prev => {
       const existing = prev.find(c => c.kd_barang === p.kd_barang)
-      if (existing) return prev.map(c => c.kd_barang === p.kd_barang ? { ...c, qty: c.qty + 1 } : c)
+      if (existing) {
+        if (existing.qty >= maxStok) {
+          toast(`Stok ${p.nama_barang} tidak mencukupi (tersisa ${maxStok})`, 'error')
+          return prev
+        }
+        return prev.map(c => c.kd_barang === p.kd_barang ? { ...c, qty: c.qty + 1 } : c)
+      }
       return [...prev, { kd_barang: p.kd_barang, nama_barang: p.nama_barang ?? '', harga_jual: p.harga_barang ?? 0, harga_modal: p.harga_modal ?? 0, qty: 1, disc: p.potongan ?? 0 }]
     })
     setSearch('')
     searchRef.current?.focus()
   }
 
-  const updateQty = (kd: string, delta: number) => setCart(prev => prev.map(c => c.kd_barang === kd ? { ...c, qty: c.qty + delta } : c).filter(c => c.qty > 0))
+  const updateQty = (kd: string, delta: number) => {
+    setCart(prev => prev.map(c => {
+      if (c.kd_barang !== kd) return c
+      const newQty = c.qty + delta
+      // Check stock limit when increasing
+      if (delta > 0) {
+        const product = products.find(p => p.kd_barang === kd)
+        const maxStok = product?.stok ?? 0
+        if (newQty > maxStok) {
+          toast(`Stok ${c.nama_barang} tidak mencukupi (tersisa ${maxStok})`, 'error')
+          return c
+        }
+      }
+      return { ...c, qty: newQty }
+    }).filter(c => c.qty > 0))
+  }
   const removeItem = (kd: string) => setCart(prev => prev.filter(c => c.kd_barang !== kd))
 
   const subTotal = cart.reduce((sum, c) => {
@@ -100,6 +128,11 @@ export default function Transaksi() {
   const handleBayar = async () => {
     if (!cart.length) return toast('Keranjang kosong', 'error')
     if ((parseFloat(bayar) || 0) < totalBayar) return toast('Jumlah bayar kurang', 'error')
+    // Warn demo users approaching limit
+    if (isDemo && isOverLimit) {
+      toast('Batas transaksi demo tercapai. Upgrade untuk melanjutkan.', 'error')
+      return
+    }
     setLoading(true)
     const r = await api<{ kd_transaksi: string }>('penjualan:create', {
       username: user?.nama_pengguna ?? 'KASIR',
@@ -114,6 +147,11 @@ export default function Transaksi() {
       setLastKd(r.kd_transaksi ?? null)
       toast(r.message as string)
       setShowStruk(true)
+      // Track usage for demo limit system
+      trackUsage()
+      if (isDemo && remainingUsage <= 3 && remainingUsage > 0) {
+        toast(`⚠️ Sisa ${remainingUsage - 1} transaksi demo`, 'error')
+      }
     } else {
       toast(r.message as string, 'error')
     }
@@ -138,7 +176,7 @@ export default function Transaksi() {
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
             {filtered.slice(0, 30).map(p => (
-              <button key={p.kd_barang} onClick={() => addToCart(p)} className="glass-card p-3 text-left hover:border-primary-300 hover:shadow-primary-100 dark:hover:border-primary-700 transition-all duration-200 active:scale-95">
+              <button key={p.kd_barang} onClick={() => addToCart(p)} disabled={(p.stok ?? 0) <= 0} className={`glass-card p-3 text-left transition-all duration-200 ${(p.stok ?? 0) <= 0 ? 'opacity-50 cursor-not-allowed' : 'hover:border-primary-300 hover:shadow-primary-100 dark:hover:border-primary-700 active:scale-95'}`}>
                 <div className="flex gap-3">
                   {p.foto_barang ? (
                     <img src={p.foto_barang} alt={p.nama_barang ?? ''} className="w-16 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-600 shrink-0" />

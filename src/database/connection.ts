@@ -74,6 +74,37 @@ function runMigrations() {
     console.error('❌ Migration error:', error.message)
     throw error // Throw critical errors to prevent app from starting with broken schema
   }
+
+  // ── Subscription Plans table ──
+  try {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS mediasoft_subscription_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        price INTEGER NOT NULL,
+        duration_days INTEGER NOT NULL,
+        features TEXT DEFAULT '[]',
+        is_active INTEGER DEFAULT 1,
+        is_recommended INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT
+      )
+    `)
+    // Seed default plans if table is empty
+    const count = sqlite.prepare('SELECT COUNT(*) as cnt FROM mediasoft_subscription_plans').get() as { cnt: number }
+    if (count.cnt === 0) {
+      const now = new Date().toISOString()
+      sqlite.prepare(`INSERT INTO mediasoft_subscription_plans (name, price, duration_days, features, is_active, is_recommended, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run('Harian', 15000, 1, JSON.stringify(['Transaksi tak terbatas', 'Export laporan dasar', 'Support email']), 1, 0, now)
+      sqlite.prepare(`INSERT INTO mediasoft_subscription_plans (name, price, duration_days, features, is_active, is_recommended, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run('Bulanan', 299000, 30, JSON.stringify(['Semua fitur Harian', 'Multi-user (3 akun)', 'Export Excel & PDF', 'Laporan lanjutan', 'Backup otomatis', 'Support prioritas']), 1, 1, now)
+      sqlite.prepare(`INSERT INTO mediasoft_subscription_plans (name, price, duration_days, features, is_active, is_recommended, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run('Tahunan', 2899000, 365, JSON.stringify(['Semua fitur Bulanan', 'Multi-user (unlimited)', 'Stok opname', 'Manajemen hutang', 'Shift management', 'API access', 'Support 24/7']), 1, 0, now)
+      console.log('✓ Seeded default subscription plans')
+    }
+  } catch (err: any) {
+    console.error('⚠️ Subscription plans migration:', err.message)
+  }
 }
 
 // Run migrations before creating drizzle instance

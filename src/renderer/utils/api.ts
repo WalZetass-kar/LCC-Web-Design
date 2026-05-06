@@ -1,40 +1,73 @@
-import type { IpcResponse } from '../../shared/types'
-import { isDemoMode } from './demo'
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * API WRAPPER — Pre-flight demo block + typed IPC invocation
+ * ═══════════════════════════════════════════════════════════════════════
+ * 
+ * This is the renderer-side API layer with demo mode pre-filtering.
+ * 
+ * SECURITY NOTE: This pre-flight block is a UX optimization only.
+ * Even if bypassed (e.g., by calling window.api.invoke directly from DevTools),
+ * the main process IPC guard will still block the mutation.
+ */
 
-// Whitelist: Only these operations are allowed in demo mode (READ operations)
-const ALLOWED_OPERATIONS = [
-  'getAll', 'get', 'search', 'getDetail', 'getById', 
+import type { IpcResponse } from '../../shared/types'
+import { isDemoMode, getDemoBlockedMessage } from './demo'
+
+/**
+ * READ-ONLY channel patterns — these are always allowed even in demo mode.
+ * We use a conservative approach: if it's NOT clearly a read, we block it.
+ */
+const READ_PATTERNS = [
+  'getAll', 'get', 'search', 'getDetail', 'getById',
   'getSummary', 'getLaporan', 'getActive', 'getUnread',
   'check', 'download', 'export', 'print',
   'getRiwayat', 'getByProduct', 'getItems', 'getPayments',
   'getCurrent', 'getByModul', 'getByUsername', 'getMigrationStatus',
   'getSettings', 'getPermissions', 'getBirthdayToday',
   'getTransaksi', 'getKasById', 'getAllKas', 'getActiveKas',
-  'getUnreadCount'
+  'getUnreadCount', 'getHistory', 'getDetails',
 ]
 
-function isReadOperation(channel: string): boolean {
-  // If channel contains any allowed operation, it's a read operation
-  return ALLOWED_OPERATIONS.some(op => channel.includes(op))
+/**
+ * Check if a channel is a read operation based on its name.
+ */
+function isReadChannel(channel: string): boolean {
+  // Auth and demo channels are always allowed
+  if (channel.startsWith('auth:') || channel.startsWith('demo:')) return true
+  
+  // Laporan/export channels are always read-only
+  if (channel.startsWith('laporan:') || channel.startsWith('export:')) return true
+  
+  // Check if any read pattern matches
+  return READ_PATTERNS.some(p => channel.includes(p))
 }
 
-/** Typed wrapper around window.api.invoke */
+/**
+ * Typed wrapper around window.api.invoke with demo mode pre-flight check.
+ * 
+ * @param channel - The IPC channel to invoke
+ * @param args - Arguments to pass to the handler
+ * @returns Typed IPC response
+ */
 export async function api<T>(channel: string, ...args: unknown[]): Promise<IpcResponse<T>> {
-  // Block ALL operations except read operations in demo mode
-  if (isDemoMode()) {
-    // Special case: allow auth operations
-    if (channel.startsWith('auth:')) {
-      return window.api.invoke(channel, ...args) as Promise<IpcResponse<T>>
-    }
-    
-    // Block if NOT a read operation
-    if (!isReadOperation(channel)) {
-      return {
-        success: false,
-        message: '🔒 Mode Demo: Anda tidak dapat melakukan perubahan data. Silakan login dengan akun biasa untuk menggunakan fitur ini.'
-      } as IpcResponse<T>
-    }
+  // ─── DEMO MODE PRE-FLIGHT BLOCK (UX optimization) ─────────────────
+  if (isDemoMode() && !isReadChannel(channel)) {
+    console.warn(`🔒 [DEMO PRE-FLIGHT] Blocked: ${channel}`)
+    return {
+      success: false,
+      message: getDemoBlockedMessage(),
+    } as IpcResponse<T>
   }
-  
-  return window.api.invoke(channel, ...args) as Promise<IpcResponse<T>>
+
+  // ─── INVOKE THE IPC CHANNEL ────────────────────────────────────────
+  try {
+    return window.api.invoke(channel, ...args) as Promise<IpcResponse<T>>
+  } catch (error: any) {
+    // Handle errors from preload whitelist or main process
+    console.error(`❌ API Error [${channel}]:`, error)
+    return {
+      success: false,
+      message: error.message || 'Terjadi kesalahan pada sistem',
+    } as IpcResponse<T>
+  }
 }

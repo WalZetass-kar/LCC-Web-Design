@@ -10,6 +10,7 @@ import DataTable from '../components/DataTable'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useDemoGuard } from '../hooks/useDemoGuard'
 import { MENU_GROUPS } from '../layouts/Sidebar'
 import type { Pengguna } from '../../shared/types'
 
@@ -46,6 +47,7 @@ const PERMISSION_MENUS = MENU_GROUPS.flatMap(g =>
 export default function Users() {
   const toast = useToast()
   const { user: currentUser } = useAuth()
+  const { guardPremiumFeature } = useDemoGuard()
   const [data, setData] = useState<Pengguna[]>([])
   const [modal, setModal] = useState<'add' | 'edit' | 'delete' | 'password' | 'permissions' | null>(null)
   const [form, setForm] = useState<FormState>({ ...EMPTY })
@@ -62,7 +64,10 @@ export default function Users() {
 
   useEffect(() => { load() }, [])
 
-  const openAdd = () => { setForm({ ...EMPTY }); setModal('add') }
+  const openAdd = () => {
+    if (guardPremiumFeature('multi_user', 'Tambah User')) return
+    setForm({ ...EMPTY }); setModal('add')
+  }
   const openEdit = (row: Pengguna) => {
     setSelected(row)
     setForm({
@@ -215,7 +220,7 @@ export default function Users() {
               <Power size={14} />
             </button>
             {canManagePermissions && (
-              <button onClick={() => openPermissions(row.original)} className="p-1.5 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/20 text-violet-500 transition-colors" title="Izin Akses">
+              <button onClick={() => openPermissions(row.original)} className="p-1.5 rounded-lg hover:bg-pink-50 dark:hover:bg-pink-900/20 text-pink-500 transition-colors" title="Izin Akses">
                 <ShieldCheck size={14} />
               </button>
             )}

@@ -6,11 +6,15 @@ import OfflineIndicator from '../components/OfflineIndicator'
 import QuickSearch from '../components/QuickSearch'
 import Onboarding from '../components/Onboarding'
 import UpdateNotification from '../components/UpdateNotification'
+import DemoOverlay from '../components/DemoOverlay'
+import PricingPopup from '../components/PricingPopup'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [quickSearchOpen, setQuickSearchOpen] = useState(false)
+  const { isDemo } = useAuth()
   
   useKeyboardShortcuts()
 
@@ -26,7 +30,10 @@ export default function AppLayout() {
   }, [])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-primary-50/30 to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <div className={`flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-pink-50/40 to-slate-100 dark:from-[#1a1a2e] dark:via-slate-900 dark:to-[#16213e] ${isDemo ? 'pt-8' : ''}`}>
+      {/* Demo Mode Overlay (banner + watermark + badge) */}
+      <DemoOverlay />
+
       {/* Mobile Overlay */}
       {sidebarOpen && (
         <div
@@ -49,6 +56,7 @@ export default function AppLayout() {
       <QuickSearch isOpen={quickSearchOpen} onClose={() => setQuickSearchOpen(false)} />
       <Onboarding />
       <UpdateNotification />
+      <PricingPopup />
     </div>
   )
 }

@@ -73,7 +73,7 @@ export default function Onboarding() {
             <div
               key={i}
               className={`h-2 rounded-full transition-all ${
-                i === step ? 'w-8 bg-indigo-600' : 'w-2 bg-gray-300'
+                i === step ? 'w-8 bg-pink-500' : 'w-2 bg-gray-300'
               }`}
             />
           ))}

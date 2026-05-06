@@ -14,8 +14,10 @@ export class AuthController {
    * - Activity logging
    */
   static async login(username: string, password: string, ipAddress?: string) {
-    // Sanitize inputs
-    username = sanitizeString(username?.trim() || '')
+    // Note: Do NOT sanitize username with sanitizeString() here — it encodes
+    // special chars (&, <, /) which breaks DB lookup. Drizzle uses parameterized
+    // queries so SQL injection is already prevented at the ORM level.
+    username = (username?.trim() || '')
     
     if (!username || !password?.trim()) {
       return { success: false, message: 'Username dan password tidak boleh kosong' }
