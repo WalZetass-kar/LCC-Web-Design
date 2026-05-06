@@ -27,6 +27,8 @@ import Shifts from './pages/Shifts'
 import Debts from './pages/Debts'
 import StockOpname from './pages/StockOpname'
 import SubscriptionPlans from './pages/SubscriptionPlans'
+import Tutorials from './pages/Tutorials'
+import Hpp from './pages/Hpp'
 import ErrorBoundary from './components/ErrorBoundary'
 import './styles/globals.css'
 
@@ -94,6 +96,8 @@ function App() {
           <Route path="/debts" element={<Debts />} />
           <Route path="/stock-opname" element={<StockOpname />} />
           <Route path="/subscription-plans" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><SubscriptionPlans /></RequireExactRoles>} />
+          <Route path="/tutorials" element={<Tutorials />} />
+          <Route path="/hpp" element={<Hpp />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X, Image } from 'lucide-react'
+import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X, Image, Settings } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Modal from '../components/Modal'
+import StrukSettingsModal from '../components/StrukSettingsModal'
 import { api } from '../utils/api'
 import { formatRupiah } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -25,6 +26,7 @@ export default function Transaksi() {
   const [loading, setLoading] = useState(false)
   const [lastKd, setLastKd] = useState<string | null>(null)
   const [showStruk, setShowStruk] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
   const strukRef = useRef<HTMLDivElement>(null)
 
@@ -253,7 +255,17 @@ export default function Transaksi() {
           )}
         </div>
 
-        <Card title="Keranjang" className="flex-1 flex flex-col overflow-hidden">
+        <Card title="Keranjang" className="flex-1 flex flex-col overflow-hidden" 
+          action={
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-primary-500 transition-colors"
+              title="Pengaturan Struk"
+            >
+              <Settings size={16} />
+            </button>
+          }
+        >
           <div className="flex-1 overflow-y-auto scrollbar-thin space-y-2 -mx-1 px-1">
             {cart.length === 0 ? (
               <div className="py-10 text-center text-slate-400">
@@ -338,9 +350,12 @@ export default function Transaksi() {
         }
       >
         <div ref={strukRef}>
-          <Struk cart={cart} subTotal={subTotal} pajak={pajakAmount} pajakPersen={pajakPersen} totalBayar={totalBayar} bayar={parseFloat(bayar)} kembalian={kembalian} kdTransaksi={lastKd ?? ''} jenisBayar={jenisBayar} customerName={selectedCustomer?.nama_customer} poinEarned={poinEarned} />
+          <Struk cart={cart} subTotal={subTotal} pajak={pajakAmount} pajakPersen={pajakPersen} totalBayar={totalBayar} bayar={parseFloat(bayar)} kembalian={kembalian} kdTransaksi={lastKd ?? ''} jenisBayar={jenisBayar} customerName={selectedCustomer?.nama_customer} poinEarned={poinEarned} kasirName={user?.nama_pengguna} />
         </div>
       </Modal>
+
+      {/* Struk Settings Modal */}
+      <StrukSettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   )
 }

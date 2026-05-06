@@ -144,7 +144,21 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   // Error Log (allow log, block clear/delete)
   'errorLog:deleteOld',
   'errorLog:clear',
+
+  // Tutorials (admin-only mutations)
+  'tutorial:create',
+  'tutorial:update',
+  'tutorial:delete',
+
+  // HPP Calculator (delete own record)
+  'hpp:delete',
+
+  // Struk Settings (admin-only)
+  'strukSettings:update',
+  'strukSettings:uploadQris',
+  'strukSettings:removeQris',
 ])
+
 
 /**
  * READ-ONLY channels that are always allowed.
@@ -281,7 +295,24 @@ const READ_CHANNELS: Set<string> = new Set([
   // Error Log
   'errorLog:log',
   'errorLog:getAll',
+
+  // Subscription plans (read-only for all users)
+  'plan:getAll',
+  'plan:getActive',
+
+  // Tutorials (all users can read)
+  'tutorial:getAll',
+  'tutorial:getById',
+
+  // HPP Calculator (demo users can calculate up to limit, reads always allowed)
+  'hpp:calculate',
+  'hpp:getHistory',
+  'hpp:getUsageCount',
+
+  // Struk Settings (all users can read)
+  'strukSettings:get',
 ])
+
 
 /**
  * Check if a channel is a mutation (write) operation.
@@ -309,12 +340,39 @@ export function isMutationChannel(channel: string): boolean {
 }
 
 /**
+ * Check if a channel should be blocked based on user role.
+ * Returns true if the user doesn't have permission.
+ */
+export function shouldBlockChannel(channel: string): boolean {
+  const role = demoSession.getRole()
+  
+  // Demo users blocked from all mutations
+  if (demoSession.isDemoMode()) {
+    return isMutationChannel(channel)
+  }
+  
+  // Struk settings: only developer, superadmin, admin, operator allowed
+  const strukSettingsChannels = [
+    'strukSettings:update',
+    'strukSettings:uploadQris',
+    'strukSettings:removeQris',
+  ]
+  
+  if (strukSettingsChannels.includes(channel)) {
+    const allowedRoles = ['developer', 'superadmin', 'admin', 'operator']
+    return !allowedRoles.includes(role || '')
+  }
+  
+  return false
+}
+
+/**
  * Check if a channel should be blocked for demo users.
  * Returns true if the channel is a mutation AND the user is demo.
+ * @deprecated Use shouldBlockChannel instead
  */
 export function shouldBlockDemoChannel(channel: string): boolean {
-  if (!demoSession.isDemoMode()) return false
-  return isMutationChannel(channel)
+  return shouldBlockChannel(channel)
 }
 
 /**
@@ -330,8 +388,8 @@ export function withDemoGuard<T extends (...args: any[]) => any>(
   handler: T
 ): T {
   const wrapped = (async (...args: any[]) => {
-    // Check if this channel should be blocked for demo
-    if (shouldBlockDemoChannel(channel)) {
+    // Check if this channel should be blocked
+    if (shouldBlockChannel(channel)) {
       // Log the violation
       demoSession.logViolation(channel, args.slice(1)) // Skip IPC event arg
       

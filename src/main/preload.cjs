@@ -230,6 +230,25 @@ const ALLOWED_CHANNELS = new Set([
   'plan:create',
   'plan:update',
   'plan:deactivate',
+
+  // Tutorial
+  'tutorial:getAll',
+  'tutorial:getById',
+  'tutorial:create',
+  'tutorial:update',
+  'tutorial:delete',
+
+  // HPP Calculator
+  'hpp:calculate',
+  'hpp:getHistory',
+  'hpp:getUsageCount',
+  'hpp:delete',
+
+  // Struk Settings
+  'strukSettings:get',
+  'strukSettings:update',
+  'strukSettings:uploadQris',
+  'strukSettings:removeQris',
 ])
 
 // Expose safe IPC bridge to renderer via window.api

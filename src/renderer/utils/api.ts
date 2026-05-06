@@ -25,7 +25,9 @@ const READ_PATTERNS = [
   'getCurrent', 'getByModul', 'getByUsername', 'getMigrationStatus',
   'getSettings', 'getPermissions', 'getBirthdayToday',
   'getTransaksi', 'getKasById', 'getAllKas', 'getActiveKas',
-  'getUnreadCount', 'getHistory', 'getDetails',
+  'getUnreadCount', 'getHistory', 'getDetails', 'getUsageCount',
+  // hpp:calculate passes through — controller enforces its own demo limit
+  'calculate',
 ]
 
 /**

@@ -216,3 +216,20 @@ export const subscriptionPlans = sqliteTable('mediasoft_subscription_plans', {
   created_at: text('created_at').notNull(),
   updated_at: text('updated_at'),
 })
+
+export const tutorials = sqliteTable('mediasoft_tutorials', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  created_at: text('created_at').notNull(),
+})
+
+export const hppCalculations = sqliteTable('mediasoft_hpp_calculations', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  user_id: text('user_id').notNull(),
+  nama_produk: text('nama_produk').notNull(),
+  modal: real('modal').default(0),
+  biaya_lain: real('biaya_lain').default(0),
+  total_hpp: real('total_hpp').default(0),
+  created_at: text('created_at').notNull(),
+})

@@ -34,6 +34,9 @@ import { ErrorLogService } from '../backend/services/errorLogService.js'
 import { demoSession } from '../backend/services/demoSessionManager.js'
 import { withDemoGuard, DEMO_BLOCKED_RESPONSE } from '../backend/middleware/demoGuardV2.js'
 import { PlanController } from '../backend/controllers/PlanController.js'
+import { TutorialController } from '../backend/controllers/TutorialController.js'
+import { HppController } from '../backend/controllers/HppController.js'
+import { StrukSettingsController } from '../backend/controllers/StrukSettingsController.js'
 
 /**
  * Helper to register an IPC handler with automatic demo guard.
@@ -308,4 +311,26 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'plan:create', (data: any) => PlanController.create(data))
   handle(ipcMain, 'plan:update', (id: number, data: any) => PlanController.update(id, data))
   handle(ipcMain, 'plan:deactivate', (id: number) => PlanController.deactivate(id))
+
+  // ─── TUTORIALS ─────────────────────────────────────────────────────
+  handle(ipcMain, 'tutorial:getAll', () => TutorialController.getAll())
+  handle(ipcMain, 'tutorial:getById', (id: number) => TutorialController.getById(id))
+  handle(ipcMain, 'tutorial:create', (data: any) => TutorialController.create(data))
+  handle(ipcMain, 'tutorial:update', (id: number, data: any) => TutorialController.update(id, data))
+  handle(ipcMain, 'tutorial:delete', (id: number) => TutorialController.delete(id))
+
+  // ─── HPP CALCULATOR ────────────────────────────────────────────────
+  // Note: hpp:calculate has its own demo-limit logic inside the controller.
+  // It is intentionally NOT in MUTATION_CHANNELS so demo users can use it up to 10 times.
+  handle(ipcMain, 'hpp:calculate', (data: any) => HppController.calculate(data))
+  handle(ipcMain, 'hpp:getHistory', (username: string) => HppController.getHistory(username))
+  handle(ipcMain, 'hpp:getUsageCount', (username: string) => HppController.getUsageCount(username))
+  handle(ipcMain, 'hpp:delete', (id: number, username: string) => HppController.delete(id, username))
+
+  // ─── STRUK SETTINGS ────────────────────────────────────────────────
+  handle(ipcMain, 'strukSettings:get', () => StrukSettingsController.get())
+  handle(ipcMain, 'strukSettings:update', (data: any) => StrukSettingsController.update(data))
+  handle(ipcMain, 'strukSettings:uploadQris', (base64: string) => StrukSettingsController.uploadQris(base64))
+  handle(ipcMain, 'strukSettings:removeQris', () => StrukSettingsController.removeQris())
 }
+

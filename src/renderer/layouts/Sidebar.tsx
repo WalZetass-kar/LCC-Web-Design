@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Package, Tag, ShoppingCart, History, Settings, Store, LogOut, Truck, X,
   Users, UserCircle, Wallet, FileText, BarChart2, Database, ShoppingBag, Activity,
-  RotateCcw, Clock, DollarSign, ClipboardCheck, Rocket
+  RotateCcw, Clock, DollarSign, ClipboardCheck, Rocket, BookOpen, Calculator
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
@@ -40,6 +40,13 @@ export const MENU_GROUPS = [
       { to: '/debts', icon: DollarSign, label: 'Hutang/Piutang', code: 'nav_pembelian' },
       { to: '/returns', icon: RotateCcw, label: 'Return', code: 'nav_penjualan' },
       { to: '/laporan', icon: BarChart2, label: 'Laporan', code: 'nav_pembelian' },
+    ],
+  },
+  {
+    label: 'Alat Bantu',
+    items: [
+      { to: '/tutorials', icon: BookOpen, label: 'Tutorial', code: 'nav_tutorials' },
+      { to: '/hpp', icon: Calculator, label: 'Kalkulator HPP', code: 'nav_hpp' },
     ],
   },
   {

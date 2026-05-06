@@ -68,6 +68,18 @@ export interface DashboardSummary {
   totalBarang: number
   lowStockCount: number
   chartData: { label: string; total: number }[]
+  topProducts: {
+    kd_barang: string | null
+    nama_barang: string | null
+    total_qty: number
+    total_revenue: number
+  }[]
+  lowStockProducts: {
+    kd_barang: string
+    nama_barang: string | null
+    stok: number | null
+    stok_minimum: number | null
+  }[]
 }
 
 export interface Identitas {
@@ -239,6 +251,23 @@ export interface SubscriptionPlan {
   updated_at: string | null
 }
 
+export interface Tutorial {
+  id: number
+  title: string
+  content: string
+  created_at: string
+}
+
+export interface HppCalculation {
+  id: number
+  user_id: string
+  nama_produk: string
+  modal: number
+  biaya_lain: number
+  total_hpp: number
+  created_at: string
+}
+
 // Extend window with our API bridge
 declare global {
   interface Window {
@@ -246,4 +275,18 @@ declare global {
       invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
     }
   }
+}
+
+export interface StrukSettings {
+  id: number
+  show_logo: number
+  show_alamat: number
+  show_telepon: number
+  show_email: number
+  show_kasir: number
+  show_customer: number
+  footer_text: string
+  qris_image: string | null
+  qris_enabled: number
+  updated_at: string
 }
