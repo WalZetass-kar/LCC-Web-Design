@@ -1,6 +1,5 @@
 import { PenggunaModel } from '../models/PenggunaModel.js'
 import { ActivityLogModel } from '../models/ActivityLogModel.js'
-import { encryptPassword } from '../services/crypto.js'
 import { sqlite } from '../../database/connection.js'
 
 // Role hierarchy: developer > superadmin > admin > operator > kasir
@@ -23,9 +22,10 @@ export class UserController {
     }
   }
 
-  static create(data: {
+  static async create(data: {
     nama_pengguna: string
-    kata_sandi: string
+    kata_sandi?: string
+    password?: string // Accept both kata_sandi and password
     nama_lengkap: string
     email?: string
     no_telp?: string
@@ -39,12 +39,22 @@ export class UserController {
         return { success: false, message: 'Username sudah digunakan' }
       }
 
-      // Encrypt password
-      const encrypted = encryptPassword(data.kata_sandi)
+      // Get password from either field
+      const plainPassword = data.kata_sandi || data.password
+      if (!plainPassword) {
+        return { success: false, message: 'Password wajib diisi' }
+      }
+
+      // Hash password using bcrypt (secure)
+      const { hashPassword } = await import('../services/crypto.js')
+      const hashed = await hashPassword(plainPassword)
 
       PenggunaModel.create({
-        ...data,
-        kata_sandi: encrypted,
+        nama_pengguna: data.nama_pengguna,
+        kata_sandi: hashed,
+        nama_lengkap: data.nama_lengkap,
+        email: data.email,
+        no_telp: data.no_telp,
         hak_akses: data.hak_akses || 'kasir',
       })
 
@@ -107,22 +117,33 @@ export class UserController {
     }
   }
 
-  static changePassword(username: string, oldPassword: string, newPassword: string) {
+  static async changePassword(username: string, oldPassword: string, newPassword: string) {
     try {
       const user = PenggunaModel.findByUsername(username)
       if (!user) {
         return { success: false, message: 'User tidak ditemukan' }
       }
 
-      // Verify old password
-      const oldEncrypted = encryptPassword(oldPassword)
-      if (user.kata_sandi !== oldEncrypted) {
+      // Verify old password (support both SHA1 and bcrypt)
+      const { verifyPassword, isSHA1Hash, encryptPassword, hashPassword } = await import('../services/crypto.js')
+      
+      let isValid = false
+      if (isSHA1Hash(user.kata_sandi || '')) {
+        // Old SHA1 password
+        const oldEncrypted = encryptPassword(oldPassword)
+        isValid = user.kata_sandi === oldEncrypted
+      } else {
+        // Bcrypt password
+        isValid = await verifyPassword(oldPassword, user.kata_sandi || '')
+      }
+
+      if (!isValid) {
         return { success: false, message: 'Password lama salah' }
       }
 
-      // Update with new password
-      const newEncrypted = encryptPassword(newPassword)
-      PenggunaModel.update(username, { kata_sandi: newEncrypted })
+      // Update with new password (bcrypt)
+      const newHashed = await hashPassword(newPassword)
+      PenggunaModel.update(username, { kata_sandi: newHashed })
 
       return { success: true, message: 'Password berhasil diubah' }
     } catch (error) {
@@ -130,10 +151,11 @@ export class UserController {
     }
   }
 
-  static resetPassword(username: string, newPassword: string, caller?: string) {
+  static async resetPassword(username: string, newPassword: string, caller?: string) {
     try {
-      const encrypted = encryptPassword(newPassword)
-      PenggunaModel.update(username, { kata_sandi: encrypted })
+      const { hashPassword } = await import('../services/crypto.js')
+      const hashed = await hashPassword(newPassword)
+      PenggunaModel.update(username, { kata_sandi: hashed })
 
       // Activity log
       if (caller) {

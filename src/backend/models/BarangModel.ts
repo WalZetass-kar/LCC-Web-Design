@@ -50,10 +50,10 @@ export class BarangModel {
     return db.select().from(barang).where(eq(barang.kd_barang, kd)).get()
   }
 
-  static create(data: typeof barang.$inferInsert) {
-    db.insert(barang).values(data).run()
-    // Insert default harga row
-    db.insert(harga).values({ kd_barang: data.kd_barang, harga_barang: 0, potongan: 0, harga_modal: 0 }).run()
+  static create(data: typeof barang.$inferInsert & { harga_barang?: number; potongan?: number; harga_modal?: number }) {
+    const { harga_barang = 0, potongan = 0, harga_modal = 0, ...barangData } = data
+    db.insert(barang).values(barangData).run()
+    db.insert(harga).values({ kd_barang: data.kd_barang, harga_barang, potongan, harga_modal }).run()
   }
 
   static update(kd: string, data: Partial<typeof barang.$inferInsert & typeof harga.$inferInsert>) {
@@ -62,7 +62,11 @@ export class BarangModel {
       db.update(barang).set(barangData).where(eq(barang.kd_barang, kd)).run()
     }
     if (harga_barang !== undefined || potongan !== undefined || harga_modal !== undefined) {
-      db.update(harga).set({ harga_barang, potongan, harga_modal }).where(eq(harga.kd_barang, kd)).run()
+      const hargaUpdate: Record<string, number | null> = {}
+      if (harga_barang !== undefined) hargaUpdate.harga_barang = harga_barang
+      if (potongan !== undefined) hargaUpdate.potongan = potongan
+      if (harga_modal !== undefined) hargaUpdate.harga_modal = harga_modal
+      db.update(harga).set(hargaUpdate).where(eq(harga.kd_barang, kd)).run()
     }
   }
 

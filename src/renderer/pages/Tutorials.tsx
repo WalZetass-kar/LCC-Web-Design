@@ -13,28 +13,28 @@ function renderContent(text: string) {
   const lines = text.split('\n')
   return lines.map((line, i) => {
     if (line.startsWith('## '))
-      return <h2 key={i} className="text-base font-bold text-slate-800 dark:text-white mt-4 mb-1">{line.slice(3)}</h2>
+      return <h2 key={i} className="text-lg font-bold text-slate-800 dark:text-white mt-6 mb-3 first:mt-0">{line.slice(3)}</h2>
     if (line.startsWith('### '))
-      return <h3 key={i} className="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-3 mb-1">{line.slice(4)}</h3>
+      return <h3 key={i} className="text-base font-semibold text-slate-700 dark:text-slate-200 mt-4 mb-2">{line.slice(4)}</h3>
     if (line.startsWith('- ') || line.startsWith('* '))
       return (
-        <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300 ml-3">
-          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary-400 shrink-0" />
+        <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300 ml-4 mb-1.5">
+          <span className="mt-2 w-1.5 h-1.5 rounded-full bg-primary-500 shrink-0" />
           <span dangerouslySetInnerHTML={{ __html: boldify(line.slice(2)) }} />
         </li>
       )
     if (/^\d+\./.test(line)) {
       const [num, ...rest] = line.split('. ')
       return (
-        <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300 ml-3">
-          <span className="shrink-0 font-bold text-primary-500">{num}.</span>
+        <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300 ml-4 mb-1.5">
+          <span className="shrink-0 font-semibold text-primary-600 dark:text-primary-500 min-w-[1.5rem]">{num}.</span>
           <span dangerouslySetInnerHTML={{ __html: boldify(rest.join('. ')) }} />
         </li>
       )
     }
-    if (line.trim() === '') return <div key={i} className="h-2" />
+    if (line.trim() === '') return <div key={i} className="h-3" />
     return (
-      <p key={i} className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed"
+      <p key={i} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-2"
         dangerouslySetInnerHTML={{ __html: boldify(line) }}
       />
     )
@@ -82,8 +82,8 @@ function FormModal({ initial, onClose, onSave }: FormModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700 shrink-0">
           <h3 className="font-bold text-slate-800 dark:text-white">
@@ -98,6 +98,7 @@ function FormModal({ initial, onClose, onSave }: FormModalProps) {
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">Judul</label>
             <input
+              autoFocus
               value={title}
               onChange={e => setTitle(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white text-sm outline-none focus:ring-2 focus:ring-primary-400"
@@ -284,7 +285,7 @@ export default function Tutorials() {
             <div className="h-px bg-slate-100 dark:bg-slate-700 mb-5" />
 
             {/* Content */}
-            <div className="space-y-1.5">
+            <div className="prose prose-sm max-w-none space-y-2">
               {renderContent(selected.content)}
             </div>
           </div>

@@ -3,6 +3,41 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 export class BackupController {
+  /**
+   * Auto backup before critical operations
+   * Returns backup filename or null if failed
+   */
+  static autoBackup(operation: string): string | null {
+    try {
+      const dbPath = path.join(process.cwd(), 'sistem_pos.db')
+      const backupDir = path.join(process.cwd(), 'backups')
+
+      if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true })
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const backupFileName = `auto_${operation}_${timestamp}.db`
+      const backupPath = path.join(backupDir, backupFileName)
+
+      fs.copyFileSync(dbPath, backupPath)
+
+      const stats = fs.statSync(backupPath)
+      BackupModel.create({
+        nama_file: backupFileName,
+        ukuran: stats.size,
+        tgl_backup: new Date().toISOString(),
+        username: 'SYSTEM',
+        keterangan: `Auto backup before ${operation}`,
+      })
+
+      return backupFileName
+    } catch (error) {
+      console.error('[AutoBackup] Failed:', error)
+      return null
+    }
+  }
+
   static getAll() {
     try {
       const backups = BackupModel.getAll()

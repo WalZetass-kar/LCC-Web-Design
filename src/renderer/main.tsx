@@ -11,6 +11,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Produk from './pages/Produk'
 import Kategori from './pages/Kategori'
+import Satuan from './pages/Satuan'
 import Transaksi from './pages/Transaksi'
 import Riwayat from './pages/Riwayat'
 import Settings from './pages/Settings'
@@ -81,6 +82,7 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/produk" element={<Produk />} />
           <Route path="/kategori" element={<Kategori />} />
+          <Route path="/satuan" element={<Satuan />} />
           <Route path="/transaksi" element={<Transaksi />} />
           <Route path="/riwayat" element={<Riwayat />} />
           <Route path="/supplier" element={<Supplier />} />

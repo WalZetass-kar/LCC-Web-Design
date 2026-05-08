@@ -53,12 +53,20 @@ function isReadChannel(channel: string): boolean {
  */
 export async function api<T>(channel: string, ...args: unknown[]): Promise<IpcResponse<T>> {
   // ─── DEMO MODE PRE-FLIGHT BLOCK (UX optimization) ─────────────────
-  if (isDemoMode() && !isReadChannel(channel)) {
+  const demoMode = isDemoMode()
+  const isRead = isReadChannel(channel)
+  
+  if (demoMode && !isRead) {
     console.warn(`🔒 [DEMO PRE-FLIGHT] Blocked: ${channel}`)
     return {
       success: false,
       message: getDemoBlockedMessage(),
     } as IpcResponse<T>
+  }
+  
+  // Debug logging for delete operations
+  if (channel.includes('delete')) {
+    console.log(`[API DEBUG] Channel: ${channel}, isDemoMode: ${demoMode}, isReadChannel: ${isRead}`)
   }
 
   // ─── INVOKE THE IPC CHANNEL ────────────────────────────────────────

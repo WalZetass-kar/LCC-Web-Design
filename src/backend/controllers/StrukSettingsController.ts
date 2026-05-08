@@ -2,6 +2,7 @@ import { sqlite } from '../../database/connection.js'
 
 interface StrukSettings {
   id: number
+  printer_type: string
   show_logo: number
   show_alamat: number
   show_telepon: number
@@ -51,6 +52,10 @@ export class StrukSettingsController {
       const fields: string[] = []
       const values: any[] = []
 
+      if (data.printer_type !== undefined) {
+        fields.push('printer_type = ?')
+        values.push(data.printer_type)
+      }
       if (data.show_logo !== undefined) {
         fields.push('show_logo = ?')
         values.push(data.show_logo ? 1 : 0)

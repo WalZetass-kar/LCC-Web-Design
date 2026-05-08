@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X, Image, Settings } from 'lucide-react'
+import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X, Image, Settings, QrCode } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -22,7 +22,7 @@ export default function Transaksi() {
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [bayar, setBayar] = useState('')
-  const [jenisBayar, setJenisBayar] = useState<'TUNAI' | 'TRANSFER'>('TUNAI')
+  const [jenisBayar, setJenisBayar] = useState<'TUNAI' | 'TRANSFER' | 'QRIS'>('TUNAI')
   const [loading, setLoading] = useState(false)
   const [lastKd, setLastKd] = useState<string | null>(null)
   const [showStruk, setShowStruk] = useState(false)
@@ -320,11 +320,11 @@ export default function Transaksi() {
               </div>
             )}
             <div className="flex gap-2">
-              {(['TUNAI', 'TRANSFER'] as const).map(j => (
+              {(['TUNAI', 'TRANSFER', 'QRIS'] as const).map(j => (
                 <button key={j} onClick={() => setJenisBayar(j)}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium border transition-all
                     ${jenisBayar === j ? 'bg-primary-500 text-white border-primary-500' : 'border-slate-200 dark:border-slate-600 text-slate-500 hover:border-primary-300'}`}>
-                  {j === 'TUNAI' ? <Banknote size={14} /> : <CreditCard size={14} />} {j}
+                  {j === 'TUNAI' ? <Banknote size={14} /> : j === 'TRANSFER' ? <CreditCard size={14} /> : <QrCode size={14} />} {j}
                 </button>
               ))}
             </div>

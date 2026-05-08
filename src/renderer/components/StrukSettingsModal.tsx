@@ -4,6 +4,7 @@ import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 
 interface StrukSettings {
+  printer_type: 'a4' | 'thermal' | 'dot_matrix'
   show_logo: boolean
   show_alamat: boolean
   show_telepon: boolean
@@ -25,6 +26,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [settings, setSettings] = useState<StrukSettings>({
+    printer_type: 'thermal',
     show_logo: true,
     show_alamat: true,
     show_telepon: true,
@@ -45,6 +47,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
     const r = await api<any>('strukSettings:get')
     if (r.success && r.data) {
       setSettings({
+        printer_type: r.data.printer_type || 'thermal',
         show_logo: Boolean(r.data.show_logo),
         show_alamat: Boolean(r.data.show_alamat),
         show_telepon: Boolean(r.data.show_telepon),
@@ -137,6 +140,32 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
           </div>
         ) : (
           <div className="p-6 space-y-6">
+            {/* Tipe Printer */}
+            <div>
+              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Tipe Printer</h3>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { value: 'thermal', label: 'Thermal', desc: '58mm/80mm' },
+                  { value: 'a4', label: 'A4', desc: 'Kertas A4' },
+                  { value: 'dot_matrix', label: 'Dot Matrix', desc: 'Continuous' },
+                ].map(({ value, label, desc }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setSettings({ ...settings, printer_type: value as any })}
+                    className={`p-4 rounded-xl border-2 transition-all text-left ${
+                      settings.printer_type === value
+                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700'
+                    }`}
+                  >
+                    <div className="font-semibold text-sm text-slate-800 dark:text-white">{label}</div>
+                    <div className="text-xs text-slate-500 mt-1">{desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Tampilan Struk */}
             <div>
               <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Tampilan Struk</h3>

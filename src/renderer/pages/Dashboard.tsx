@@ -14,17 +14,25 @@ import type { DashboardSummary } from '../../shared/types'
 // Count-up hook
 function useCountUp(target: number, duration = 800) {
   const [value, setValue] = useState(0)
-  const raf = useRef<number>(0)
+  const rafRef = useRef<number>(0)
+  const isMountedRef = useRef(true)
+  
   useEffect(() => {
+    isMountedRef.current = true
     const start = performance.now()
     const tick = (now: number) => {
+      if (!isMountedRef.current) return
       const p = Math.min((now - start) / duration, 1)
       setValue(Math.floor(p * target))
-      if (p < 1) raf.current = requestAnimationFrame(tick)
+      if (p < 1) rafRef.current = requestAnimationFrame(tick)
     }
-    raf.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf.current)
+    rafRef.current = requestAnimationFrame(tick)
+    return () => {
+      isMountedRef.current = false
+      cancelAnimationFrame(rafRef.current)
+    }
   }, [target, duration])
+  
   return value
 }
 
@@ -44,11 +52,21 @@ export default function Dashboard() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    api<DashboardSummary>('dashboard:getSummary').then(r => {
-      if (r.success && r.data) setSummary(r.data)
-    })
+    const fetchData = async () => {
+      try {
+        const r = await api<DashboardSummary>('dashboard:getSummary')
+        if (r.success && r.data) setSummary(r.data)
+      } catch (error) {
+        console.error('Failed to fetch dashboard summary:', error)
+      }
+    }
+    
+    fetchData()
+    
     // Auto-check stok minimum and create notifications
-    api('notifikasi:checkStokMinimum')
+    api('notifikasi:checkStokMinimum').catch(error => {
+      console.error('Failed to check minimum stock:', error)
+    })
   }, [])
 
   return (
@@ -246,28 +264,6 @@ export default function Dashboard() {
         </Card>
       </div>
     </div>
-  )
-}
-
-function QuickActionButton({ icon, label, color, onClick }: {
-  icon: React.ReactNode
-  label: string
-  color: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`group relative overflow-hidden rounded-xl bg-gradient-to-br ${color} p-4 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95`}
-    >
-      <div className="flex flex-col items-center gap-2">
-        <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:bg-white/30 transition-colors">
-          {icon}
-        </div>
-        <span className="text-sm font-semibold">{label}</span>
-      </div>
-      <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors" />
-    </button>
   )
 }
 

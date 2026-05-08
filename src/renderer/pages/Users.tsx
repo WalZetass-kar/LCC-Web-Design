@@ -59,7 +59,10 @@ export default function Users() {
 
   const load = async () => {
     const r = await api<Pengguna[]>('user:getAll')
-    if (r.success) setData(r.data ?? [])
+    if (r.success) {
+      console.log('Loaded users:', r.data?.length)
+      setData(r.data ?? [])
+    }
   }
 
   useEffect(() => { load() }, [])

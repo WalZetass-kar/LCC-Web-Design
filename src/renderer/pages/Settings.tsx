@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Sun, Moon, Palette, Store, Receipt, Barcode, Printer, Database, Bell } from 'lucide-react'
+import { Sun, Moon, Palette, Store, Receipt, Barcode, Printer, Database, Bell, AlertTriangle } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { useTheme, type ThemeColor } from '../contexts/ThemeContext'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
@@ -22,6 +23,8 @@ export default function Settings() {
   const toast = useToast()
   const [identitas, setIdentitas] = useState<Partial<Identitas>>({})
   const [loading, setLoading] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
     api<Identitas>('identitas:get').then(r => {
@@ -35,6 +38,19 @@ export default function Settings() {
     setLoading(false)
     if (r.success) toast(r.message as string)
     else toast(r.message as string, 'error')
+  }
+
+  const handleReset = async () => {
+    setResetting(true)
+    const r = await api('system:resetData')
+    setResetting(false)
+    if (r.success) {
+      toast('Semua data berhasil direset!', 'success')
+      setConfirmReset(false)
+      setTimeout(() => window.location.reload(), 1500)
+    } else {
+      toast(r.message as string || 'Gagal reset data', 'error')
+    }
   }
 
   const f = (k: string, v: string | number) => setIdentitas(prev => ({ ...prev, [k]: v }))
@@ -194,9 +210,78 @@ export default function Settings() {
             <Button loading={loading} onClick={saveIdentitas} className="w-full sm:w-auto">Simpan Pengaturan Notifikasi</Button>
           </div>
         </Card>
+
+        {/* Reset Data - Danger Zone */}
+        <Card title="⚠️ Zona Berbahaya" action={<AlertTriangle size={16} className="text-red-500" />}>
+          <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/40">
+                <AlertTriangle className="text-red-600 dark:text-red-400" size={24} />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-red-700 dark:text-red-400 mb-1">Reset Semua Data</h3>
+                <p className="text-sm text-red-600 dark:text-red-400 leading-relaxed">
+                  Menghapus <strong>SEMUA</strong> data transaksi, produk, customer, supplier, dan pengaturan. 
+                  Tindakan ini <strong>TIDAK DAPAT DIBATALKAN</strong>!
+                </p>
+              </div>
+            </div>
+            
+            <div className="space-y-2 text-xs text-red-600 dark:text-red-400 mb-4 pl-2 border-l-2 border-red-300 dark:border-red-700">
+              <p>✗ Semua transaksi penjualan & pembelian</p>
+              <p>✗ Semua data produk & stok</p>
+              <p>✗ Semua data customer & supplier</p>
+              <p>✗ Semua data kas & shift</p>
+              <p>✗ Riwayat backup & activity log</p>
+            </div>
+
+            <Button 
+              variant="danger" 
+              onClick={() => setConfirmReset(true)}
+              className="w-full"
+            >
+              <AlertTriangle size={16} />
+              Reset Semua Data
+            </Button>
+          </div>
+        </Card>
       </div>
 
       <p className="text-xs text-slate-400 text-center lg:col-span-2">MediaSoft POS v2.0.0 — Preferensi tema disimpan otomatis</p>
+
+      {/* Confirm Reset Dialog */}
+      <ConfirmDialog
+        open={confirmReset}
+        onClose={() => setConfirmReset(false)}
+        onConfirm={handleReset}
+        loading={resetting}
+        title="⚠️ PERINGATAN KERAS!"
+        message={
+          <div className="space-y-3">
+            <p className="font-bold text-red-600 dark:text-red-400 text-lg">
+              Anda akan menghapus SEMUA data aplikasi!
+            </p>
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+              <p className="font-semibold mb-2">Data yang akan dihapus:</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Semua transaksi penjualan & pembelian</li>
+                <li>Semua produk, kategori, & satuan</li>
+                <li>Semua customer & supplier</li>
+                <li>Semua data kas, shift, & hutang/piutang</li>
+                <li>Semua backup & activity log</li>
+              </ul>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              <strong>Catatan:</strong> Data user dan pengaturan identitas toko akan tetap tersimpan.
+            </p>
+            <p className="font-bold text-red-600 dark:text-red-400">
+              Tindakan ini TIDAK DAPAT DIBATALKAN! Yakin ingin melanjutkan?
+            </p>
+          </div>
+        }
+        confirmText="Ya, Reset Semua Data"
+        cancelText="Batal"
+      />
     </div>
   )
 }

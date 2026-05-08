@@ -1,22 +1,39 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Download, X, AlertCircle } from 'lucide-react'
 import Button from './Button'
 import { api } from '../utils/api'
 
+interface UpdateInfo {
+  hasUpdate: boolean
+  latestVersion: string
+  downloadUrl: string
+  releaseNotes?: string
+  isCritical: boolean
+}
+
 export default function UpdateNotification() {
-  const [updateInfo, setUpdateInfo] = useState<any>(null)
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [dismissed, setDismissed] = useState(false)
+  const isMountedRef = useRef(true)
 
   useEffect(() => {
+    isMountedRef.current = true
     checkForUpdates()
     const interval = setInterval(checkForUpdates, 1000 * 60 * 60) // Check every hour
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      isMountedRef.current = false
+    }
   }, [])
 
   const checkForUpdates = async () => {
-    const r = await api<any>('update:check')
-    if (r.success && r.data?.hasUpdate) {
-      setUpdateInfo(r.data)
+    try {
+      const r = await api<UpdateInfo>('update:check')
+      if (r.success && r.data?.hasUpdate && isMountedRef.current) {
+        setUpdateInfo(r.data)
+      }
+    } catch (error) {
+      console.error('Failed to check for updates:', error)
     }
   }
 
@@ -43,7 +60,7 @@ export default function UpdateNotification() {
               size="sm"
               variant="secondary"
               onClick={() => window.open(updateInfo.downloadUrl, '_blank')}
-              icon={Download}
+              icon={<Download />}
             >
               Download
             </Button>

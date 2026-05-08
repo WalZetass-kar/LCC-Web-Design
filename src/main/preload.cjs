@@ -249,6 +249,15 @@ const ALLOWED_CHANNELS = new Set([
   'strukSettings:update',
   'strukSettings:uploadQris',
   'strukSettings:removeQris',
+
+  // System
+  'system:checkDb',
+  'system:resetData',
+
+  // Satuan CRUD
+  'satuan:create',
+  'satuan:update',
+  'satuan:delete',
 ])
 
 // Expose safe IPC bridge to renderer via window.api

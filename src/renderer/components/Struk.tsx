@@ -19,6 +19,7 @@ interface StrukProps {
 }
 
 interface StrukSettings {
+  printer_type: 'a4' | 'thermal' | 'dot_matrix'
   show_logo: boolean
   show_alamat: boolean
   show_telepon: boolean
@@ -43,6 +44,7 @@ const Struk = forwardRef<HTMLDivElement, StrukProps>(
     const total = totalBayar ?? subTotal
 
     const [settings, setSettings] = useState<StrukSettings>({
+      printer_type: 'thermal',
       show_logo: true,
       show_alamat: true,
       show_telepon: true,
@@ -61,6 +63,7 @@ const Struk = forwardRef<HTMLDivElement, StrukProps>(
       api<any>('strukSettings:get').then(r => {
         if (r.success && r.data) {
           setSettings({
+            printer_type: r.data.printer_type || 'thermal',
             show_logo: Boolean(r.data.show_logo),
             show_alamat: Boolean(r.data.show_alamat),
             show_telepon: Boolean(r.data.show_telepon),
@@ -82,8 +85,14 @@ const Struk = forwardRef<HTMLDivElement, StrukProps>(
       })
     }, [])
 
+    const printerWidth = settings.printer_type === 'a4' ? 595 : settings.printer_type === 'thermal' ? 280 : 320
+
     return (
-      <div ref={ref} className="font-mono text-xs text-slate-800 p-4 bg-white print:p-0 print:text-black" style={{ width: 280 }}>
+      <div 
+        ref={ref} 
+        className="font-mono text-xs text-slate-800 p-4 bg-white print:p-0 print:text-black" 
+        style={{ width: printerWidth }}
+      >
         <div className="text-center mb-3">
           <p className="font-bold text-sm">{identitas.nama_toko || 'MediaSoft POS'}</p>
           {settings.show_alamat && identitas.alamat_toko && (

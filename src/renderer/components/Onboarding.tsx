@@ -37,13 +37,15 @@ export default function Onboarding() {
   useEffect(() => {
     const hasSeenTour = localStorage.getItem('hasSeenTour')
     if (!hasSeenTour) {
-      setTimeout(() => setIsOpen(true), 1000)
+      const timer = setTimeout(() => setIsOpen(true), 1000)
+      return () => clearTimeout(timer)
     }
   }, [])
 
   const handleClose = () => {
     localStorage.setItem('hasSeenTour', 'true')
     setIsOpen(false)
+    setStep(0) // Reset step for next time
   }
 
   const handleNext = () => {
@@ -59,7 +61,7 @@ export default function Onboarding() {
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="">
+    <Modal open={isOpen} onClose={handleClose} title="">
       <div className="text-center space-y-6 py-4">
         <div className="text-6xl">{step === 0 ? '👋' : step === TOUR_STEPS.length - 1 ? '🎉' : '💡'}</div>
         
@@ -81,11 +83,11 @@ export default function Onboarding() {
 
         <div className="flex gap-2">
           {step > 0 && (
-            <Button variant="secondary" onClick={handlePrev} icon={ChevronLeft} className="flex-1">
+            <Button variant="secondary" onClick={handlePrev} icon={<ChevronLeft />} className="flex-1">
               Kembali
             </Button>
           )}
-          <Button onClick={handleNext} icon={step < TOUR_STEPS.length - 1 ? ChevronRight : undefined} className="flex-1">
+          <Button onClick={handleNext} icon={step < TOUR_STEPS.length - 1 ? <ChevronRight /> : undefined} className="flex-1">
             {step < TOUR_STEPS.length - 1 ? 'Lanjut' : 'Mulai'}
           </Button>
         </div>

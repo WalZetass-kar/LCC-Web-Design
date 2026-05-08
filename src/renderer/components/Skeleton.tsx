@@ -23,9 +23,9 @@ export function SkeletonCard() {
   )
 }
 
-export function SkeletonChart() {
+export function SkeletonChart({ className = '' }: SkeletonProps) {
   return (
-    <div className="glass-card p-6">
+    <div className={`glass-card p-6 ${className}`}>
       <Skeleton className="h-5 w-48 mb-6" />
       <div className="flex items-end gap-2 h-40">
         {[60, 80, 45, 90, 70, 55, 85].map((h, i) => (

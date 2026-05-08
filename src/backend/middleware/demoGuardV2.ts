@@ -153,10 +153,8 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   // HPP Calculator (delete own record)
   'hpp:delete',
 
-  // Struk Settings (admin-only)
-  'strukSettings:update',
-  'strukSettings:uploadQris',
-  'strukSettings:removeQris',
+  // Note: strukSettings channels have custom role-based access control
+  // See shouldBlockChannel() function
 ])
 
 
@@ -360,9 +358,11 @@ export function shouldBlockChannel(channel: string): boolean {
   
   if (strukSettingsChannels.includes(channel)) {
     const allowedRoles = ['developer', 'superadmin', 'admin', 'operator']
+    // Block if role is NOT in allowed list
     return !allowedRoles.includes(role || '')
   }
   
+  // All other channels: allow for non-demo users
   return false
 }
 

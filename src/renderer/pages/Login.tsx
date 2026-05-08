@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { User, Lock, Store, Eye, EyeOff, Sparkles } from 'lucide-react'
+import { User, Lock, Store, Eye, EyeOff, Sparkles, Info, Key, Keyboard, Database, Globe } from 'lucide-react'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Modal from '../components/Modal'
@@ -18,6 +18,10 @@ export default function Login() {
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
+  const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'error'>('checking')
+  const [showDefaultLogin, setShowDefaultLogin] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
 
   // Identitas dialog state
   const [showIdentitas, setShowIdentitas] = useState(false)
@@ -26,7 +30,48 @@ export default function Login() {
   const [savingIdentitas, setSavingIdentitas] = useState(false)
 
   const usernameRef = useRef<HTMLInputElement>(null)
-  useEffect(() => { usernameRef.current?.focus() }, [])
+  
+  useEffect(() => { 
+    // Check auth and db status
+    const checkStatus = async () => {
+      try {
+        // Check if remembered
+        const remembered = localStorage.getItem('rememberMe')
+        if (remembered) {
+          const { username: savedUser, password: savedPass } = JSON.parse(remembered)
+          setUsername(savedUser)
+          setPassword(savedPass)
+          setRememberMe(true)
+        }
+        
+        // Check DB status
+        const dbCheck = await api('system:checkDb')
+        setDbStatus(dbCheck.success ? 'connected' : 'error')
+      } catch {
+        setDbStatus('error')
+      } finally {
+        setAuthLoading(false)
+        usernameRef.current?.focus()
+      }
+    }
+    checkStatus()
+  }, [])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !loading) {
+        const form = document.querySelector('form')
+        if (form) form.requestSubmit()
+      }
+      if (e.key === 'F1') {
+        e.preventDefault()
+        setShowDefaultLogin(true)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [loading])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,6 +89,13 @@ export default function Login() {
         setError(r.message ?? 'Login gagal')
         setLoading(false)
         return
+      }
+
+      // Save credentials if remember me is checked
+      if (rememberMe) {
+        localStorage.setItem('rememberMe', JSON.stringify({ username, password }))
+      } else {
+        localStorage.removeItem('rememberMe')
       }
 
       // Check if store identity is set
@@ -163,106 +215,188 @@ export default function Login() {
             <p className="text-slate-500 text-xs mt-1">by Ihwal</p>
           </div>
 
-          {/* Card */}
-          <div className="bg-white/[0.06] backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/40 hover:border-white/20 transition-all duration-300">
-            {/* Header */}
-            <div className="mb-7">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center mb-4 shadow-lg shadow-primary-500/30 animate-pulse">
-                <Store size={22} className="text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-white mb-1">Selamat datang 👋</h3>
-              <p className="text-slate-400 text-sm">Masuk ke akun Anda untuk melanjutkan</p>
-            </div>
-
-            <form onSubmit={handleLogin} className="space-y-4">
-              {/* Username */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Username</label>
-                <div className="relative group">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
-                    <User size={16} />
-                  </span>
-                  <input
-                    ref={usernameRef}
-                    placeholder="Masukkan username"
-                    value={username}
-                    onChange={e => setUsername(e.target.value)}
-                    autoComplete="username"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
-                  />
+          {/* Loading Skeleton */}
+          {authLoading ? (
+            <div className="bg-white/[0.06] backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/40">
+              <div className="animate-pulse space-y-4">
+                <div className="w-12 h-12 bg-slate-700 rounded-2xl mb-4"></div>
+                <div className="h-6 bg-slate-700 rounded w-3/4"></div>
+                <div className="h-4 bg-slate-700 rounded w-1/2"></div>
+                <div className="space-y-3 mt-6">
+                  <div className="h-12 bg-slate-700 rounded-xl"></div>
+                  <div className="h-12 bg-slate-700 rounded-xl"></div>
+                  <div className="h-12 bg-slate-700 rounded-xl"></div>
                 </div>
               </div>
+            </div>
+          ) : (
+            /* Card */
+            <div className="bg-white/[0.06] backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/40 hover:border-white/20 transition-all duration-300">
+              {/* Header */}
+              <div className="mb-7">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center mb-4 shadow-lg shadow-primary-500/30 animate-pulse">
+                  <Store size={22} className="text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-white mb-1">Selamat datang 👋</h3>
+                <p className="text-slate-400 text-sm">Masuk ke akun Anda untuk melanjutkan</p>
+              </div>
 
-              {/* Password */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Password</label>
-                <div className="relative group">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
-                    <Lock size={16} />
-                  </span>
-                  <input
-                    type={showPass ? 'text' : 'password'}
-                    placeholder="Masukkan password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    autoComplete="current-password"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-12 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
-                  />
-                  <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1">
-                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+              <form onSubmit={handleLogin} className="space-y-4">
+                {/* Username */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Username</label>
+                  <div className="relative group">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
+                      <User size={16} />
+                    </span>
+                    <input
+                      ref={usernameRef}
+                      placeholder="Masukkan username"
+                      value={username}
+                      onChange={e => setUsername(e.target.value)}
+                      autoComplete="username"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Password</label>
+                  <div className="relative group">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
+                      <Lock size={16} />
+                    </span>
+                    <input
+                      type={showPass ? 'text' : 'password'}
+                      placeholder="Masukkan password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-12 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                    />
+                    <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1">
+                      {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Remember Me & Forgot Password */}
+                <div className="flex items-center justify-between text-xs">
+                  <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={e => setRememberMe(e.target.checked)}
+                      className="w-3 h-3 rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500/40"
+                    />
+                    Ingat Saya
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => window.open('https://wa.me/6208988098238?text=Halo%20Admin,%20saya%20lupa%20password%20akun%20MediaSoft%20POS', '_blank')}
+                    className="text-primary-400 hover:text-primary-300 transition-colors"
+                  >
+                    Lupa Password?
                   </button>
                 </div>
-              </div>
 
-              {error && (
-                <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-                  <span className="text-red-400 mt-0.5 shrink-0">⚠️</span>
-                  <p className="text-sm text-red-400">{error}</p>
+                {error && (
+                  <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                    <span className="text-red-400 mt-0.5 shrink-0">⚠️</span>
+                    <p className="text-sm text-red-400">{error}</p>
+                  </div>
+                )}
+
+                <Button type="submit" className="w-full mt-1 bg-gradient-to-r from-primary-500 to-primary-400 hover:from-primary-600 hover:to-primary-500 border-0" size="lg" loading={loading}>
+                  {loading ? 'Memproses...' : 'Masuk ke Dashboard'}
+                </Button>
+
+                {/* Keyboard Hint */}
+                <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                  <Keyboard size={12} />
+                  Press Enter to login • F1 for default credentials
+                </div>
+              </form>
+
+              {/* Default Login Info */}
+              {showDefaultLogin && (
+                <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                  <div className="flex items-start gap-2 mb-3">
+                    <Info size={16} className="text-blue-400 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-400">Default Login</p>
+                      <p className="text-xs text-slate-400">Untuk first-time user</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Admin:</span>
+                      <span className="text-white font-mono">admin / admin</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Demo:</span>
+                      <span className="text-white font-mono">demo / demo</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowDefaultLogin(false)}
+                    className="mt-2 text-xs text-slate-500 hover:text-slate-400"
+                  >
+                    Tutup
+                  </button>
                 </div>
               )}
 
-              <Button type="submit" className="w-full mt-1 bg-gradient-to-r from-primary-500 to-primary-400 hover:from-primary-600 hover:to-primary-500 border-0" size="lg" loading={loading}>
-                {loading ? 'Memproses...' : 'Masuk ke Dashboard'}
-              </Button>
-            </form>
-
-            {/* Demo Login Section */}
-            <div className="mt-5 pt-5 border-t border-white/10">
-              <button
-                type="button"
-                onClick={async () => {
-                  setError('')
-                  setLoading(true)
-                  try {
-                    const r = await api<UserSession>('auth:login', 'demo', 'demo')
-                    if (r.success && r.data) {
-                      login(r.data)
-                      toast('🔒 Mode Demo aktif — semua aksi tulis diblokir', 'info')
-                      navigate('/', { replace: true })
-                    } else {
-                      setError(r.message ?? 'Akun demo belum tersedia. Hubungi administrator.')
+              {/* Demo Login Section */}
+              <div className="mt-5 pt-5 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setError('')
+                    setLoading(true)
+                    try {
+                      const r = await api<UserSession>('auth:login', 'demo', 'demo')
+                      if (r.success && r.data) {
+                        login(r.data)
+                        toast('🔒 Mode Demo aktif — semua aksi tulis diblokir', 'info')
+                        navigate('/', { replace: true })
+                      } else {
+                        setError(r.message ?? 'Akun demo belum tersedia. Hubungi administrator.')
+                      }
+                    } catch (err) {
+                      setError('Akun demo belum tersedia')
                     }
-                  } catch (err) {
-                    setError('Akun demo belum tersedia')
-                  }
-                  setLoading(false)
-                }}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 hover:from-amber-500/20 hover:to-orange-500/20 transition-all group"
-              >
-                <span className="text-lg">🔒</span>
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-amber-400 group-hover:text-amber-300 transition-colors">Coba Demo Mode</p>
-                  <p className="text-[10px] text-slate-500">Jelajahi semua fitur — read only</p>
-                </div>
-              </button>
-            </div>
+                    setLoading(false)
+                  }}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 hover:from-amber-500/20 hover:to-orange-500/20 transition-all group"
+                >
+                  <span className="text-lg">🔒</span>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-amber-400 group-hover:text-amber-300 transition-colors">Coba Demo Mode</p>
+                    <p className="text-[10px] text-slate-500">Jelajahi semua fitur — read only</p>
+                  </div>
+                </button>
+              </div>
 
-            <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500">
-              <Sparkles size={12} className="text-primary-500" />
-              Powered by Electron + React
+              {/* System Status & Version */}
+              <div className="mt-4 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${dbStatus === 'connected' ? 'bg-green-500' : dbStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'}`}></div>
+                  <span className="text-slate-500">
+                    {dbStatus === 'connected' ? 'Database OK' : dbStatus === 'error' ? 'DB Error' : 'Checking...'}
+                  </span>
+                </div>
+                <span className="text-slate-500">v2.0.0</span>
+              </div>
+
+              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500">
+                <Sparkles size={12} className="text-primary-500" />
+                Powered by Electron + React
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

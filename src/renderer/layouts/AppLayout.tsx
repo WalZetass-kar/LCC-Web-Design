@@ -9,6 +9,7 @@ import UpdateNotification from '../components/UpdateNotification'
 import DemoOverlay from '../components/DemoOverlay'
 import PricingPopup from '../components/PricingPopup'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useSessionTimeout } from '../hooks/useSessionTimeout'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function AppLayout() {
@@ -17,6 +18,7 @@ export default function AppLayout() {
   const { isDemo } = useAuth()
   
   useKeyboardShortcuts()
+  useSessionTimeout() // Auto logout after 30 minutes idle
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

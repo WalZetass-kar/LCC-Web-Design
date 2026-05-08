@@ -30,26 +30,27 @@ export class DashboardModel {
     })
 
     // Top 5 produk terlaris (minggu ini)
-    const weekSalesIds = weekSales.map(s => s.kd_tansaksi_jual).filter(Boolean)
     let topProducts: any[] = []
     
-    if (weekSalesIds.length > 0) {
-      try {
-        topProducts = db.select({
-          kd_barang: penjualanDetail.kd_barang,
-          nama_barang: barang.nama_barang,
-          total_qty: sql<number>`SUM(${penjualanDetail.qty})`,
-          total_revenue: sql<number>`SUM(${penjualanDetail.harga_jual} * ${penjualanDetail.qty})`,
-        })
-          .from(penjualanDetail)
-          .leftJoin(barang, sql`${penjualanDetail.kd_barang} = ${barang.kd_barang}`)
-          .groupBy(penjualanDetail.kd_barang, barang.nama_barang)
-          .orderBy(sql`total_qty DESC`)
-          .limit(5)
-          .all()
-      } catch (e) {
-        console.error('Error fetching top products:', e)
-      }
+    try {
+      topProducts = db.all(sql`
+        SELECT 
+          pd.kd_barang,
+          b.nama_barang,
+          SUM(pd.qty) as total_qty,
+          SUM(pd.harga_jual * pd.qty) as total_revenue
+        FROM mediasoft_penjualan_detail pd
+        LEFT JOIN mediasoft_barang b ON pd.kd_barang = b.kd_barang
+        WHERE pd.kd_tansaksi_jual IN (
+          SELECT kd_tansaksi_jual FROM mediasoft_penjualan 
+          WHERE tgl_wkt_transaksi >= ${weekAgo}
+        )
+        GROUP BY pd.kd_barang, b.nama_barang
+        ORDER BY total_qty DESC
+        LIMIT 5
+      `)
+    } catch (e) {
+      console.error('Error fetching top products:', e)
     }
 
     return {

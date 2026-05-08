@@ -1,6 +1,7 @@
 import { PenjualanModel } from '../models/PenjualanModel.js'
 import { CustomerModel } from '../models/CustomerModel.js'
 import { validateDemoMode } from '../utils/demoMode.js'
+import { withTransaction } from '../utils/transaction.js'
 
 interface CartItem {
   kd_barang: string
@@ -29,7 +30,7 @@ export class PenjualanController {
     return { success: true, data: PenjualanModel.getDetail(kd) }
   }
 
-  static create(payload: CreateTransaksiPayload) {
+  static async create(payload: CreateTransaksiPayload) {
     // Block demo user
     const demoError = validateDemoMode(payload.username)
     if (demoError) return demoError
@@ -83,15 +84,24 @@ export class PenjualanController {
       }
     })
 
-    PenjualanModel.create(header, details)
+    // Execute all operations in a transaction
+    const result = await withTransaction(() => {
+      PenjualanModel.create(header, details)
 
-    // Update customer poin & total_belanja if customer selected
-    if (payload.kd_customer) {
-      const poinEarned = Math.floor(sub_total / 10000) // 1 poin per Rp10.000
-      CustomerModel.addPoin(payload.kd_customer, poinEarned)
-      CustomerModel.updateTotalBelanja(payload.kd_customer, sub_total)
+      // Update customer poin & total_belanja if customer selected
+      if (payload.kd_customer) {
+        const poinEarned = Math.floor(sub_total / 10000) // 1 poin per Rp10.000
+        CustomerModel.addPoin(payload.kd_customer, poinEarned)
+        CustomerModel.updateTotalBelanja(payload.kd_customer, sub_total)
+      }
+      
+      return kd_transaksi
+    })
+
+    if (!result.success) {
+      return { success: false, message: `Transaksi gagal: ${result.error}` }
     }
 
-    return { success: true, message: 'Transaksi berhasil disimpan', kd_transaksi }
+    return { success: true, message: 'Transaksi berhasil disimpan', kd_transaksi: result.data }
   }
 }

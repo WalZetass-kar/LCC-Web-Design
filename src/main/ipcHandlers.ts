@@ -37,6 +37,7 @@ import { PlanController } from '../backend/controllers/PlanController.js'
 import { TutorialController } from '../backend/controllers/TutorialController.js'
 import { HppController } from '../backend/controllers/HppController.js'
 import { StrukSettingsController } from '../backend/controllers/StrukSettingsController.js'
+import { SystemController } from '../backend/controllers/SystemController.js'
 
 /**
  * Helper to register an IPC handler with automatic demo guard.
@@ -104,6 +105,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
 
   // ─── SATUAN ────────────────────────────────────────────────────────
   handle(ipcMain, 'satuan:getAll', () => SatuanController.getAll())
+  handle(ipcMain, 'satuan:create', (data: any) => SatuanController.create(data))
+  handle(ipcMain, 'satuan:update', (kd: number, data: any) => SatuanController.update(kd, data))
+  handle(ipcMain, 'satuan:delete', (kd: number) => SatuanController.delete(kd))
 
   // ─── PENJUALAN (Transactions) ──────────────────────────────────────
   handle(ipcMain, 'penjualan:getAll', () => PenjualanController.getAll())
@@ -332,5 +336,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'strukSettings:update', (data: any) => StrukSettingsController.update(data))
   handle(ipcMain, 'strukSettings:uploadQris', (base64: string) => StrukSettingsController.uploadQris(base64))
   handle(ipcMain, 'strukSettings:removeQris', () => StrukSettingsController.removeQris())
+
+  // ─── SYSTEM STATUS ─────────────────────────────────────────────────
+  handle(ipcMain, 'system:checkDb', () => SystemController.checkDb())
+  handle(ipcMain, 'system:resetData', () => SystemController.resetData())
 }
 
