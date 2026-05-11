@@ -5,6 +5,7 @@ import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
+import { SkeletonPage } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah, formatDate } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -19,6 +20,7 @@ export default function Debts() {
   const [selectedDebt, setSelectedDebt] = useState<any>(null)
   const [deleteDebt, setDeleteDebt] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
   
   // Form state
   const [type, setType] = useState<'HUTANG' | 'PIUTANG'>('HUTANG')
@@ -33,6 +35,7 @@ export default function Debts() {
       const validData = (r.data ?? []).filter(item => item && item.id)
       setDebts(validData)
     }
+    setLoadingData(false)
   }
 
   useEffect(() => { loadDebts() }, [filter])
@@ -55,7 +58,7 @@ export default function Debts() {
       setNotes('')
       loadDebts()
     } else {
-      toast(r.error || 'Gagal menambahkan', 'error')
+      toast(r.message || 'Gagal menambahkan', 'error')
     }
   }
 
@@ -75,7 +78,7 @@ export default function Debts() {
       setSelectedDebt(null)
       loadDebts()
     } else {
-      toast(r.error || 'Gagal mencatat pembayaran', 'error')
+      toast(r.message || 'Gagal mencatat pembayaran', 'error')
     }
   }
 
@@ -94,7 +97,7 @@ export default function Debts() {
       setDeleteDebt(null)
       loadDebts()
     } else {
-      toast(r.error || 'Gagal menghapus', 'error')
+      toast(r.message || 'Gagal menghapus', 'error')
     }
   }
 
@@ -103,15 +106,19 @@ export default function Debts() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Hutang & Piutang</h1>
-          <p className="text-slate-600 dark:text-slate-400">Kelola hutang dan piutang</p>
-        </div>
-        <Button onClick={() => setModal('add')} icon={<Plus size={16} />} className="w-full sm:w-auto">Tambah Hutang/Piutang</Button>
-      </div>
+      {loadingData ? (
+        <SkeletonPage rows={5} />
+      ) : (
+        <>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Hutang &amp; Piutang</h1>
+              <p className="text-slate-600 dark:text-slate-400">Kelola hutang dan piutang</p>
+            </div>
+            <Button onClick={() => setModal('add')} icon={<Plus size={16} />} className="w-full sm:w-auto">Tambah Hutang/Piutang</Button>
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="bg-gradient-to-r from-red-500 to-pink-600 border-none">
           <div className="flex items-center justify-between">
             <div>
@@ -211,6 +218,9 @@ export default function Debts() {
           </div>
         </div>
       </Card>
+
+        </>
+      )}
 
       {/* Modal Tambah Hutang/Piutang */}
       <Modal open={modal === 'add'} onClose={() => setModal(null)} title="Tambah Hutang/Piutang" size="sm"

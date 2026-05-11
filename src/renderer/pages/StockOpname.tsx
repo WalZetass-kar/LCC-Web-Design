@@ -5,6 +5,7 @@ import Button from '../components/Button'
 import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Input from '../components/Input'
+import { TableSkeleton } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -16,6 +17,7 @@ export default function StockOpname() {
   const [opnames, setOpnames] = useState<any[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
   const [modal, setModal] = useState<'create' | 'detail' | 'input' | 'delete' | 'approve' | null>(null)
   const [selectedOpname, setSelectedOpname] = useState<any>(null)
   const [opnameItems, setOpnameItems] = useState<any[]>([])
@@ -34,6 +36,7 @@ export default function StockOpname() {
       const validData = (r.data ?? []).filter(item => item && item.id && item.opname_number)
       setOpnames(validData)
     }
+    setLoadingData(false)
   }
   
   const loadProducts = async () => {
@@ -62,7 +65,7 @@ export default function StockOpname() {
       setNotes('')
       loadOpnames()
     } else {
-      toast(r.error || 'Gagal membuat opname', 'error')
+      toast(r.message || 'Gagal membuat opname', 'error')
     }
   }
   
@@ -100,7 +103,7 @@ export default function StockOpname() {
       setStokFisik('')
       loadOpnames()
     } else {
-      toast(r.error || 'Gagal menambahkan item', 'error')
+      toast(r.message || 'Gagal menambahkan item', 'error')
     }
   }
   
@@ -115,14 +118,14 @@ export default function StockOpname() {
       setSelectedOpname(null)
       loadOpnames()
     } else {
-      toast(r.error || 'Gagal menghapus', 'error')
+      toast(r.message || 'Gagal menghapus', 'error')
     }
   }
 
   const handleApprove = async () => {
     if (!selectedOpname) return
     setLoading(true)
-    const r = await api('opname:approve', selectedOpname.id, user?.id)
+    const r = await api('opname:approve', selectedOpname.id, user?.nama_pengguna)
     setLoading(false)
     if (r.success) {
       toast('Stok opname berhasil diapprove', 'success')
@@ -130,7 +133,7 @@ export default function StockOpname() {
       setSelectedOpname(null)
       loadOpnames()
     } else {
-      toast(r.error || 'Gagal approve', 'error')
+      toast(r.message || 'Gagal approve', 'error')
     }
   }
 
@@ -145,6 +148,9 @@ export default function StockOpname() {
       </div>
 
       <Card>
+        {loadingData ? (
+          <TableSkeleton rows={5} columns={7} />
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -208,6 +214,7 @@ export default function StockOpname() {
             </tbody>
           </table>
         </div>
+        )}
       </Card>
 
       {/* Modal Buat Opname */}

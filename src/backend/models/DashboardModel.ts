@@ -53,6 +53,10 @@ export class DashboardModel {
       console.error('Error fetching top products:', e)
     }
 
+    // Prediction Logic: Simple 3-day moving average for tomorrow's sales
+    const last3Days = chartData.slice(-3)
+    const predictedTomorrow = Math.round(last3Days.reduce((a, b) => a + b.total, 0) / 3)
+
     return {
       today: { count: todaySales.length, total: sum(todaySales) },
       week: { count: weekSales.length, total: sum(weekSales) },
@@ -60,6 +64,7 @@ export class DashboardModel {
       totalBarang: totalBarang?.count ?? 0,
       lowStockCount: lowStock.length,
       chartData,
+      predictedTomorrow,
       topProducts: topProducts.map(p => ({
         kd_barang: p.kd_barang,
         nama_barang: p.nama_barang,

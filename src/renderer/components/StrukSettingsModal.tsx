@@ -5,6 +5,8 @@ import { useToast } from '../contexts/ToastContext'
 
 interface StrukSettings {
   printer_type: 'a4' | 'thermal' | 'dot_matrix'
+  paper_size: '58mm' | '80mm'
+  layout_type: 'classic' | 'modern' | 'minimal'
   show_logo: boolean
   show_alamat: boolean
   show_telepon: boolean
@@ -27,6 +29,8 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
   const [saving, setSaving] = useState(false)
   const [settings, setSettings] = useState<StrukSettings>({
     printer_type: 'thermal',
+    paper_size: '58mm',
+    layout_type: 'classic',
     show_logo: true,
     show_alamat: true,
     show_telepon: true,
@@ -48,6 +52,8 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
     if (r.success && r.data) {
       setSettings({
         printer_type: r.data.printer_type || 'thermal',
+        paper_size: r.data.paper_size || '58mm',
+        layout_type: r.data.layout_type || 'classic',
         show_logo: Boolean(r.data.show_logo),
         show_alamat: Boolean(r.data.show_alamat),
         show_telepon: Boolean(r.data.show_telepon),
@@ -145,9 +151,9 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
               <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Tipe Printer</h3>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { value: 'thermal', label: 'Thermal', desc: '58mm/80mm' },
-                  { value: 'a4', label: 'A4', desc: 'Kertas A4' },
-                  { value: 'dot_matrix', label: 'Dot Matrix', desc: 'Continuous' },
+                  { value: 'thermal', label: 'Thermal', desc: 'Roll' },
+                  { value: 'a4', label: 'A4', desc: 'Standard' },
+                  { value: 'dot_matrix', label: 'Dot Matrix', desc: 'Pita' },
                 ].map(({ value, label, desc }) => (
                   <button
                     key={value}
@@ -155,6 +161,59 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                     onClick={() => setSettings({ ...settings, printer_type: value as any })}
                     className={`p-4 rounded-xl border-2 transition-all text-left ${
                       settings.printer_type === value
+                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700'
+                    }`}
+                  >
+                    <div className="font-semibold text-sm text-slate-800 dark:text-white">{label}</div>
+                    <div className="text-xs text-slate-500 mt-1">{desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Ukuran Kertas (Hanya untuk Thermal) */}
+            {settings.printer_type === 'thermal' && (
+              <div>
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Ukuran Kertas Thermal</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { value: '58mm', label: '58mm', desc: 'Lebar Kecil' },
+                    { value: '80mm', label: '80mm', desc: 'Lebar Standar' },
+                  ].map(({ value, label, desc }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, paper_size: value as any })}
+                      className={`p-4 rounded-xl border-2 transition-all text-left ${
+                        settings.paper_size === value
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700'
+                      }`}
+                    >
+                      <div className="font-semibold text-sm text-slate-800 dark:text-white">{label}</div>
+                      <div className="text-xs text-slate-500 mt-1">{desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Template Layout */}
+            <div>
+              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">Template Layout</h3>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { value: 'classic', label: 'Klasik', desc: 'Standar' },
+                  { value: 'modern', label: 'Modern', desc: 'Rapi' },
+                  { value: 'minimal', label: 'Minimal', desc: 'Simple' },
+                ].map(({ value, label, desc }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setSettings({ ...settings, layout_type: value as any })}
+                    className={`p-4 rounded-xl border-2 transition-all text-left ${
+                      settings.layout_type === value
                         ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                         : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700'
                     }`}

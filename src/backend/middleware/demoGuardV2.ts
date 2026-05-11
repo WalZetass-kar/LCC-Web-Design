@@ -45,6 +45,16 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   // Identitas (Store settings)
   'identitas:save',
 
+  // WhatsApp
+  'whatsapp:save',
+  'whatsapp:test',
+
+  // Security
+  'security:save',
+
+  // Ecommerce API
+  'ecommerce:save',
+
   // Supplier
   'supplier:create',
   'supplier:update',
@@ -149,22 +159,72 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   'tutorial:create',
   'tutorial:update',
   'tutorial:delete',
+// HPP Calculator (delete own record)
+'hpp:delete',
 
-  // HPP Calculator (delete own record)
-  'hpp:delete',
+// Advanced Features (Mutations)
+'currency:create',
+'currency:update',
+'currency:delete',
+'currency:setDefault',
 
-  // Note: strukSettings channels have custom role-based access control
-  // See shouldBlockChannel() function
+'warehouse:create',
+'warehouse:update',
+'warehouse:delete',
+
+'inventory:addBatch',
+'inventory:updateBatch',
+'inventory:deleteBatch',
+'inventory:addSerial',
+'inventory:updateSerial',
+'inventory:deleteSerial',
+'inventory:transfer',
+
+'promo:create',
+'promo:update',
+'promo:delete',
+'promo:toggleStatus',
+
+'audit:clear',
+'audit:deleteOld',
+
+'mobile:processScan',
+
+// Note: strukSettings channels have custom role-based access control
+
+// See shouldBlockChannel() function
 ])
 
 
 /**
- * READ-ONLY channels that are always allowed.
- * Used as secondary validation.
- */
+* READ-ONLY channels that are always allowed.
+* Used as secondary validation.
+*/
 const READ_CHANNELS: Set<string> = new Set([
-  // Auth
-  'auth:login',
+// ... rest of read channels
+'strukSettings:get',
+
+// Advanced Features (Reads)
+'currency:getAll',
+'currency:getById',
+'currency:getActive',
+
+'warehouse:getAll',
+'warehouse:getById',
+
+'inventory:getBatches',
+'inventory:getSerials',
+'inventory:getTransfers',
+
+'promo:getAll',
+'promo:getById',
+'promo:getActive',
+
+'audit:getAll',
+'audit:getLatest',
+
+'mobile:getSummary',
+
   'auth:checkIdentitas',
   'auth:logout',
 

@@ -5,6 +5,7 @@ import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
+import { SkeletonSpinner } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah, formatDateTime } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -22,6 +23,7 @@ export default function Shifts() {
   const [closingBalance, setClosingBalance] = useState('')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
 
   const loadShifts = async () => {
     const r = await api<any[]>('shift:getAll')
@@ -29,9 +31,9 @@ export default function Shifts() {
       const validData = (r.data ?? []).filter(item => item && item.id)
       setShifts(validData)
     }
-    
     const curr = await api<any>('shift:getCurrent', user?.nama_pengguna)
     if (curr.success) setCurrentShift(curr.data)
+    setLoadingData(false)
   }
 
   useEffect(() => { loadShifts() }, [])
@@ -47,14 +49,14 @@ export default function Shifts() {
       setOpeningBalance('')
       loadShifts()
     } else {
-      toast(r.error || 'Gagal buka shift', 'error')
+      toast(r.message || 'Gagal buka shift', 'error')
     }
   }
 
   const handleCloseShift = async () => {
     if (!closingBalance) return toast('Masukkan saldo akhir', 'error')
     setLoading(true)
-    const r = await api('shift:close', currentShift.id, {
+    const r = await api<{ difference: number }>('shift:close', currentShift.id, {
       opening_balance: currentShift.opening_balance,
       closing_balance: parseFloat(closingBalance),
       notes
@@ -67,7 +69,7 @@ export default function Shifts() {
       setNotes('')
       loadShifts()
     } else {
-      toast(r.error || 'Gagal tutup shift', 'error')
+      toast(r.message || 'Gagal tutup shift', 'error')
     }
   }
   
@@ -81,23 +83,27 @@ export default function Shifts() {
       setDeleteShift(null)
       loadShifts()
     } else {
-      toast(r.error || 'Gagal menghapus shift', 'error')
+      toast(r.message || 'Gagal menghapus shift', 'error')
     }
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Shift Management</h1>
-          <p className="text-slate-600 dark:text-slate-400">Kelola shift kasir</p>
-        </div>
-        {!currentShift ? (
-          <Button onClick={() => setModal('open')} icon={<Plus size={16} />} className="w-full sm:w-auto">Buka Shift</Button>
-        ) : (
-          <Button onClick={() => setModal('close')} variant="danger" icon={<Clock size={16} />} className="w-full sm:w-auto">Tutup Shift</Button>
-        )}
-      </div>
+      {loadingData ? (
+        <SkeletonSpinner label="Memuat data shift..." />
+      ) : (
+        <>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Shift Management</h1>
+              <p className="text-slate-600 dark:text-slate-400">Kelola shift kasir</p>
+            </div>
+            {!currentShift ? (
+              <Button onClick={() => setModal('open')} icon={<Plus size={16} />} className="w-full sm:w-auto">Buka Shift</Button>
+            ) : (
+              <Button onClick={() => setModal('close')} variant="danger" icon={<Clock size={16} />} className="w-full sm:w-auto">Tutup Shift</Button>
+            )}
+          </div>
 
       {currentShift && (
         <Card className="bg-gradient-to-r from-primary-500 to-primary-600 border-none">
@@ -258,6 +264,8 @@ export default function Shifts() {
           </div>
         )}
       </Modal>
+        </>
+      )}
     </div>
   )
 }

@@ -7,8 +7,10 @@ export class ReturnController {
     
     const returnId = result.lastInsertRowid
     for (const item of data.items) {
-      sqlite.prepare('INSERT INTO mediasoft_return_details (return_id, barang_id, quantity, price, subtotal, reason) VALUES (?, ?, ?, ?, ?, ?)').run(returnId, item.barang_id, item.quantity, item.price, item.subtotal, item.reason)
-      sqlite.prepare('UPDATE mediasoft_barang SET stok = stok + ? WHERE kd_barang = ?').run(item.quantity, item.barang_id)
+      sqlite.prepare('INSERT INTO mediasoft_return_details (return_id, barang_id, quantity, price, subtotal, reason) VALUES (?, ?, ?, ?, ?, ?)').run(returnId, item.kd_barang ?? item.barang_id, item.quantity, item.price, item.subtotal, item.reason)
+      // Update stok menggunakan kd_barang
+      const kd = item.kd_barang ?? item.barang_id
+      sqlite.prepare('UPDATE mediasoft_barang SET stok = stok + ? WHERE kd_barang = ?').run(item.quantity, kd)
     }
     
     return { success: true, data: { id: returnId, return_number: returnNumber } }

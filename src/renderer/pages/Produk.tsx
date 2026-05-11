@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, Pencil, Trash2, Barcode, AlertTriangle, Image, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Barcode, AlertTriangle, Image, X, Upload } from 'lucide-react'
 import Barcode_ from 'react-barcode'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -11,6 +11,7 @@ import DataTable from '../components/DataTable'
 import Select from '../components/Select'
 import Textarea from '../components/Textarea'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { SkeletonPage } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -57,6 +58,9 @@ export default function Produk() {
   const [form, setForm] = useState<FormState>({ ...EMPTY })
   const [selected, setSelected] = useState<Barang | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [showImport, setShowImport] = useState(false)
 
   const load = async () => {
     const [r1, r2, r3] = await Promise.all([
@@ -67,11 +71,12 @@ export default function Produk() {
     if (r1.success) setData(r1.data ?? [])
     if (r2.success) setKategori(r2.data ?? [])
     if (r3.success) setSatuan(r3.data ?? [])
+    setLoadingData(false)
   }
 
   useEffect(() => { load() }, [])
 
-  const openAdd = () => { setForm({ ...EMPTY }); setModal('add') }
+  const openAdd = () => { setForm({ ...EMPTY }); setModal('add'); setFormErrors({}) }
   const openEdit = (row: Barang) => {
     setSelected(row)
     setForm({
@@ -95,6 +100,15 @@ export default function Produk() {
   const closeModal = () => { setModal(null); setSelected(null) }
 
   const handleSave = async () => {
+    const errors: Record<string, string> = {}
+    if (!form.kd_barang) errors.kd_barang = 'Kode barang wajib diisi'
+    if (!form.nama_barang) errors.nama_barang = 'Nama barang wajib diisi'
+    if (form.harga_barang < 0) errors.harga_barang = 'Harga tidak boleh negatif'
+    if (form.harga_modal < 0) errors.harga_modal = 'Harga modal tidak boleh negatif'
+    if (form.stok < 0) errors.stok = 'Stok tidak boleh negatif'
+    if (form.potongan < 0 || form.potongan > 100) errors.potongan = 'Diskon 0-100%'
+    if (Object.keys(errors).length > 0) { setFormErrors(errors); return }
+
     setLoading(true)
     const r = modal === 'add'
       ? await api('barang:create', form)
@@ -109,6 +123,36 @@ export default function Produk() {
     const r = await api('barang:delete', selected!.kd_barang)
     setLoading(false)
     if (r.success) { toast(r.message as string); setConfirmDelete(false); setSelected(null); load() }
+    else toast(r.message as string, 'error')
+  }
+
+  const handleImportCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const text = await file.text()
+    const lines = text.split('\n').filter(l => l.trim())
+    if (lines.length < 2) return toast('Format CSV tidak valid', 'error')
+
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+    const products: Record<string, unknown>[] = []
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim())
+      const row: Record<string, unknown> = {}
+      headers.forEach((h, idx) => {
+        const val = values[idx] || ''
+        row[h] = h === 'stok' || h === 'harga_barang' || h === 'harga_modal' || h === 'potongan' || h === 'kd_kategori_barang' || h === 'kd_satuan'
+          ? parseFloat(val) || 0
+          : val
+      })
+      products.push(row)
+    }
+
+    setLoading(true)
+    const r = await api('barang:bulkImport', products)
+    setLoading(false)
+    if (r.success) { toast(r.message as string); setShowImport(false); load() }
     else toast(r.message as string, 'error')
   }
 
@@ -203,24 +247,33 @@ export default function Produk() {
 
   return (
     <div className="space-y-4">
-      {(expiredCount > 0 || soonCount > 0) && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 text-sm">
-          <AlertTriangle size={16} className="shrink-0" />
-          <span>
-            {expiredCount > 0 && <strong>{expiredCount} produk sudah expired. </strong>}
-            {soonCount > 0 && <strong>{soonCount} produk akan expired dalam 30 hari.</strong>}
-          </span>
-        </div>
+      {loadingData ? (
+        <SkeletonPage rows={7} />
+      ) : (
+        <>
+          {(expiredCount > 0 || soonCount > 0) && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 text-sm">
+              <AlertTriangle size={16} className="shrink-0" />
+              <span>
+                {expiredCount > 0 && <strong>{expiredCount} produk sudah expired. </strong>}
+                {soonCount > 0 && <strong>{soonCount} produk akan expired dalam 30 hari.</strong>}
+              </span>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} produk terdaftar</p>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button variant="secondary" icon={<Upload size={16} />} onClick={() => setShowImport(true)} className="w-full sm:w-auto">Import CSV</Button>
+              <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Produk</Button>
+            </div>
+          </div>
+
+          <Card>
+            <DataTable data={data} columns={columns} searchPlaceholder="Cari produk..." />
+          </Card>
+        </>
       )}
-
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} produk terdaftar</p>
-        <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Produk</Button>
-      </div>
-
-      <Card>
-        <DataTable data={data} columns={columns} searchPlaceholder="Cari produk..." />
-      </Card>
 
       {/* Add/Edit Modal */}
       <Modal
@@ -236,12 +289,12 @@ export default function Produk() {
         }
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input label="Kode Barang *" value={form.kd_barang} onChange={e => f('kd_barang', e.target.value)} disabled={modal === 'edit'} />
-          <Input label="Nama Barang *" value={form.nama_barang} onChange={e => f('nama_barang', e.target.value)} />
-          <Input label="Harga Jual" type="number" value={form.harga_barang} onChange={e => f('harga_barang', +e.target.value)} />
-          <Input label="Harga Modal" type="number" value={form.harga_modal} onChange={e => f('harga_modal', +e.target.value)} />
-          <Input label="Stok" type="number" value={form.stok} onChange={e => f('stok', +e.target.value)} />
-          <Input label="Diskon (%)" type="number" value={form.potongan} onChange={e => f('potongan', +e.target.value)} />
+          <Input label="Kode Barang *" value={form.kd_barang} onChange={e => f('kd_barang', e.target.value)} disabled={modal === 'edit'} error={formErrors.kd_barang} />
+          <Input label="Nama Barang *" value={form.nama_barang} onChange={e => f('nama_barang', e.target.value)} error={formErrors.nama_barang} />
+          <Input label="Harga Jual" type="number" value={form.harga_barang} onChange={e => f('harga_barang', +e.target.value)} error={formErrors.harga_barang} />
+          <Input label="Harga Modal" type="number" value={form.harga_modal} onChange={e => f('harga_modal', +e.target.value)} error={formErrors.harga_modal} />
+          <Input label="Stok" type="number" value={form.stok} onChange={e => f('stok', +e.target.value)} error={formErrors.stok} />
+          <Input label="Diskon (%)" type="number" value={form.potongan} onChange={e => f('potongan', +e.target.value)} error={formErrors.potongan} />
           <Select
             label="Kategori"
             value={form.kd_kategori_barang}
@@ -256,9 +309,7 @@ export default function Produk() {
             placeholder="-- Pilih Satuan --"
             options={satuan.map(s => ({ value: s.kd_satuan, label: s.nama_satuan ?? '' }))}
           />
-          {/* Barcode field */}
           <Input label="Barcode" value={form.barcode} onChange={e => f('barcode', e.target.value)} placeholder="Scan atau ketik barcode..." />
-          {/* Expired date field */}
           <Input label="Tanggal Expired" type="date" value={form.expired_date} onChange={e => f('expired_date', e.target.value)} />
           
           {/* Image Upload */}
@@ -333,8 +384,43 @@ export default function Produk() {
         onClose={() => { setConfirmDelete(false); setSelected(null) }}
         onConfirm={handleDelete}
         loading={loading}
+        title="Hapus Produk"
         message={`Yakin ingin menghapus produk "${selected?.nama_barang}"? Tindakan ini tidak dapat dibatalkan.`}
       />
+
+      {/* Import CSV Modal */}
+      <Modal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        title="Import Produk dari CSV"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowImport(false)} className="w-full sm:w-auto">Batal</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-400">
+            <p className="font-semibold mb-2">Format CSV yang didukung:</p>
+            <p className="font-mono">kd_barang, nama_barang, harga_barang, harga_modal, stok, potongan, kd_kategori_barang, kd_satuan, barcode</p>
+          </div>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleImportCsv}
+            className="hidden"
+            id="csv-import"
+          />
+          <label
+            htmlFor="csv-import"
+            className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-primary-400 dark:hover:border-primary-500 cursor-pointer transition-colors"
+          >
+            <Upload size={20} className="text-slate-400" />
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Pilih File CSV</span>
+          </label>
+        </div>
+      </Modal>
     </div>
   )
 }

@@ -23,7 +23,7 @@ export function useSessionTimeout() {
 
     // Set warning timer (2 minutes before logout)
     warningRef.current = setTimeout(() => {
-      toast('Sesi akan berakhir dalam 2 menit. Lakukan aktivitas untuk tetap login.', 'warning')
+      toast('Sesi akan berakhir dalam 2 menit. Lakukan aktivitas untuk tetap login.', 'info')
     }, IDLE_TIMEOUT - WARNING_TIME)
 
     // Set logout timer

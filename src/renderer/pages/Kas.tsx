@@ -5,6 +5,7 @@ import Button from '../components/Button'
 import Input from '../components/Input'
 import Modal from '../components/Modal'
 import Badge from '../components/Badge'
+import { SkeletonStatGrid, SkeletonSpinner } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah, formatDateTime } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -16,6 +17,7 @@ interface KasDrawer {
   modal_awal: number
   total_penjualan: number
   total_pengeluaran: number
+  total_pemasukan: number
   saldo_akhir: number
   selisih: number
   status: 'OPEN' | 'CLOSED'
@@ -46,6 +48,7 @@ export default function Kas() {
   const [expense, setExpense] = useState({ jumlah: '', keterangan: '' })
   const [income, setIncome] = useState({ jumlah: '', keterangan: '' })
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
   const [deleteKas, setDeleteKas] = useState<KasDrawer | null>(null)
 
   const load = async () => {
@@ -60,6 +63,7 @@ export default function Kas() {
       setActiveDrawer(null)
     }
     if (r2.success) setHistory(r2.data ?? [])
+    setLoadingData(false)
   }
 
   const loadTransactions = async (kd_kas: string) => {
@@ -157,7 +161,14 @@ export default function Kas() {
 
   return (
     <div className="space-y-4">
-      {/* Active Drawer Status */}
+      {loadingData ? (
+        <>
+          <SkeletonStatGrid count={5} />
+          <SkeletonSpinner label="Memuat data kas..." />
+        </>
+      ) : (
+        <>
+          {/* Active Drawer Status */}
       {activeDrawer ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <Card title="Modal Awal" action={<DollarSign size={16} className="text-pink-500" />}>
@@ -456,6 +467,8 @@ export default function Kas() {
           </div>
         )}
       </Modal>
+        </>
+      )}
     </div>
   )
 }

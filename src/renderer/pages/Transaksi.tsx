@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X, Image, Settings, QrCode } from 'lucide-react'
+import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X, Image, Settings, QrCode, Tag } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -33,12 +33,25 @@ export default function Transaksi() {
   // Pajak PPN
   const [pajakPersen, setPajakPersen] = useState(0)
 
+  // Shift aktif
+  const [activeShiftId, setActiveShiftId] = useState<number | null>(null)
+
+  // Promo
+  const [promoCode, setPromoCode] = useState('')
+  const [promoDiskon, setPromoDiskon] = useState(0)
+  const [promoMsg, setPromoMsg] = useState('')
+  const [promoLoading, setPromoLoading] = useState(false)
+
   // Customer
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
   const [showCustomerDrop, setShowCustomerDrop] = useState(false)
   const customerRef = useRef<HTMLDivElement>(null)
+
+  // Barcode scanner buffer
+  const barcodeBuffer = useRef('')
+  const barcodeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadProducts = useCallback(async () => {
     const r = await api<Barang[]>('barang:getAll')
@@ -50,7 +63,10 @@ export default function Transaksi() {
   useEffect(() => {
     api<Customer[]>('customer:getAll').then(r => { if (r.success) setCustomers(r.data ?? []) })
     api<Identitas>('identitas:get').then(r => { if (r.success && r.data) setPajakPersen(r.data.pajak_persen ?? 0) })
-  }, [])
+    if (user?.id) {
+      api<any>('shift:getCurrent', user.id).then(r => { if (r.success && r.data) setActiveShiftId(r.data.id) })
+    }
+  }, [user?.id])
 
   // Close customer dropdown on outside click
   useEffect(() => {
@@ -58,6 +74,76 @@ export default function Transaksi() {
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
+
+  // Barcode scanner keyboard input handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+
+      // F1: Focus search
+      if (e.key === 'F1') {
+        e.preventDefault()
+        searchRef.current?.focus()
+        return
+      }
+
+      // F2: Focus payment amount
+      if (e.key === 'F2') {
+        e.preventDefault()
+        const bayarInput = document.querySelector('input[type="number"]') as HTMLInputElement
+        bayarInput?.focus()
+        return
+      }
+
+      // F5: Process payment
+      if (e.key === 'F5') {
+        e.preventDefault()
+        if (cart.length && bayar) handleBayar()
+        return
+      }
+
+      // Escape: Clear cart
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        if (cart.length > 0) {
+          setCart([])
+          setBayar('')
+          toast('Keranjang dibersihkan')
+        }
+        return
+      }
+
+      if (e.key === 'Enter') {
+        if (barcodeBuffer.current.length > 0) {
+          const barcode = barcodeBuffer.current.trim()
+          barcodeBuffer.current = ''
+          if (barcodeTimeoutRef.current) clearTimeout(barcodeTimeoutRef.current)
+
+          const product = products.find(p => p.barcode === barcode)
+          if (product) {
+            addToCart(product)
+          } else {
+            toast(`Barcode "${barcode}" tidak ditemukan`, 'error')
+          }
+        }
+        return
+      }
+
+      if (e.key.length === 1) {
+        barcodeBuffer.current += e.key
+        if (barcodeTimeoutRef.current) clearTimeout(barcodeTimeoutRef.current)
+        barcodeTimeoutRef.current = setTimeout(() => {
+          barcodeBuffer.current = ''
+        }, 100)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      if (barcodeTimeoutRef.current) clearTimeout(barcodeTimeoutRef.current)
+    }
+  }, [products, cart.length, bayar])
 
   const filteredCustomers = customers.filter(c =>
     c.status === 'Aktif' &&
@@ -117,9 +203,29 @@ export default function Transaksi() {
   }, 0)
 
   const pajakAmount = Math.round(subTotal * pajakPersen / 100)
-  const totalBayar = subTotal + pajakAmount
+  const totalBayar = subTotal + pajakAmount - promoDiskon
   const kembalian = (parseFloat(bayar) || 0) - totalBayar
   const poinEarned = selectedCustomer ? Math.floor(subTotal / 10000) : 0
+
+  const applyPromo = async () => {
+    if (!promoCode.trim()) return
+    setPromoLoading(true)
+    const r = await api<any>('promo:validate', promoCode.trim().toUpperCase(), subTotal, cart)
+    setPromoLoading(false)
+    if (r.success && r.data?.valid) {
+      setPromoDiskon(r.data.discount)
+      setPromoMsg(`✅ ${r.data.promo?.name} — hemat ${formatRupiah(r.data.discount)}`)
+    } else {
+      setPromoDiskon(0)
+      setPromoMsg(r.data?.message ?? r.message ?? 'Kode promo tidak valid')
+    }
+  }
+
+  const removePromo = () => {
+    setPromoCode('')
+    setPromoDiskon(0)
+    setPromoMsg('')
+  }
 
   const handleSearchKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && filtered.length > 0) addToCart(filtered[0])
@@ -143,9 +249,13 @@ export default function Transaksi() {
       jenis_pembayaran: jenisBayar,
       kd_customer: selectedCustomer?.kd_customer,
       pajak: pajakAmount,
+      diskon_promo: promoDiskon,
+      kode_promo: promoCode || undefined,
+      shift_id: activeShiftId ?? undefined,
     })
     setLoading(false)
     if (r.success) {
+      if (promoCode) await api('promo:apply', promoCode.toUpperCase())
       setLastKd(r.kd_transaksi ?? null)
       toast(r.message as string)
       setShowStruk(true)
@@ -166,41 +276,43 @@ export default function Transaksi() {
     setLastKd(null)
     setSelectedCustomer(null)
     setCustomerSearch('')
+    setPromoCode('')
+    setPromoDiskon(0)
+    setPromoMsg('')
     loadProducts()
     searchRef.current?.focus()
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-8rem)]">
+    <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-8rem)] p-4">
       {/* Left: Product Search */}
-      <div className="flex-1 flex flex-col gap-3 min-w-0">
+      <div className="flex-1 flex flex-col gap-3 min-w-0 bg-white dark:bg-slate-800 rounded-xl p-4">
+        <div className="flex items-center gap-2 text-[10px] text-slate-400 mb-2">
+          <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-mono">F1</kbd> Cari
+          <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-mono">F2</kbd> Bayar
+          <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-mono">F5</kbd> Proses
+          <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-mono">Esc</kbd> Reset
+        </div>
         <Input ref={searchRef} placeholder="Cari produk (Enter untuk tambah)..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={handleSearchKey} icon={<Search size={14} />} />
         <div className="flex-1 overflow-y-auto scrollbar-thin">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
-            {filtered.slice(0, 30).map(p => (
-              <button key={p.kd_barang} onClick={() => addToCart(p)} disabled={(p.stok ?? 0) <= 0} className={`glass-card p-3 text-left transition-all duration-200 ${(p.stok ?? 0) <= 0 ? 'opacity-50 cursor-not-allowed' : 'hover:border-primary-300 hover:shadow-primary-100 dark:hover:border-primary-700 active:scale-95'}`}>
-                <div className="flex gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {filtered.slice(0, 50).map(p => (
+              <button key={p.kd_barang} onClick={() => addToCart(p)} disabled={(p.stok ?? 0) <= 0} className={`p-3 rounded-xl border-2 text-left transition-all hover:border-primary-400 active:scale-95 ${(p.stok ?? 0) <= 0 ? 'opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-600' : 'border-slate-200 dark:border-slate-700 hover:shadow-lg'}`}>
+                <div className="w-full aspect-square rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center mb-2 overflow-hidden">
                   {p.foto_barang ? (
-                    <img src={p.foto_barang} alt={p.nama_barang ?? ''} className="w-16 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-600 shrink-0" />
+                    <img src={p.foto_barang} alt={p.nama_barang ?? ''} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-16 h-16 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                      <Image size={24} className="text-slate-400" />
-                    </div>
+                    <Image size={32} className="text-slate-400" />
                   )}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm text-slate-700 dark:text-slate-200 truncate">{p.nama_barang}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{p.kd_barang}</p>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-primary-600 dark:text-primary-400 font-semibold text-sm">{formatRupiah(p.harga_barang)}</span>
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${(p.stok ?? 0) <= 5 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>{p.stok} stok</span>
-                    </div>
-                  </div>
                 </div>
+                <p className="font-medium text-xs text-slate-700 dark:text-slate-200 truncate">{p.nama_barang}</p>
+                <p className="text-primary-600 dark:text-primary-400 font-bold text-sm">{formatRupiah(p.harga_barang)}</p>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${(p.stok ?? 0) <= 5 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>{p.stok} stok</span>
               </button>
             ))}
             {filtered.length === 0 && (
               <div className="col-span-full py-16 text-center text-slate-400">
-                <ShoppingCart size={40} className="mx-auto mb-2 opacity-30" />
+                <ShoppingCart size={48} className="mx-auto mb-2 opacity-30" />
                 <p className="text-sm">Produk tidak ditemukan</p>
               </div>
             )}
@@ -209,32 +321,32 @@ export default function Transaksi() {
       </div>
 
       {/* Right: Cart + Payment */}
-      <div className="w-full lg:w-80 flex flex-col gap-3 shrink-0">
+      <div className="w-full lg:w-96 flex flex-col gap-3 shrink-0 bg-white dark:bg-slate-800 rounded-xl p-4">
         {/* Customer selector */}
         <div ref={customerRef} className="relative">
           <div
             onClick={() => setShowCustomerDrop(v => !v)}
-            className="glass-card px-3 py-2.5 flex items-center gap-2 cursor-pointer hover:border-primary-300 transition-colors"
+            className="px-3 py-2.5 flex items-center gap-2 cursor-pointer border border-slate-200 dark:border-slate-600 rounded-lg hover:border-primary-400 transition-colors bg-slate-50 dark:bg-slate-700"
           >
-            <UserCircle size={16} className={selectedCustomer ? 'text-primary-500' : 'text-slate-400'} />
+            <UserCircle size={18} className={selectedCustomer ? 'text-primary-500' : 'text-slate-400'} />
             <span className={`flex-1 text-sm truncate ${selectedCustomer ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-400'}`}>
               {selectedCustomer ? `${selectedCustomer.nama_customer} · ${(selectedCustomer.poin ?? 0)} poin` : 'Pilih customer (opsional)'}
             </span>
             {selectedCustomer && (
-              <button onClick={e => { e.stopPropagation(); setSelectedCustomer(null); setCustomerSearch('') }} className="text-slate-400 hover:text-red-500 transition-colors">
-                <X size={14} />
+              <button onClick={e => { e.stopPropagation(); setSelectedCustomer(null); setCustomerSearch('') }} className="text-slate-400 hover:text-red-500">
+                <X size={16} />
               </button>
             )}
           </div>
           {showCustomerDrop && (
-            <div className="absolute top-full left-0 right-0 mt-1 glass-card shadow-xl rounded-xl overflow-hidden z-20">
+            <div className="absolute top-full left-0 right-0 mt-1 border border-slate-200 dark:border-slate-600 shadow-xl rounded-xl overflow-hidden z-20 bg-white dark:bg-slate-800">
               <div className="p-2 border-b border-slate-100 dark:border-slate-700">
                 <input
                   autoFocus
                   placeholder="Cari nama / no. telp..."
                   value={customerSearch}
                   onChange={e => setCustomerSearch(e.target.value)}
-                  className="w-full text-sm px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-200 outline-none"
+                  className="w-full text-sm px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-200 outline-none border-0"
                 />
               </div>
               <div className="max-h-48 overflow-y-auto">
@@ -301,6 +413,38 @@ export default function Transaksi() {
               <span className="text-slate-500">Subtotal</span>
               <span className="font-bold text-slate-800 dark:text-white">{formatRupiah(subTotal)}</span>
             </div>
+            {/* Promo Code */}
+            <div className="flex gap-1.5">
+              <div className="relative flex-1">
+                <Tag size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={promoCode}
+                  onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoDiskon(0); setPromoMsg('') }}
+                  onKeyDown={e => e.key === 'Enter' && applyPromo()}
+                  placeholder="Kode promo"
+                  disabled={promoDiskon > 0}
+                  className="w-full pl-8 pr-2 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 disabled:opacity-60"
+                />
+              </div>
+              {promoDiskon > 0 ? (
+                <button onClick={removePromo} className="px-2.5 py-2 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-500 text-xs font-medium hover:bg-red-200 transition-colors">
+                  <X size={14} />
+                </button>
+              ) : (
+                <button onClick={applyPromo} disabled={promoLoading || !promoCode.trim()} className="px-3 py-2 rounded-lg bg-primary-500 text-white text-xs font-medium hover:bg-primary-600 disabled:opacity-50 transition-colors">
+                  {promoLoading ? '...' : 'Pakai'}
+                </button>
+              )}
+            </div>
+            {promoMsg && (
+              <p className={`text-xs ${promoDiskon > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>{promoMsg}</p>
+            )}
+            {promoDiskon > 0 && (
+              <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                <span>Diskon Promo</span>
+                <span className="font-semibold">-{formatRupiah(promoDiskon)}</span>
+              </div>
+            )}
             {pajakPersen > 0 && (
               <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400">
                 <span>PPN {pajakPersen}%</span>
@@ -350,7 +494,7 @@ export default function Transaksi() {
         }
       >
         <div ref={strukRef}>
-          <Struk cart={cart} subTotal={subTotal} pajak={pajakAmount} pajakPersen={pajakPersen} totalBayar={totalBayar} bayar={parseFloat(bayar)} kembalian={kembalian} kdTransaksi={lastKd ?? ''} jenisBayar={jenisBayar} customerName={selectedCustomer?.nama_customer} poinEarned={poinEarned} kasirName={user?.nama_pengguna} />
+          <Struk cart={cart} subTotal={subTotal} pajak={pajakAmount} pajakPersen={pajakPersen} totalBayar={totalBayar} promoDiskon={promoDiskon} bayar={parseFloat(bayar)} kembalian={kembalian} kdTransaksi={lastKd ?? ''} jenisBayar={jenisBayar} customerName={selectedCustomer?.nama_customer} poinEarned={poinEarned} kasirName={user?.nama_pengguna} />
         </div>
       </Modal>
 

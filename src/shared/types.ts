@@ -68,6 +68,7 @@ export interface DashboardSummary {
   totalBarang: number
   lowStockCount: number
   chartData: { label: string; total: number }[]
+  predictedTomorrow?: number
   topProducts: {
     kd_barang: string | null
     nama_barang: string | null

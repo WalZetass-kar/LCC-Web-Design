@@ -1,4 +1,4 @@
-import { db } from '../../database/connection.js'
+import { db, sqlite } from '../../database/connection.js'
 import { penjualan, penjualanDetail, barang } from '../../database/schema.js'
 import { eq, desc } from 'drizzle-orm'
 
@@ -27,19 +27,31 @@ export class PenjualanModel {
   }
 
   static create(
-    header: typeof penjualan.$inferInsert,
+    header: typeof penjualan.$inferInsert & { discount_amount?: number },
     details: (typeof penjualanDetail.$inferInsert)[]
   ) {
-    db.insert(penjualan).values(header).run()
-    for (const d of details) {
-      db.insert(penjualanDetail).values(d).run()
-      // Decrease stock
-      if (d.kd_barang && d.qty) {
-        const item = db.select({ stok: barang.stok }).from(barang).where(eq(barang.kd_barang, d.kd_barang)).get()
-        if (item) {
-          db.update(barang).set({ stok: (item.stok ?? 0) - d.qty }).where(eq(barang.kd_barang, d.kd_barang)).run()
+    try {
+      db.insert(penjualan).values(header).run()
+      // Save discount_amount and shift_id (not in Drizzle schema but exist in DB)
+      if (header.discount_amount || header.shift_id) {
+        sqlite.prepare('UPDATE mediasoft_penjualan SET discount_amount = ?, shift_id = ? WHERE kd_tansaksi_jual = ?')
+          .run(header.discount_amount ?? 0, header.shift_id ?? null, header.kd_tansaksi_jual)
+      }
+      for (const d of details) {
+        db.insert(penjualanDetail).values(d).run()
+        if (d.kd_barang && d.qty) {
+          const item = db.select({ stok: barang.stok }).from(barang).where(eq(barang.kd_barang, d.kd_barang)).get()
+          if (item) {
+            const newStok = (item.stok ?? 0) - d.qty
+            if (newStok < 0) {
+              throw new Error(`Stok tidak mencukupi untuk barang ${d.kd_barang}`)
+            }
+            db.update(barang).set({ stok: newStok }).where(eq(barang.kd_barang, d.kd_barang)).run()
+          }
         }
       }
+    } catch (error) {
+      throw error
     }
   }
 }

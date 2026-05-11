@@ -36,6 +36,7 @@ const ALLOWED_CHANNELS = new Set([
   'barang:create',
   'barang:update',
   'barang:delete',
+  'barang:bulkImport',
 
   // Kategori
   'kategori:getAll',
@@ -177,6 +178,8 @@ const ALLOWED_CHANNELS = new Set([
   'tax:getAll',
   'tax:setActive',
   'tax:create',
+  'tax:update',
+  'tax:delete',
 
   // Returns
   'return:create',
@@ -258,6 +261,77 @@ const ALLOWED_CHANNELS = new Set([
   'satuan:create',
   'satuan:update',
   'satuan:delete',
+
+  // Dialog
+  'dialog:showSaveDialog',
+
+  // Promo/Discount
+  'promo:getAll',
+  'promo:getActive',
+  'promo:create',
+  'promo:update',
+  'promo:delete',
+  'promo:validate',
+  'promo:apply',
+
+  // Branch/Multi-outlet
+  'branch:getAll',
+  'branch:getActive',
+  'branch:getWarehouses',
+  'branch:getById',
+  'branch:create',
+  'branch:update',
+  'branch:delete',
+  'branch:transferStock',
+
+  // Loyalty/Points
+  'loyalty:getTiers',
+  'loyalty:getCustomerTier',
+  'loyalty:calculatePoints',
+  'loyalty:redeemPoints',
+  'loyalty:createTier',
+  'loyalty:updateTier',
+  'loyalty:deleteTier',
+
+  // Currency
+  'currency:getAll',
+  'currency:getActive',
+  'currency:create',
+  'currency:update',
+  'currency:delete',
+  'currency:setDefault',
+
+  // Inventory / Warehouse
+  'warehouse:getAll',
+  'warehouse:create',
+  'inventory:getBatches',
+  'inventory:addBatch',
+  'inventory:getSerials',
+  'inventory:addSerial',
+  'inventory:transfer',
+
+  // Audit Trail
+  'audit:getAll',
+  'audit:log',
+  'audit:clear',
+
+  // Mobile App
+  'mobile:getSummary',
+  'mobile:processScan',
+
+  // WhatsApp Settings
+  'whatsapp:get',
+  'whatsapp:save',
+  'whatsapp:test',
+  // Security Settings
+  'security:get',
+  'security:save',
+  // Ecommerce API Settings
+  'ecommerce:get',
+  'ecommerce:save',
+  // Print
+  'print:getPrinters',
+  'print:execute',
 ])
 
 // Expose safe IPC bridge to renderer via window.api

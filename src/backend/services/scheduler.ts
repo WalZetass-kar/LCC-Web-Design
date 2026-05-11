@@ -23,6 +23,13 @@ export class SchedulerService {
     })
     this.tasks.push(expiredTask)
 
+    // Check debt due dates every day at 8 AM
+    const debtTask = cron.schedule('0 8 * * *', () => {
+      console.log('⏰ Running debt due date check...')
+      NotifikasiController.checkDebtDueDate()
+    })
+    this.tasks.push(debtTask)
+
     // Auto backup every day at 2 AM
     const backupTask = cron.schedule('0 2 * * *', () => {
       console.log('⏰ Running auto backup...')
@@ -54,6 +61,10 @@ export class SchedulerService {
 
   static async runExpiredCheck() {
     return NotifikasiController.checkExpiredProducts()
+  }
+
+  static async runDebtCheck() {
+    return NotifikasiController.checkDebtDueDate()
   }
 
   static async runBackup(username: string = 'system') {

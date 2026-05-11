@@ -22,7 +22,7 @@ export default function BulkImport({ isOpen, onClose, onImport }: BulkImportProp
   }
 
   const handleImport = async () => {
-    if (!file) return toast.error('Pilih file terlebih dahulu')
+    if (!file) return toast('Pilih file terlebih dahulu', 'error')
     
     setLoading(true)
     try {
@@ -40,10 +40,10 @@ export default function BulkImport({ isOpen, onClose, onImport }: BulkImportProp
       })
       
       await onImport(data)
-      toast.success(`Berhasil import ${data.length} data`)
+      toast(`Berhasil import ${data.length} data`)
       onClose()
     } catch (error) {
-      toast.error('Gagal import data')
+      toast('Gagal import data', 'error')
     } finally {
       setLoading(false)
     }
@@ -61,7 +61,7 @@ export default function BulkImport({ isOpen, onClose, onImport }: BulkImportProp
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Import Produk">
+    <Modal open={isOpen} onClose={onClose} title="Import Produk">
       <div className="space-y-4">
         <div className="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg">
           <FileSpreadsheet className="w-12 h-12 mx-auto text-gray-400 mb-4" />
@@ -72,13 +72,14 @@ export default function BulkImport({ isOpen, onClose, onImport }: BulkImportProp
             className="hidden"
             id="file-upload"
           />
-          <label htmlFor="file-upload" className="cursor-pointer">
-            <Button as="span" icon={Upload}>Pilih File CSV/Excel</Button>
+          <label htmlFor="file-upload" className="cursor-pointer inline-flex items-center justify-center font-semibold px-4 py-2 bg-primary-500 text-white rounded-lg gap-2 hover:bg-primary-600 transition-colors">
+            <Upload size={16} />
+            Pilih File CSV/Excel
           </label>
           {file && <p className="mt-2 text-sm text-gray-600">{file.name}</p>}
         </div>
 
-        <Button variant="secondary" onClick={downloadTemplate} icon={Download} className="w-full">
+        <Button variant="secondary" onClick={downloadTemplate} icon={<Download size={16} />} className="w-full">
           Download Template
         </Button>
 

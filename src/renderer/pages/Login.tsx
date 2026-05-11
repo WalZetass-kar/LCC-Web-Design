@@ -157,7 +157,7 @@ export default function Login() {
           </div>
           <div>
             <span className="font-bold text-white text-lg block leading-tight">MediaSoft POS</span>
-            <span className="text-xs text-slate-500">by Ihwal</span>
+            <span className="text-xs text-slate-500">by Zetass</span>
           </div>
         </div>
 
@@ -200,7 +200,7 @@ export default function Login() {
         </div>
 
         {/* Footer */}
-        <p className="text-slate-600 text-xs">© 2026 MediaSoft POS by Ihwal</p>
+        <p className="text-slate-600 text-xs">© 2026 MediaSoft POS by Zetass</p>
       </div>
 
       {/* RIGHT PANEL — form */}
@@ -212,7 +212,7 @@ export default function Login() {
               <Store size={26} className="text-white" />
             </div>
             <p className="font-bold text-white text-xl">MediaSoft POS</p>
-            <p className="text-slate-500 text-xs mt-1">by Ihwal</p>
+            <p className="text-slate-500 text-xs mt-1">by Zetass</p>
           </div>
 
           {/* Loading Skeleton */}

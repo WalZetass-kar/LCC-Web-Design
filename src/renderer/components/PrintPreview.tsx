@@ -19,7 +19,7 @@ export default function PrintPreview({ isOpen, onClose, children, title = 'Previ
   })
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <Modal open={isOpen} onClose={onClose} title={title}>
       <div className="space-y-4">
         <div className="max-h-[60vh] overflow-y-auto border border-gray-300 rounded-lg p-4 bg-white">
           <div ref={contentRef}>
@@ -28,10 +28,10 @@ export default function PrintPreview({ isOpen, onClose, children, title = 'Previ
         </div>
 
         <div className="flex gap-2">
-          <Button onClick={handlePrint} icon={Printer} className="flex-1">
+          <Button onClick={handlePrint} icon={<Printer size={16} />} className="flex-1">
             Print
           </Button>
-          <Button variant="secondary" onClick={onClose} icon={X} className="flex-1">
+          <Button variant="secondary" onClick={onClose} icon={<X size={16} />} className="flex-1">
             Tutup
           </Button>
         </div>

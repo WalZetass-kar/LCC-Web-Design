@@ -7,6 +7,7 @@ import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
+import { SkeletonPage } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -53,6 +54,7 @@ export default function Users() {
   const [form, setForm] = useState<FormState>({ ...EMPTY })
   const [selected, setSelected] = useState<Pengguna | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const [permissions, setPermissions] = useState<Record<string, boolean>>({})
@@ -63,6 +65,7 @@ export default function Users() {
       console.log('Loaded users:', r.data?.length)
       setData(r.data ?? [])
     }
+    setLoadingData(false)
   }
 
   useEffect(() => { load() }, [])
@@ -77,6 +80,7 @@ export default function Users() {
       nama_pengguna: row.nama_pengguna,
       nama_lengkap: row.nama_lengkap ?? '',
       password: '',
+      confirmPassword: '',
       hak_akses: (row.hak_akses as FormState['hak_akses']) ?? 'kasir',
       email: row.email ?? '',
       no_telp: row.no_telp ?? '',
@@ -247,14 +251,19 @@ export default function Users() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} user terdaftar</p>
-        <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah User</Button>
-      </div>
-
-      <Card>
-        <DataTable data={data} columns={columns} searchPlaceholder="Cari user..." />
-      </Card>
+      {loadingData ? (
+        <SkeletonPage rows={5} />
+      ) : (
+        <>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} user terdaftar</p>
+            <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah User</Button>
+          </div>
+          <Card>
+            <DataTable data={data} columns={columns} searchPlaceholder="Cari user..." />
+          </Card>
+        </>
+      )}
 
       {/* Add/Edit Modal */}
       <Modal

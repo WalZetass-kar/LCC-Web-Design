@@ -5,6 +5,7 @@ import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
+import { TableSkeleton } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah, formatDate } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -18,6 +19,7 @@ export default function Returns() {
   const [selectedReturn, setSelectedReturn] = useState<any>(null)
   const [deleteReturn, setDeleteReturn] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
   
   // Form state
   const [totalAmount, setTotalAmount] = useState('')
@@ -30,6 +32,7 @@ export default function Returns() {
       const validData = (r.data ?? []).filter(item => item && item.id)
       setReturns(validData)
     }
+    setLoadingData(false)
   }
 
   useEffect(() => { loadReturns() }, [])
@@ -41,7 +44,7 @@ export default function Returns() {
       total_amount: parseFloat(totalAmount),
       refund_method: refundMethod,
       reason,
-      created_by: user?.id,
+      created_by: user?.nama_pengguna,
       items: []
     })
     setLoading(false)
@@ -52,33 +55,33 @@ export default function Returns() {
       setReason('')
       loadReturns()
     } else {
-      toast(r.error || 'Gagal membuat return', 'error')
+      toast(r.message || 'Gagal membuat return', 'error')
     }
   }
 
   const handleApprove = async (id: number) => {
     if (!confirm('Approve return ini?')) return
     setLoading(true)
-    const r = await api('return:approve', id, user?.id)
+    const r = await api('return:approve', id, user?.nama_pengguna)
     setLoading(false)
     if (r.success) {
       toast('Return berhasil diapprove')
       loadReturns()
     } else {
-      toast(r.error || 'Gagal approve return', 'error')
+      toast(r.message || 'Gagal approve return', 'error')
     }
   }
   
   const handleReject = async (id: number) => {
     if (!confirm('Reject return ini?')) return
     setLoading(true)
-    const r = await api('return:reject', id, user?.id)
+    const r = await api('return:reject', id, user?.nama_pengguna)
     setLoading(false)
     if (r.success) {
       toast('Return berhasil direject')
       loadReturns()
     } else {
-      toast(r.error || 'Gagal reject return', 'error')
+      toast(r.message || 'Gagal reject return', 'error')
     }
   }
   
@@ -92,7 +95,7 @@ export default function Returns() {
       setDeleteReturn(null)
       loadReturns()
     } else {
-      toast(r.error || 'Gagal menghapus return', 'error')
+      toast(r.message || 'Gagal menghapus return', 'error')
     }
   }
 
@@ -107,6 +110,9 @@ export default function Returns() {
       </div>
 
       <Card title="Daftar Return">
+        {loadingData ? (
+          <TableSkeleton rows={5} columns={6} />
+        ) : (
         <div className="overflow-x-auto -mx-4 sm:mx-0">
           <div className="min-w-[800px]">
             <table className="w-full text-sm">
@@ -172,6 +178,7 @@ export default function Returns() {
             </table>
           </div>
         </div>
+        )}
       </Card>
 
       {/* Modal Buat Return */}

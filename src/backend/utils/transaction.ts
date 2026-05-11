@@ -106,7 +106,7 @@ export function batchUpdate<T extends Record<string, any>>(
       const { [idColumn]: id, ...data } = record
       const columns = Object.keys(data)
       const setClause = columns.map(col => `${col} = ?`).join(', ')
-      const values = [...columns.map(col => (data as any)[col]), id]
+      const values = [...columns.map(col => (data as Record<string, unknown>)[col]), id]
       
       sqlite.prepare(`UPDATE ${table} SET ${setClause} WHERE ${idColumn} = ?`).run(...values)
       updated++

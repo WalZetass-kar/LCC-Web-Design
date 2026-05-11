@@ -90,14 +90,14 @@ export function sanitizeString(input: string): string {
 }
 
 // Sanitize object recursively
-export function sanitizeObject<T extends Record<string, any>>(obj: T): T {
-  const sanitized = { ...obj }
+export function sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
+  const sanitized: Record<string, unknown> = { ...obj }
   for (const key in sanitized) {
     if (typeof sanitized[key] === 'string') {
-      sanitized[key] = sanitizeString(sanitized[key]) as any
+      sanitized[key] = sanitizeString(sanitized[key] as string)
     } else if (typeof sanitized[key] === 'object' && sanitized[key] !== null) {
-      sanitized[key] = sanitizeObject(sanitized[key])
+      sanitized[key] = sanitizeObject(sanitized[key] as Record<string, unknown>)
     }
   }
-  return sanitized
+  return sanitized as T
 }

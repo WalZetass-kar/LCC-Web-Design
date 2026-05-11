@@ -8,6 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
+import { SkeletonPage } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah, formatDate } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -30,6 +31,7 @@ export default function CustomerPage() {
   const [form, setForm] = useState<FormState>({ ...EMPTY })
   const [selected, setSelected] = useState<Customer | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
   const [poinInput, setPoinInput] = useState('')
   const [poinMode, setPoinMode] = useState<'add' | 'sub'>('add')
   const [riwayat, setRiwayat] = useState<Penjualan[]>([])
@@ -37,6 +39,7 @@ export default function CustomerPage() {
   const load = async () => {
     const r = await api<Customer[]>('customer:getAll')
     if (r.success) setData(r.data ?? [])
+    setLoadingData(false)
   }
 
   useEffect(() => { load() }, [])
@@ -158,14 +161,19 @@ export default function CustomerPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} customer terdaftar</p>
-        <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Customer</Button>
-      </div>
-
-      <Card>
-        <DataTable data={data} columns={columns} searchPlaceholder="Cari customer..." />
-      </Card>
+      {loadingData ? (
+        <SkeletonPage rows={6} />
+      ) : (
+        <>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} customer terdaftar</p>
+            <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Customer</Button>
+          </div>
+          <Card>
+            <DataTable data={data} columns={columns} searchPlaceholder="Cari customer..." />
+          </Card>
+        </>
+      )}
 
       {/* Add/Edit Modal */}
       <Modal open={modal === 'add' || modal === 'edit'} onClose={closeModal}

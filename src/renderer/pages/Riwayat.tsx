@@ -7,6 +7,7 @@ import Modal from '../components/Modal'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
 import Struk from '../components/Struk'
+import { SkeletonPage } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah, formatDateTime } from '../utils/format'
 import { useReactToPrint } from 'react-to-print'
@@ -15,11 +16,13 @@ import type { Penjualan, PenjualanDetailItem } from '../../shared/types'
 export default function Riwayat() {
   const [data, setData] = useState<Penjualan[]>([])
   const [detail, setDetail] = useState<{ header: Penjualan; details: PenjualanDetailItem[] } | null>(null)
+  const [loadingData, setLoadingData] = useState(true)
   const strukRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     api<Penjualan[]>('penjualan:getAll').then(r => {
       if (r.success) setData(r.data ?? [])
+      setLoadingData(false)
     })
   }, [])
 
@@ -68,10 +71,16 @@ export default function Riwayat() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} transaksi tercatat</p>
-      <Card>
-        <DataTable data={data} columns={columns} searchPlaceholder="Cari transaksi..." />
-      </Card>
+      {loadingData ? (
+        <SkeletonPage rows={6} />
+      ) : (
+        <>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} transaksi tercatat</p>
+          <Card>
+            <DataTable data={data} columns={columns} searchPlaceholder="Cari transaksi..." />
+          </Card>
+        </>
+      )}
 
       <Modal
         open={!!detail}

@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import './i18n' // initialize i18next
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ToastProvider } from './contexts/ToastContext'
 import { AuthProvider } from './contexts/AuthContext'
@@ -30,6 +31,13 @@ import StockOpname from './pages/StockOpname'
 import SubscriptionPlans from './pages/SubscriptionPlans'
 import Tutorials from './pages/Tutorials'
 import Hpp from './pages/Hpp'
+import Promo from './pages/Promo'
+import Branch from './pages/Branch'
+import Security from './pages/Security'
+import Loyalty from './pages/Loyalty'
+import WhatsApp from './pages/WhatsApp'
+import PrintQueue from './pages/PrintQueue'
+import EcommerceApi from './pages/EcommerceApi'
 import ErrorBoundary from './components/ErrorBoundary'
 import './styles/globals.css'
 
@@ -100,6 +108,13 @@ function App() {
           <Route path="/subscription-plans" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><SubscriptionPlans /></RequireExactRoles>} />
           <Route path="/tutorials" element={<Tutorials />} />
           <Route path="/hpp" element={<Hpp />} />
+          <Route path="/promo" element={<Promo />} />
+          <Route path="/branch" element={<Branch />} />
+          <Route path="/security" element={<Security />} />
+          <Route path="/loyalty" element={<Loyalty />} />
+          <Route path="/whatsapp" element={<WhatsApp />} />
+          <Route path="/print-queue" element={<PrintQueue />} />
+          <Route path="/ecommerce-api" element={<EcommerceApi />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

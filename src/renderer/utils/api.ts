@@ -17,7 +17,7 @@ import { isDemoMode, getDemoBlockedMessage } from './demo'
  * READ-ONLY channel patterns — these are always allowed even in demo mode.
  * We use a conservative approach: if it's NOT clearly a read, we block it.
  */
-const READ_PATTERNS = [
+const READ_PATTERNS: readonly string[] = [
   'getAll', 'get', 'search', 'getDetail', 'getById',
   'getSummary', 'getLaporan', 'getActive', 'getUnread',
   'check', 'download', 'export', 'print',
@@ -26,9 +26,8 @@ const READ_PATTERNS = [
   'getSettings', 'getPermissions', 'getBirthdayToday',
   'getTransaksi', 'getKasById', 'getAllKas', 'getActiveKas',
   'getUnreadCount', 'getHistory', 'getDetails', 'getUsageCount',
-  // hpp:calculate passes through — controller enforces its own demo limit
   'calculate',
-]
+] as const
 
 /**
  * Check if a channel is a read operation based on its name.

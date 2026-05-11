@@ -9,6 +9,7 @@
  */
 
 import type { IpcMain } from 'electron'
+import { dialog, BrowserWindow } from 'electron'
 import { BarangController } from '../backend/controllers/BarangController.js'
 import { KategoriController } from '../backend/controllers/KategoriController.js'
 import { SatuanController } from '../backend/controllers/SatuanController.js'
@@ -38,6 +39,17 @@ import { TutorialController } from '../backend/controllers/TutorialController.js
 import { HppController } from '../backend/controllers/HppController.js'
 import { StrukSettingsController } from '../backend/controllers/StrukSettingsController.js'
 import { SystemController } from '../backend/controllers/SystemController.js'
+import { CurrencyController } from '../backend/controllers/CurrencyController.js'
+import { InventoryController } from '../backend/controllers/InventoryController.js'
+import { AuditController } from '../backend/controllers/AuditController.js'
+import { PromoController } from '../backend/controllers/PromoController.js'
+import { PromoService } from '../backend/services/promoService.js'
+import { MobileAppController } from '../backend/controllers/MobileAppController.js'
+import { BranchController } from '../backend/controllers/BranchController.js'
+import { WhatsAppController } from '../backend/controllers/WhatsAppController.js'
+import { LoyaltyController } from '../backend/controllers/LoyaltyController.js'
+import { SecurityController } from '../backend/controllers/SecurityController.js'
+import { EcommerceApiController } from '../backend/controllers/EcommerceApiController.js'
 
 /**
  * Helper to register an IPC handler with automatic demo guard.
@@ -96,6 +108,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'barang:create', (data: any) => BarangController.create(data))
   handle(ipcMain, 'barang:update', (kd: string, data: any) => BarangController.update(kd, data))
   handle(ipcMain, 'barang:delete', (kd: string) => BarangController.delete(kd))
+  handle(ipcMain, 'barang:bulkImport', (products: any[], username?: string) => BarangController.bulkImport(products, username))
 
   // ─── KATEGORI ──────────────────────────────────────────────────────
   handle(ipcMain, 'kategori:getAll', () => KategoriController.getAll())
@@ -228,20 +241,21 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     ActivityLogController.deleteOldLogs(days))
 
   // ─── EXPORT ────────────────────────────────────────────────────────
-  handle(ipcMain, 'export:penjualanExcel', (startDate: string, endDate: string) => 
-    ExportController.exportPenjualanExcel(startDate, endDate))
-  handle(ipcMain, 'export:penjualanPDF', (startDate: string, endDate: string) => 
-    ExportController.exportPenjualanPDF(startDate, endDate))
-  handle(ipcMain, 'export:stokExcel', () => ExportController.exportStokExcel())
-  handle(ipcMain, 'export:stokPDF', () => ExportController.exportStokPDF())
-  handle(ipcMain, 'export:toExcel', (data: any[], filename: string, sheetName?: string) => 
-    ExportController.exportToExcel(data, filename, sheetName))
-  handle(ipcMain, 'export:toPDF', (title: string, headers: string[], data: any[][], filename: string, orientation?: 'portrait' | 'landscape') => 
-    ExportController.exportToPDF(title, headers, data, filename, orientation))
+  handle(ipcMain, 'export:penjualanExcel', (startDate: string, endDate: string, customPath?: string) => 
+    ExportController.exportPenjualanExcel(startDate, endDate, customPath))
+  handle(ipcMain, 'export:penjualanPDF', (startDate: string, endDate: string, customPath?: string) => 
+    ExportController.exportPenjualanPDF(startDate, endDate, customPath))
+  handle(ipcMain, 'export:stokExcel', (customPath?: string) => ExportController.exportStokExcel(customPath))
+  handle(ipcMain, 'export:stokPDF', (customPath?: string) => ExportController.exportStokPDF(customPath))
+  handle(ipcMain, 'export:toExcel', (data: any[], filename: string, sheetName?: string, customPath?: string) => 
+    ExportController.exportToExcel(data, filename, sheetName, customPath))
+  handle(ipcMain, 'export:toPDF', (title: string, headers: string[], data: any[][], filename: string, orientation?: 'portrait' | 'landscape', customPath?: string) => 
+    ExportController.exportToPDF(title, headers, data, filename, orientation, customPath))
 
   // ─── SCHEDULER ─────────────────────────────────────────────────────
   handle(ipcMain, 'scheduler:runStokCheck', () => SchedulerService.runStokCheck())
   handle(ipcMain, 'scheduler:runExpiredCheck', () => SchedulerService.runExpiredCheck())
+  handle(ipcMain, 'scheduler:runDebtCheck', () => SchedulerService.runDebtCheck())
   handle(ipcMain, 'scheduler:runBackup', (username: string) => SchedulerService.runBackup(username))
   handle(ipcMain, 'scheduler:runCleanLogs', (days?: number) => SchedulerService.runCleanLogs(days))
 
@@ -262,6 +276,8 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'tax:getAll', () => TaxController.getAll())
   handle(ipcMain, 'tax:setActive', (id: number) => TaxController.setActive(id))
   handle(ipcMain, 'tax:create', (data: any) => TaxController.create(data))
+  handle(ipcMain, 'tax:update', (id: number, data: any) => TaxController.update(id, data))
+  handle(ipcMain, 'tax:delete', (id: number) => TaxController.delete(id))
 
   // ─── RETURNS ───────────────────────────────────────────────────────
   handle(ipcMain, 'return:create', (data: any) => ReturnController.create(data))
@@ -337,8 +353,117 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'strukSettings:uploadQris', (base64: string) => StrukSettingsController.uploadQris(base64))
   handle(ipcMain, 'strukSettings:removeQris', () => StrukSettingsController.removeQris())
 
+  // ─── CURRENCY ──────────────────────────────────────────────────────
+  handle(ipcMain, 'currency:getAll', () => CurrencyController.getAll())
+  handle(ipcMain, 'currency:getActive', () => CurrencyController.getActive())
+  handle(ipcMain, 'currency:create', (data: any) => CurrencyController.create(data))
+  handle(ipcMain, 'currency:update', (id: number, data: any) => CurrencyController.update(id, data))
+  handle(ipcMain, 'currency:delete', (id: number) => CurrencyController.delete(id))
+  handle(ipcMain, 'currency:setDefault', (id: number) => CurrencyController.setDefault(id))
+
+  // ─── INVENTORY ─────────────────────────────────────────────────────
+  handle(ipcMain, 'warehouse:getAll', () => InventoryController.getWarehouses())
+  handle(ipcMain, 'warehouse:create', (data: any) => InventoryController.createWarehouse(data))
+  handle(ipcMain, 'inventory:getBatches', (kd: string) => InventoryController.getBatches(kd))
+  handle(ipcMain, 'inventory:addBatch', (data: any) => InventoryController.addBatch(data))
+  handle(ipcMain, 'inventory:getSerials', (kd: string) => InventoryController.getSerials(kd))
+  handle(ipcMain, 'inventory:addSerial', (data: any) => InventoryController.addSerial(data))
+  handle(ipcMain, 'inventory:transfer', (data: any) => InventoryController.transfer(data))
+
+  // ─── PROMO ─────────────────────────────────────────────────────────
+  handle(ipcMain, 'promo:getAll', () => PromoController.getAll())
+  handle(ipcMain, 'promo:getActive', () => PromoController.getActive())
+  handle(ipcMain, 'promo:create', (data: any) => PromoController.create(data))
+  handle(ipcMain, 'promo:update', (id: number, data: any) => PromoController.update(id, data))
+  handle(ipcMain, 'promo:delete', (id: number) => PromoController.delete(id))
+  handle(ipcMain, 'promo:validate', (code: string, subtotal: number, items: any[]) => PromoController.validate(code, subtotal, items))
+  handle(ipcMain, 'promo:apply', (code: string) => PromoService.applyPromo(code))
+
+  // ─── BRANCH / MULTI-OUTLET ────────────────────────────────────────────
+  handle(ipcMain, 'branch:getAll', () => BranchController.getAll())
+  handle(ipcMain, 'branch:getActive', () => BranchController.getActive())
+  handle(ipcMain, 'branch:getWarehouses', () => BranchController.getWarehouses())
+  handle(ipcMain, 'branch:getById', (id: number) => BranchController.getById(id))
+  handle(ipcMain, 'branch:create', (data: any) => BranchController.create(data))
+  handle(ipcMain, 'branch:update', (id: number, data: any) => BranchController.update(id, data))
+  handle(ipcMain, 'branch:delete', (id: number) => BranchController.delete(id))
+  handle(ipcMain, 'branch:transferStock', (fromId: number, toId: number, productId: string, qty: number, notes: string, userId: string) => 
+    BranchController.transferStock(fromId, toId, productId, qty, notes, userId))
+
+  // ─── LOYALTY / POINTS ───────────────────────────────────────────────
+  handle(ipcMain, 'loyalty:getTiers', () => LoyaltyController.getTiers())
+  handle(ipcMain, 'loyalty:getCustomerTier', (customerId: string) => LoyaltyController.getCustomerTier(customerId))
+  handle(ipcMain, 'loyalty:calculatePoints', (amount: number, tierId: number) => LoyaltyController.calculatePoints(amount, tierId))
+  handle(ipcMain, 'loyalty:redeemPoints', (customerId: string, points: number) => LoyaltyController.redeemPoints(customerId, points))
+  handle(ipcMain, 'loyalty:createTier', (data: any) => LoyaltyController.createTier(data))
+  handle(ipcMain, 'loyalty:updateTier', (id: number, data: any) => LoyaltyController.updateTier(id, data))
+  handle(ipcMain, 'loyalty:deleteTier', (id: number) => LoyaltyController.deleteTier(id))
+
+  // ─── AUDIT TRAIL ───────────────────────────────────────────────────
+  handle(ipcMain, 'audit:getAll', () => AuditController.getAll())
+  handle(ipcMain, 'audit:log', (data: any) => AuditController.log(data))
+  handle(ipcMain, 'audit:clear', () => AuditController.clear())
+
+  // ─── MOBILE APP SUPPORT ────────────────────────────────────────────
+  handle(ipcMain, 'mobile:getSummary', (token: string) => MobileAppController.getRemoteSummary(token))
+  handle(ipcMain, 'mobile:processScan', (barcode: string, username: string) => MobileAppController.processMobileScan(barcode, username))
+
   // ─── SYSTEM STATUS ─────────────────────────────────────────────────
   handle(ipcMain, 'system:checkDb', () => SystemController.checkDb())
   handle(ipcMain, 'system:resetData', () => SystemController.resetData())
+
+  // ─── WHATSAPP SETTINGS ─────────────────────────────────────────────
+  handle(ipcMain, 'whatsapp:get', () => WhatsAppController.get())
+  handle(ipcMain, 'whatsapp:save', (data: any) => WhatsAppController.save(data))
+  handle(ipcMain, 'whatsapp:test', (phone: string) => WhatsAppController.test(phone))
+
+  // ─── SECURITY SETTINGS ─────────────────────────────────────────────
+  handle(ipcMain, 'security:get', () => SecurityController.get())
+  handle(ipcMain, 'security:save', (data: any) => SecurityController.save(data))
+
+  // ─── ECOMMERCE API SETTINGS ────────────────────────────────────────
+  handle(ipcMain, 'ecommerce:get', () => EcommerceApiController.get())
+  handle(ipcMain, 'ecommerce:save', (data: any) => EcommerceApiController.save(data))
+
+  // ─── DIALOG ────────────────────────────────────────────────────────
+  handle(ipcMain, 'dialog:showSaveDialog', async (options: any) => {
+    const result = await dialog.showSaveDialog(options)
+    return { success: true, data: result }
+  })
+
+  // ─── PRINT ─────────────────────────────────────────────────────────
+  ipcMain.handle('print:getPrinters', async (event) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (!win) return { success: false, message: 'Window not found' }
+      const printers = await win.webContents.getPrintersAsync()
+      return { success: true, data: printers }
+    } catch (error) {
+      return { success: false, message: String(error) }
+    }
+  })
+
+  ipcMain.handle('print:execute', async (event, options: { printerName?: string; silent?: boolean; copies?: number }) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (!win) return { success: false, message: 'Window not found' }
+      return new Promise<{ success: boolean; message?: string }>((resolve) => {
+        win.webContents.print(
+          {
+            silent: options.silent ?? true,
+            printBackground: true,
+            deviceName: options.printerName ?? '',
+            copies: options.copies ?? 1,
+          },
+          (success, failureReason) => {
+            if (success) resolve({ success: true })
+            else resolve({ success: false, message: failureReason })
+          }
+        )
+      })
+    } catch (error) {
+      return { success: false, message: String(error) }
+    }
+  })
 }
 

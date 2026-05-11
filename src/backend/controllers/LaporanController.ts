@@ -1,5 +1,5 @@
-import { db } from '../../database/connection.js'
-import { penjualan, penjualanDetail, barang, customer, kasDrawer } from '../../database/schema.js'
+import { db, sqlite } from '../../database/connection.js'
+import { penjualan, penjualanDetail, barang, customer, kasDrawer, pembelian, pembelianDetail, supplier } from '../../database/schema.js'
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm'
 
 export class LaporanController {
@@ -56,15 +56,21 @@ export class LaporanController {
             qty: penjualanDetail.qty,
             harga_jual: penjualanDetail.harga_jual,
             harga_modal: penjualanDetail.harga_modal,
+            disc: penjualanDetail.disc,
           })
           .from(penjualanDetail)
           .where(eq(penjualanDetail.kd_tansaksi_jual, t.kd_tansaksi_jual))
           .all()
 
         for (const d of details) {
-          total_penjualan += (d.qty || 0) * (d.harga_jual || 0)
+          const disc_amount = ((d.harga_jual || 0) * (d.disc || 0)) / 100
+          total_penjualan += (d.qty || 0) * ((d.harga_jual || 0) - disc_amount)
           total_modal += (d.qty || 0) * (d.harga_modal || 0)
         }
+
+        // Kurangi diskon promo level transaksi
+        const row = sqlite.prepare('SELECT discount_amount FROM mediasoft_penjualan WHERE kd_tansaksi_jual = ?').get(t.kd_tansaksi_jual) as any
+        if (row?.discount_amount) total_penjualan -= row.discount_amount
       }
 
       const laba_kotor = total_penjualan - total_modal
@@ -217,6 +223,44 @@ export class LaporanController {
       return { success: true, data: { customers: result, summary } }
     } catch (error) {
       return { success: false, message: 'Gagal mengambil laporan: ' + (error as Error).message }
+    }
+  }
+
+  // Laporan Pembelian
+  static getLaporanPembelian(startDate: string, endDate: string) {
+    try {
+      const result = db
+        .select({
+          kd_pembelian: pembelian.kd_pembelian,
+          tgl_pembelian: pembelian.tgl_pembelian,
+          kd_suplier: pembelian.kd_suplier,
+          nama_suplier: supplier.nama_suplier,
+          total_qty: pembelian.total_qty,
+          sub_total: pembelian.sub_total,
+          yang_dibayar: pembelian.yang_dibayar,
+          sisa_hutang: pembelian.sisa_hutang,
+          status: pembelian.status,
+          username: pembelian.username,
+        })
+        .from(pembelian)
+        .leftJoin(supplier, eq(pembelian.kd_suplier, supplier.kd_suplier))
+        .where(and(gte(pembelian.tgl_pembelian, startDate), lte(pembelian.tgl_pembelian, endDate)))
+        .orderBy(desc(pembelian.tgl_pembelian))
+        .all()
+
+      const summary = {
+        total_po: result.length,
+        total_qty: result.reduce((sum, r) => sum + (r.total_qty || 0), 0),
+        total_pembelian: result.reduce((sum, r) => sum + (r.sub_total || 0), 0),
+        total_dibayar: result.reduce((sum, r) => sum + (r.yang_dibayar || 0), 0),
+        total_hutang: result.reduce((sum, r) => sum + (r.sisa_hutang || 0), 0),
+        lunas: result.filter(r => r.status === 'LUNAS').length,
+        belum_lunas: result.filter(r => r.status !== 'LUNAS').length,
+      }
+
+      return { success: true, data: { pembelian: result, summary } }
+    } catch (error) {
+      return { success: false, message: 'Gagal mengambil laporan pembelian: ' + (error as Error).message }
     }
   }
 }

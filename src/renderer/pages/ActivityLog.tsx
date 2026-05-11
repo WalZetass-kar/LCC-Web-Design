@@ -7,6 +7,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
+import { TableSkeleton } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatDateTime } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -148,7 +149,11 @@ export default function ActivityLogPage() {
 
       {/* Table */}
       <Card>
-        <DataTable data={filtered} columns={columns} searchPlaceholder="Cari aktivitas..." />
+        {loading ? (
+          <TableSkeleton rows={8} columns={5} />
+        ) : (
+          <DataTable data={filtered} columns={columns} searchPlaceholder="Cari aktivitas..." />
+        )}
       </Card>
 
       <ConfirmDialog

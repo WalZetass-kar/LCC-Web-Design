@@ -4,9 +4,11 @@ import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import ConfirmDialog from '../components/ConfirmDialog'
+import Modal from '../components/Modal'
 import { useTheme, type ThemeColor } from '../contexts/ThemeContext'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
+import { playDangerSound, playWarningSound } from '../utils/sound'
 import type { Identitas } from '../../shared/types'
 
 const COLORS: { key: ThemeColor; label: string; hex: string }[] = [
@@ -24,6 +26,7 @@ export default function Settings() {
   const [identitas, setIdentitas] = useState<Partial<Identitas>>({})
   const [loading, setLoading] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
   const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
@@ -40,7 +43,20 @@ export default function Settings() {
     else toast(r.message as string, 'error')
   }
 
+  const openResetDialog = () => {
+    playWarningSound()
+    setConfirmReset(true)
+    setConfirmText('')
+  }
+
   const handleReset = async () => {
+    if (confirmText !== 'RESET SEMUA DATA') {
+      playDangerSound()
+      toast('Ketik "RESET SEMUA DATA" untuk konfirmasi', 'error')
+      return
+    }
+
+    playDangerSound()
     setResetting(true)
     const r = await api('system:resetData')
     setResetting(false)
@@ -237,7 +253,7 @@ export default function Settings() {
 
             <Button 
               variant="danger" 
-              onClick={() => setConfirmReset(true)}
+              onClick={openResetDialog}
               className="w-full"
             >
               <AlertTriangle size={16} />
@@ -250,38 +266,128 @@ export default function Settings() {
       <p className="text-xs text-slate-400 text-center lg:col-span-2">MediaSoft POS v2.0.0 — Preferensi tema disimpan otomatis</p>
 
       {/* Confirm Reset Dialog */}
-      <ConfirmDialog
+      <Modal
         open={confirmReset}
-        onClose={() => setConfirmReset(false)}
-        onConfirm={handleReset}
-        loading={resetting}
-        title="⚠️ PERINGATAN KERAS!"
-        message={
-          <div className="space-y-3">
-            <p className="font-bold text-red-600 dark:text-red-400 text-lg">
-              Anda akan menghapus SEMUA data aplikasi!
-            </p>
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-              <p className="font-semibold mb-2">Data yang akan dihapus:</p>
-              <ul className="space-y-1 list-disc list-inside">
-                <li>Semua transaksi penjualan & pembelian</li>
-                <li>Semua produk, kategori, & satuan</li>
-                <li>Semua customer & supplier</li>
-                <li>Semua data kas, shift, & hutang/piutang</li>
-                <li>Semua backup & activity log</li>
-              </ul>
+        onClose={() => {
+          setConfirmReset(false)
+          setConfirmText('')
+        }}
+        title="🚨 PERINGATAN KERAS - ZONA BERBAHAYA!"
+        size="lg"
+      >
+        <div className="space-y-4">
+          {/* Warning Banner */}
+          <div className="p-4 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white animate-pulse">
+            <div className="flex items-center gap-3">
+              <AlertTriangle size={32} className="shrink-0" />
+              <div>
+                <p className="font-bold text-lg">TINDAKAN TIDAK DAPAT DIBATALKAN!</p>
+                <p className="text-sm opacity-90">Semua data akan dihapus permanen</p>
+              </div>
             </div>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              <strong>Catatan:</strong> Data user dan pengaturan identitas toko akan tetap tersimpan.
+          </div>
+
+          {/* Data yang akan dihapus */}
+          <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800">
+            <p className="font-bold text-red-700 dark:text-red-400 mb-3 flex items-center gap-2">
+              <Database size={18} />
+              Data yang akan DIHAPUS PERMANEN:
             </p>
-            <p className="font-bold text-red-600 dark:text-red-400">
-              Tindakan ini TIDAK DAPAT DIBATALKAN! Yakin ingin melanjutkan?
+            <div className="grid grid-cols-2 gap-2 text-sm text-red-600 dark:text-red-400">
+              <div className="flex items-center gap-2">
+                <span className="text-red-500">✗</span>
+                <span>Transaksi Penjualan</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-red-500">✗</span>
+                <span>Transaksi Pembelian</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-red-500">✗</span>
+                <span>Data Produk & Stok</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-red-500">✗</span>
+                <span>Data Customer</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-red-500">✗</span>
+                <span>Data Supplier</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-red-500">✗</span>
+                <span>Data Kas & Shift</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-red-500">✗</span>
+                <span>Hutang & Piutang</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-red-500">✗</span>
+                <span>Backup & Activity Log</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Data yang tetap tersimpan */}
+          <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-700 dark:text-blue-400">
+              <strong>✓ Data yang TETAP tersimpan:</strong> User & Identitas Toko
             </p>
           </div>
-        }
-        confirmText="Ya, Reset Semua Data"
-        cancelText="Batal"
-      />
+
+          {/* Konfirmasi Input */}
+          <div className="space-y-2">
+            <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">
+              Ketik <span className="text-red-600 dark:text-red-400 font-mono bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">RESET SEMUA DATA</span> untuk konfirmasi:
+            </label>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="Ketik: RESET SEMUA DATA"
+              className="w-full px-4 py-3 rounded-xl border-2 border-red-300 dark:border-red-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono"
+              autoFocus
+            />
+            {confirmText && confirmText !== 'RESET SEMUA DATA' && (
+              <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+                <AlertTriangle size={12} />
+                Teks tidak sesuai! Harus persis: RESET SEMUA DATA
+              </p>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setConfirmReset(false)
+                setConfirmText('')
+              }}
+              className="flex-1"
+              disabled={resetting}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleReset}
+              loading={resetting}
+              disabled={confirmText !== 'RESET SEMUA DATA'}
+              className="flex-1"
+            >
+              <AlertTriangle size={16} />
+              {resetting ? 'Menghapus...' : 'Ya, Reset Semua Data'}
+            </Button>
+          </div>
+
+          {/* Final Warning */}
+          <div className="text-center text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700">
+            ⚠️ Pastikan Anda sudah backup data sebelum melanjutkan
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

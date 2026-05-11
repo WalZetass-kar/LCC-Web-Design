@@ -2,6 +2,8 @@ import { PenjualanModel } from '../models/PenjualanModel.js'
 import { CustomerModel } from '../models/CustomerModel.js'
 import { validateDemoMode } from '../utils/demoMode.js'
 import { withTransaction } from '../utils/transaction.js'
+import { WhatsAppController } from './WhatsAppController.js'
+import { WhatsAppService } from '../services/whatsappService.js'
 
 interface CartItem {
   kd_barang: string
@@ -19,6 +21,9 @@ interface CreateTransaksiPayload {
   jenis_pembayaran: string
   kd_customer?: string
   pajak?: number
+  diskon_promo?: number
+  kode_promo?: string
+  shift_id?: number
 }
 
 export class PenjualanController {
@@ -50,7 +55,8 @@ export class PenjualanController {
     }, 0)
 
     const pajak = payload.pajak ?? 0
-    const total_bayar = sub_total + pajak
+    const diskon_promo = payload.diskon_promo ?? 0
+    const total_bayar = sub_total + pajak - diskon_promo
     const kembalian = payload.yang_dibayar - total_bayar
 
     const header = {
@@ -64,6 +70,8 @@ export class PenjualanController {
       kembalian,
       jenis_pembayaran: payload.jenis_pembayaran || 'TUNAI',
       kd_customer: payload.kd_customer || null,
+      discount_amount: diskon_promo,
+      shift_id: payload.shift_id ?? null,
     }
 
     const details = payload.items.map(item => {
@@ -101,6 +109,22 @@ export class PenjualanController {
     if (!result.success) {
       return { success: false, message: `Transaksi gagal: ${result.error}` }
     }
+
+    // Send WhatsApp notification if enabled and customer has phone
+    try {
+      const waSetting = WhatsAppController.getSettings()
+      if (waSetting?.enabled && waSetting?.notify_on_sale && waSetting?.api_key && payload.kd_customer) {
+        const cust = CustomerModel.getById(payload.kd_customer) as any
+        if (cust?.no_telp) {
+          WhatsAppService.init(waSetting.api_key)
+          const msg = (waSetting.message_template as string)
+            .replace('{customer}', cust.nama_customer ?? '')
+            .replace('{total}', `Rp ${total_bayar.toLocaleString('id-ID')}`)
+            .replace('{invoice}', kd_transaksi)
+          WhatsAppService.sendMessage({ to: cust.no_telp, message: msg }).catch(() => {})
+        }
+      }
+    } catch (_) {}
 
     return { success: true, message: 'Transaksi berhasil disimpan', kd_transaksi: result.data }
   }

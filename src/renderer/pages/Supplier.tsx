@@ -8,6 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
+import { SkeletonPage } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import type { Supplier } from '../../shared/types'
@@ -35,10 +36,12 @@ export default function SupplierPage() {
   const [form, setForm] = useState<FormState>({ ...EMPTY })
   const [selected, setSelected] = useState<Supplier | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
 
   const load = async () => {
     const r = await api<Supplier[]>('supplier:getAll')
     if (r.success) setData(r.data ?? [])
+    setLoadingData(false)
   }
 
   useEffect(() => { load() }, [])
@@ -179,21 +182,26 @@ export default function SupplierPage() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">Supplier</h2>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            {data.length} supplier terdaftar
-          </p>
-        </div>
-        <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">
-          Tambah Supplier
-        </Button>
-      </div>
-
-      <Card>
-        <DataTable data={data} columns={columns} searchPlaceholder="Cari supplier..." />
-      </Card>
+      {loadingData ? (
+        <SkeletonPage rows={5} />
+      ) : (
+        <>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">Supplier</h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {data.length} supplier terdaftar
+              </p>
+            </div>
+            <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">
+              Tambah Supplier
+            </Button>
+          </div>
+          <Card>
+            <DataTable data={data} columns={columns} searchPlaceholder="Cari supplier..." />
+          </Card>
+        </>
+      )}
 
       {/* Add/Edit Modal */}
       <Modal

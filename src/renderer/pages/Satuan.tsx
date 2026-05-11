@@ -7,6 +7,7 @@ import Modal from '../components/Modal'
 import Input from '../components/Input'
 import DataTable from '../components/DataTable'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { SkeletonPage } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import type { Satuan } from '../../shared/types'
@@ -25,10 +26,12 @@ export default function SatuanPage() {
   const [form, setForm] = useState<FormState>({ ...EMPTY })
   const [selected, setSelected] = useState<Satuan | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
 
   const load = async () => {
     const r = await api<Satuan[]>('satuan:getAll')
     if (r.success) setData(r.data ?? [])
+    setLoadingData(false)
   }
 
   useEffect(() => { load() }, [])
@@ -86,20 +89,25 @@ export default function SatuanPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Satuan</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Kelola satuan produk</p>
-        </div>
-        <Button onClick={openAdd}>
-          <Plus size={18} />
-          Tambah Satuan
-        </Button>
-      </div>
-
-      <Card>
-        <DataTable data={data} columns={columns} searchPlaceholder="Cari satuan..." />
-      </Card>
+      {loadingData ? (
+        <SkeletonPage rows={4} />
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Satuan</h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Kelola satuan produk</p>
+            </div>
+            <Button onClick={openAdd}>
+              <Plus size={18} />
+              Tambah Satuan
+            </Button>
+          </div>
+          <Card>
+            <DataTable data={data} columns={columns} searchPlaceholder="Cari satuan..." />
+          </Card>
+        </>
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -127,6 +135,7 @@ export default function SatuanPage() {
         onClose={() => { setConfirmDelete(false); setSelected(null) }}
         onConfirm={handleDelete}
         loading={loading}
+        title="Hapus Satuan"
         message={`Yakin ingin menghapus satuan "${selected?.nama_satuan}"?`}
       />
     </div>

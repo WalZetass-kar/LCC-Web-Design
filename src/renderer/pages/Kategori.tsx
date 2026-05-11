@@ -7,6 +7,7 @@ import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Input from '../components/Input'
 import DataTable from '../components/DataTable'
+import { SkeletonPage } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import type { Kategori } from '../../shared/types'
@@ -18,10 +19,12 @@ export default function Kategori() {
   const [form, setForm] = useState({ kategori_barang: '' })
   const [selected, setSelected] = useState<Kategori | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
 
   const load = async () => {
     const r = await api<Kategori[]>('kategori:getAll')
     if (r.success) setData(r.data ?? [])
+    setLoadingData(false)
   }
 
   useEffect(() => { load() }, [])
@@ -79,14 +82,19 @@ export default function Kategori() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} kategori terdaftar</p>
-        <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Kategori</Button>
-      </div>
-
-      <Card>
-        <DataTable data={data} columns={columns} searchPlaceholder="Cari kategori..." />
-      </Card>
+      {loadingData ? (
+        <SkeletonPage rows={4} />
+      ) : (
+        <>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} kategori terdaftar</p>
+            <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Kategori</Button>
+          </div>
+          <Card>
+            <DataTable data={data} columns={columns} searchPlaceholder="Cari kategori..." />
+          </Card>
+        </>
+      )}
 
       <Modal
         open={modal === 'add' || modal === 'edit'}

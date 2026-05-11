@@ -4,6 +4,7 @@ import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
+import { SkeletonSpinner } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
@@ -97,6 +98,25 @@ export default function Laporan() {
     const featureKey = format === 'excel' ? 'export_excel' : 'export_pdf'
     if (guardPremiumFeature(featureKey, `Export ${format.toUpperCase()}`)) return
 
+    // Show save dialog
+    const ext = format === 'excel' ? 'xlsx' : 'pdf'
+    const defaultFilename = `laporan_${tab}_${new Date().toISOString().split('T')[0]}.${ext}`
+    
+    const dialogResult = await api<any>('dialog:showSaveDialog', {
+      title: `Simpan Laporan ${format.toUpperCase()}`,
+      defaultPath: defaultFilename,
+      filters: [
+        { name: format === 'excel' ? 'Excel Files' : 'PDF Files', extensions: [ext] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    })
+
+    if (!dialogResult.success || !dialogResult.data || dialogResult.data.canceled) {
+      return // User cancelled
+    }
+
+    const savePath = dialogResult.data.filePath
+
     const key = `${tab}-${format}`
     setExportLoading(key)
     let r: any
@@ -104,32 +124,32 @@ export default function Laporan() {
       if (tab === 'penjualan') {
         if (!dateRange.start || !dateRange.end) { toast('Pilih rentang tanggal', 'error'); return }
         r = format === 'excel'
-          ? await api('export:penjualanExcel', dateRange.start, dateRange.end)
-          : await api('export:penjualanPDF', dateRange.start, dateRange.end)
+          ? await api('export:penjualanExcel', dateRange.start, dateRange.end, savePath)
+          : await api('export:penjualanPDF', dateRange.start, dateRange.end, savePath)
       } else if (tab === 'stok') {
         r = format === 'excel'
-          ? await api('export:stokExcel')
-          : await api('export:stokPDF')
+          ? await api('export:stokExcel', savePath)
+          : await api('export:stokPDF', savePath)
       } else if (tab === 'laba-rugi' || tab === 'produk' || tab === 'customer') {
         // Use generic export with current data
         if (tab === 'laba-rugi' && labaRugiData) {
           const rows = [['Total Transaksi', labaRugiData.total_transaksi], ['Total Penjualan', labaRugiData.total_penjualan], ['Total Modal', labaRugiData.total_modal], ['Laba Kotor', labaRugiData.laba_kotor], ['Margin (%)', labaRugiData.margin_persen]]
           r = format === 'excel'
-            ? await api('export:toExcel', rows.map(([k, v]) => ({ Keterangan: k, Nilai: v })), 'laporan_laba_rugi')
-            : await api('export:toPDF', 'Laporan Laba Rugi', ['Keterangan', 'Nilai'], rows, 'laporan_laba_rugi')
+            ? await api('export:toExcel', rows.map(([k, v]) => ({ Keterangan: k, Nilai: v })), 'laporan_laba_rugi', undefined, savePath)
+            : await api('export:toPDF', 'Laporan Laba Rugi', ['Keterangan', 'Nilai'], rows, 'laporan_laba_rugi', undefined, savePath)
         } else if (tab === 'produk' && produkData.length > 0) {
           r = format === 'excel'
-            ? await api('export:toExcel', produkData, 'laporan_produk_terlaris')
-            : await api('export:toPDF', 'Produk Terlaris', ['Produk', 'Total Qty', 'Total Penjualan'], produkData.map(p => [p.nama_barang, p.total_qty, p.total_penjualan]), 'laporan_produk_terlaris')
+            ? await api('export:toExcel', produkData, 'laporan_produk_terlaris', undefined, savePath)
+            : await api('export:toPDF', 'Produk Terlaris', ['Produk', 'Total Qty', 'Total Penjualan'], produkData.map(p => [p.nama_barang, p.total_qty, p.total_penjualan]), 'laporan_produk_terlaris', undefined, savePath)
         } else if (tab === 'customer' && customerData) {
           r = format === 'excel'
-            ? await api('export:toExcel', customerData.customers, 'laporan_customer')
-            : await api('export:toPDF', 'Laporan Customer', ['Nama', 'Poin', 'Total Belanja', 'Status'], customerData.customers.map((c: any) => [c.nama_customer, c.poin ?? 0, c.total_belanja ?? 0, c.status ?? '']), 'laporan_customer')
+            ? await api('export:toExcel', customerData.customers, 'laporan_customer', undefined, savePath)
+            : await api('export:toPDF', 'Laporan Customer', ['Nama', 'Poin', 'Total Belanja', 'Status'], customerData.customers.map((c: any) => [c.nama_customer, c.poin ?? 0, c.total_belanja ?? 0, c.status ?? '']), 'laporan_customer', undefined, savePath)
         } else {
           toast('Tampilkan data terlebih dahulu', 'error'); return
         }
       }
-      if (r?.success) toast(`Export ${format.toUpperCase()} berhasil disimpan`)
+      if (r?.success) toast(`File berhasil disimpan ke ${savePath}`, 'success')
       else toast(r?.message ?? 'Export gagal', 'error')
     } finally {
       setExportLoading(null)
@@ -386,6 +406,9 @@ export default function Laporan() {
           </Card>
         </>
       )}
+
+      {/* Loading state */}
+      {loading && <SkeletonSpinner label="Memuat laporan..." />}
 
       {/* Empty state */}
       {!loading && tab === 'penjualan' && !penjualanData && (

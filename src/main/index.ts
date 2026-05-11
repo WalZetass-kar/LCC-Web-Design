@@ -18,6 +18,7 @@ import { existsSync } from 'fs'
 import { registerIpcHandlers } from './ipcHandlers.js'
 import { SchedulerService } from '../backend/services/scheduler.js'
 import { demoSession } from '../backend/services/demoSessionManager.js'
+import { initDatabase } from '../backend/utils/dbInit.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -106,6 +107,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Initialize database tables first
+  initDatabase()
+  
   registerIpcHandlers(ipcMain)
   
   // Start scheduler service

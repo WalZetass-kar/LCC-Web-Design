@@ -1,11 +1,13 @@
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, Package, Tag, ShoppingCart, History, Settings, Store, LogOut, Truck, X,
   Users, UserCircle, Wallet, FileText, BarChart2, Database, ShoppingBag, Activity,
-  RotateCcw, Clock, DollarSign, ClipboardCheck, Rocket, BookOpen, Calculator, Ruler
+  RotateCcw, Clock, DollarSign, ClipboardCheck, Rocket, BookOpen, Calculator, Ruler, Gift, Building2, Shield, Award, MessageCircle, Printer, Globe
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
+import { api } from '../utils/api'
 
 export const MENU_GROUPS = [
   {
@@ -24,6 +26,7 @@ export const MENU_GROUPS = [
       { to: '/satuan', icon: Ruler, label: 'Satuan', code: 'nav_barang' },
       { to: '/pembelian', icon: ShoppingBag, label: 'Pembelian', code: 'nav_pembelian' },
       { to: '/stock-opname', icon: ClipboardCheck, label: 'Stok Opname', code: 'nav_barang' },
+      { to: '/branch', icon: Building2, label: 'Cabang/Gudang', code: 'nav_branch', adminOnly: true },
     ],
   },
   {
@@ -31,6 +34,7 @@ export const MENU_GROUPS = [
     items: [
       { to: '/supplier', icon: Truck, label: 'Supplier', code: 'nav_supplier' },
       { to: '/customer', icon: UserCircle, label: 'Customer', code: 'nav_supplier' },
+      { to: '/loyalty', icon: Award, label: 'Loyalty', code: 'nav_loyalty' },
     ],
   },
   {
@@ -40,6 +44,7 @@ export const MENU_GROUPS = [
       { to: '/shifts', icon: Clock, label: 'Shift', code: 'nav_pembelian' },
       { to: '/debts', icon: DollarSign, label: 'Hutang/Piutang', code: 'nav_pembelian' },
       { to: '/returns', icon: RotateCcw, label: 'Return', code: 'nav_penjualan' },
+      { to: '/promo', icon: Gift, label: 'Promo', code: 'nav_promo' },
       { to: '/laporan', icon: BarChart2, label: 'Laporan', code: 'nav_pembelian' },
     ],
   },
@@ -48,6 +53,8 @@ export const MENU_GROUPS = [
     items: [
       { to: '/tutorials', icon: BookOpen, label: 'Tutorial', code: 'nav_tutorials' },
       { to: '/hpp', icon: Calculator, label: 'Kalkulator HPP', code: 'nav_hpp' },
+      { to: '/whatsapp', icon: MessageCircle, label: 'WhatsApp', code: 'nav_whatsapp' },
+      { to: '/print-queue', icon: Printer, label: 'Antrian Print', code: 'nav_print_queue' },
     ],
   },
   {
@@ -57,6 +64,8 @@ export const MENU_GROUPS = [
       { to: '/subscription-plans', icon: DollarSign, label: 'Paket Langganan', code: 'nav_plans', adminOnly: true },
       { to: '/activity-log', icon: Activity, label: 'Activity Log', code: 'nav_activity_log', adminOnly: true },
       { to: '/backup', icon: Database, label: 'Backup', code: 'nav_export_db', adminOnly: true },
+      { to: '/security', icon: Shield, label: 'Keamanan', code: 'nav_security', adminOnly: true },
+      { to: '/ecommerce-api', icon: Globe, label: 'E-commerce API', code: 'nav_ecommerce_api', adminOnly: true },
       { to: '/settings', icon: Settings, label: 'Pengaturan', code: 'nav_identitas' },
     ],
   },
@@ -71,6 +80,17 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { isDemo: isDemoGuard, showPricing, remainingUsage } = useDemoGuard()
+  const [permissions, setPermissions] = useState<Record<string, boolean> | null>(null)
+
+  useEffect(() => {
+    if (user?.nama_pengguna) {
+      api<Record<string, boolean>>('user:getPermissions', user.nama_pengguna).then(r => {
+        if (r.success && r.data && Object.keys(r.data).length > 0) {
+          setPermissions(r.data)
+        }
+      })
+    }
+  }, [user?.nama_pengguna])
 
   const handleLogout = () => {
     logout()
@@ -103,7 +123,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
           <div>
             <p className="font-bold text-sm text-slate-800 dark:text-white leading-tight">MediaSoft POS</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">by Ihwal</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">by Zetass</p>
           </div>
         </div>
         <button
@@ -119,6 +139,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {MENU_GROUPS.map(group => {
           const visibleItems = group.items.filter(item => {
             if (item.adminOnly && !isAdmin) return false
+            // Jika permissions sudah dimuat dan user bukan admin, cek permission
+            if (permissions && !isAdmin && item.code) {
+              // Jika code ada di permissions dan nilainya false, sembunyikan
+              if (permissions[item.code] === false) return false
+            }
             return true
           })
           if (visibleItems.length === 0) return null

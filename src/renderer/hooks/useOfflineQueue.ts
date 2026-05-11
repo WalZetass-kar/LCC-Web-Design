@@ -45,7 +45,7 @@ export function useOfflineQueue() {
 
     const handleOffline = () => {
       setIsOnline(false)
-      toast('Mode Offline: Data akan disimpan dan disinkronkan saat online', 'warning')
+      toast('Mode Offline: Data akan disimpan dan disinkronkan saat online', 'info')
     }
 
     window.addEventListener('online', handleOnline)
@@ -98,7 +98,7 @@ export function useOfflineQueue() {
     if (failedOps.length === 0) {
       toast('Semua data berhasil disinkronkan!', 'success')
     } else {
-      toast(`${failedOps.length} operasi gagal disinkronkan`, 'warning')
+      toast(`${failedOps.length} operasi gagal disinkronkan`, 'info')
     }
   }
 

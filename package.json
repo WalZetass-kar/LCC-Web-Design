@@ -1,10 +1,10 @@
 {
-  "name": "mediasoft-pos-ihwal",
+  "name": "mediasoft-pos-zetass",
   "version": "1.0.0",
-  "description": "MediaSoft POS Ihwal - Desktop Point of Sale Application",
+  "description": "MediaSoft POS Zetass - Desktop Point of Sale Application",
   "type": "module",
   "main": "dist-electron/main/index.js",
-  "author": "Ihwal",
+  "author": "Zetass",
   "license": "MIT",
   "scripts": {
     "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
@@ -69,8 +69,8 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.mediasoft.pos.ihwal",
-    "productName": "MediaSoft POS Ihwal",
+    "appId": "com.mediasoft.pos.zetass",
+    "productName": "MediaSoft POS Zetass",
     "directories": {
       "output": "release"
     },

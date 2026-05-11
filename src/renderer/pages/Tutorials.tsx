@@ -157,9 +157,32 @@ export default function Tutorials() {
     if (r.success) {
       setTutorials(r.data ?? [])
       if (!selected && (r.data ?? []).length > 0) setSelected((r.data ?? [])[0])
+      
+      // Auto-seed default tutorials if none exist
+      if ((r.data ?? []).length === 0 && isAdmin) {
+        const defaultTutorials = [
+          { title: 'Cara Menggunakan Fitur Pajak/PPN', content: '## Pengaturan Pajak/PPN\n\nFitur ini digunakan untuk mengelola persentase pajak yang akan diterapkan pada setiap transaksi.\n\n### Cara Menggunakan:\n- Buka menu Pajak dari sidebar\n- Klik tombol Tambah Pajak untuk membuat pajak baru\n- Masukkan nama pajak (contoh: PPN 10%)\n- Masukkan persentase pajak (contoh: 10)\n- Klik Simpan\n\n### Mengaktifkan Pajak:\n- Klik tombol centang pada pajak yang ingin dijadikan aktif\n- Pajak aktif akan diterapkan otomatis pada setiap transaksi di kasir' },
+          { title: 'Cara Membuat Promo dan Diskon', content: '## Promo dan Diskon\n\nFitur promo digunakan untuk membuat kode diskon yang dapat digunakan oleh pelanggan.\n\n### Jenis Promo:\n1. Persentase (%) - Diskon berupa persen\n2. Potongan Tetap (Rp) - Diskon berupa jumlah tetap\n3. Beli X Gratis Y - Beli beberapa dapat gratis\n4. Happy Hour - Promo berdasarkan waktu\n\n### Cara Membuat Promo:\n- Buka menu Promo dari sidebar\n- Klik Buat Promo\n- Isi kode promo (huruf besar, contoh: DISCOUNT20)\n- Pilih tipe promo\n- Masukkan nilai diskon\n- Tentukan minimum pembelian\n- Klik Simpan' },
+          { title: 'Mengelola Cabin dan Gudang', content: '## Cabin dan Gudang\n\nFitur ini digunakan untuk mengelola beberapa cabang toko dan gudang.\n\n### Jenis Lokasi:\n- Cabin Toko - Lokasi penjualan retail\n- Gudang - Lokasi penyimpanan stok\n\n### Cara Menambah Cabin/Gudang:\n- Buka menu Cabin/Gudang dari sidebar\n- Klik Tambah Cabin\n- Masukkan kode dan nama lokasi\n- Pilih tipe (Cabang atau Gudang)\n- Klik Simpan\n\n### Transfer Stok:\n- Klik tombol Transfer Stok\n- Pilih lokasi asal dan tujuan\n- Masukkan kode produk dan jumlah\n- Klik Transfer' },
+          { title: 'Program Loyalty dan Poin Pelanggan', content: '## Loyalty dan Poin\n\nFitur ini digunakan untuk memberikan reward kepada pelanggan tetap.\n\n### Cara Kerja:\n- Pelanggan mendapatkan poin setiap transaksi\n- 1 poin per Rp 10.000\n- 1 poin dapat ditukar dengan Rp 1.000 diskon\n\n### Tier/Loyalty Level:\n- Bronze - 0 poin (1x poin)\n- Silver - 500+ poin (1.2x poin + 2% diskon)\n- Gold - 2000+ poin (1.5x poin + 5% diskon)\n- Platinum - 5000+ poin (2x poin + 10% diskon)' },
+          { title: 'WhatsApp Notification', content: '## WhatsApp Notification\n\nFitur ini untuk mengirim notifikasi otomatis ke pelanggan via WhatsApp.\n\n### Persiapan:\n1. Daftar di fonnte.com untuk mendapatkan API Key\n2. Masukkan API Key di pengaturan\n\n### Notifikasi yang Dapat Dikirim:\n- Transaksi baru\n- Return barang\n- Stok menipis\n- Pembayaran\n\n### Cara Mengaktifkan:\n- Buka menu WhatsApp dari sidebar\n- Masukkan API Key\n- Aktifkan toggle Status\n- Pilih notifikasi yang diinginkan\n- Klik Simpan' },
+          { title: 'Antrian Print Thermal', content: '## Antrian Print\n\nFitur ini mengelola antrian print untuk printer thermal.\n\n### Cara Menggunakan:\n- Buka menu Antrian Print dari sidebar\n- Tambah pekerjaan print ke antrian\n- Klik Print Next untuk print pekerjaan berikutnya\n\n### Pengaturan:\n- Default Printer - Printer yang digunakan\n- Ukuran Kertas - 58mm atau 80mm\n- Jumlah Salinan - 1-5 copy\n- Auto Print - Print otomatis setelah ditambahkan' },
+          { title: 'E-commerce API', content: '## E-commerce API\n\nAPI untuk integrasi dengan website atau sistem lain.\n\n### Endpoint yang Tersedia:\n- GET /api/v1/products - Daftar produk\n- GET /api/v1/categories - Daftar kategori\n- POST /api/v1/orders - Buat pesanan\n- GET /api/v1/orders - Daftar pesanan\n\n### Contoh Penggunaan:\ncurl -X GET "https://api.yourpos.com/api/v1/products" -H "Authorization: Bearer YOUR_API_KEY"' },
+          { title: 'Pengaturan Keamanan Sistem', content: '## Keamanan Sistem\n\nFitur untuk mengatur keamanan aplikasi.\n\n### Yang Dapat Dikonfigurasi:\n1. Login Security - Maksimum percobaan login sebelum terkunci\n2. Session Security - Session timeout\n3. IP Whitelist - Batasi akses dari IP tertentu\n\n### Fitur Keamanan yang Aktif:\n- Rate Limiting\n- Input Validation\n- SQL Injection Protection\n- XSS Protection' },
+        ]
+        
+        for (const t of defaultTutorials) {
+          await api('tutorial:create', t)
+        }
+        // Reload after seeding
+        const r2 = await api<Tutorial[]>('tutorial:getAll')
+        if (r2.success) {
+          setTutorials(r2.data ?? [])
+        }
+      }
     }
     setLoading(false)
-  }, [selected])
+  }, [selected, isAdmin])
 
   useEffect(() => { load() }, [load])
 

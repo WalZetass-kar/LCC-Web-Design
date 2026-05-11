@@ -132,6 +132,10 @@ export class AuthController {
     rateLimiter.resetAttempts(username)
     PenggunaModel.updateLastLogin(username)
 
+    // ─── 2FA OTP LOGIC (Placeholder) ───
+    // const otp = Math.floor(100000 + Math.random() * 900000).toString()
+    // if (user.no_telp) await WhatsAppService.sendMessage({ to: user.no_telp, message: `OTP Login: ${otp}` })
+
     // Log successful login
     ActivityLogModel.create({
       username,

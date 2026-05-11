@@ -443,9 +443,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👨‍💻 Author
 
-**MediaSoft POS by Ihwal**
+**MediaSoft POS by Zetass**
 
-Developed with ❤️ by Ihwal Development Team
+Developed with ❤️ by Zetass Development Team
 
 ---
 

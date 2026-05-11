@@ -4,12 +4,14 @@ export interface Promo {
   id: number
   code: string
   name: string
-  type: 'PERCENTAGE' | 'FIXED' | 'BUY_X_GET_Y' | 'BUNDLE'
+  type: 'PERCENTAGE' | 'FIXED' | 'BUY_X_GET_Y' | 'BUNDLE' | 'HAPPY_HOUR'
   value: number
   min_purchase: number
   max_discount?: number
-  start_date: string
-  end_date: string
+  start_date?: string
+  end_date?: string
+  start_time?: string
+  end_time?: string
   usage_limit?: number
   usage_count: number
   is_active: number
@@ -32,7 +34,7 @@ export class PromoService {
       const promo = sqlite.prepare(`
         SELECT * FROM mediasoft_promos 
         WHERE code = ? AND is_active = 1
-      `).get(code) as Promo | undefined
+      `).get(code) as Promo | any
 
       if (!promo) {
         return { valid: false, discount: 0, message: 'Kode promo tidak valid' }
@@ -43,12 +45,25 @@ export class PromoService {
       const startDate = new Date(promo.start_date)
       const endDate = new Date(promo.end_date)
 
-      if (now < startDate) {
+      if (promo.start_date && now < startDate) {
         return { valid: false, discount: 0, message: 'Promo belum dimulai' }
       }
 
-      if (now > endDate) {
+      if (promo.end_date && now > endDate) {
         return { valid: false, discount: 0, message: 'Promo sudah berakhir' }
+      }
+
+      // Check Happy Hour
+      if (promo.type === 'HAPPY_HOUR' && promo.start_time && promo.end_time) {
+        const currentTime = now.getHours() * 60 + now.getMinutes()
+        const [sH, sM] = promo.start_time.split(':').map(Number)
+        const [eH, eM] = promo.end_time.split(':').map(Number)
+        const startTime = sH * 60 + sM
+        const endTime = eH * 60 + eM
+
+        if (currentTime < startTime || currentTime > endTime) {
+          return { valid: false, discount: 0, message: `Promo hanya berlaku pukul ${promo.start_time} - ${promo.end_time}` }
+        }
       }
 
       // Check usage limit
@@ -70,6 +85,7 @@ export class PromoService {
 
       switch (promo.type) {
         case 'PERCENTAGE':
+        case 'HAPPY_HOUR':
           discount = (subtotal * promo.value) / 100
           if (promo.max_discount && discount > promo.max_discount) {
             discount = promo.max_discount
@@ -83,7 +99,7 @@ export class PromoService {
         case 'BUY_X_GET_Y':
           // Conditions: { buy: 2, get: 1, product_id: 'P001' }
           if (promo.conditions) {
-            const cond = JSON.parse(promo.conditions)
+            const cond = typeof promo.conditions === 'string' ? JSON.parse(promo.conditions) : promo.conditions
             const targetItem = items.find(i => i.kd_barang === cond.product_id)
             if (targetItem && targetItem.qty >= cond.buy) {
               const freeQty = Math.floor(targetItem.qty / cond.buy) * cond.get
@@ -95,7 +111,7 @@ export class PromoService {
         case 'BUNDLE':
           // Conditions: { products: ['P001', 'P002'], discount: 50000 }
           if (promo.conditions) {
-            const cond = JSON.parse(promo.conditions)
+            const cond = typeof promo.conditions === 'string' ? JSON.parse(promo.conditions) : promo.conditions
             const hasAllProducts = cond.products.every((pid: string) =>
               items.some(i => i.kd_barang === pid)
             )

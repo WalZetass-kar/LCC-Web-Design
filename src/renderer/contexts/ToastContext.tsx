@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
-import { CheckCircle, XCircle, AlertCircle, X } from 'lucide-react'
+import { CheckCircle, XCircle, Info, X } from 'lucide-react'
 
 type ToastType = 'success' | 'error' | 'info'
 
@@ -28,7 +28,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const remove = (id: number) => setToasts(prev => prev.filter(t => t.id !== id))
 
-  const icons = { success: CheckCircle, error: XCircle, info: AlertCircle }
+  const icons = { success: CheckCircle, error: XCircle, info: Info }
   const colors = {
     success: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/40 dark:border-emerald-700 dark:text-emerald-300',
     error: 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/40 dark:border-red-700 dark:text-red-300',

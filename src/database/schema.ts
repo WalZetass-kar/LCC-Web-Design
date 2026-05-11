@@ -130,6 +130,7 @@ export const kasDrawer = sqliteTable('mediasoft_kas_drawer', {
   username: text('username').notNull(),
   modal_awal: real('modal_awal').default(0),
   total_penjualan: real('total_penjualan').default(0),
+  total_pemasukan: real('total_pemasukan').default(0),
   total_pengeluaran: real('total_pengeluaran').default(0),
   saldo_akhir: real('saldo_akhir').default(0),
   selisih: real('selisih').default(0),
@@ -231,5 +232,103 @@ export const hppCalculations = sqliteTable('mediasoft_hpp_calculations', {
   modal: real('modal').default(0),
   biaya_lain: real('biaya_lain').default(0),
   total_hpp: real('total_hpp').default(0),
+  created_at: text('created_at').notNull(),
+})
+
+// --- ADVANCED FEATURES TABLES ---
+
+export const strukSettings = sqliteTable('mediasoft_struk_settings', {
+  id: integer('id').primaryKey(),
+  printer_type: text('printer_type').default('thermal'),
+  paper_size: text('paper_size').default('58mm'), // 58mm, 80mm
+  layout_type: text('layout_type').default('classic'), // classic, modern, minimal
+  show_logo: integer('show_logo').default(1),
+  show_alamat: integer('show_alamat').default(1),
+  show_telepon: integer('show_telepon').default(1),
+  show_email: integer('show_email').default(1),
+  show_kasir: integer('show_kasir').default(1),
+  show_customer: integer('show_customer').default(1),
+  footer_text: text('footer_text').default('Terima kasih atas kunjungan Anda'),
+  qris_image: text('qris_image'),
+  qris_enabled: integer('qris_enabled').default(0),
+  updated_at: text('updated_at'),
+})
+
+export const currencies = sqliteTable('mediasoft_currencies', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  code: text('code').notNull(), // USD, EUR, IDR
+  name: text('name').notNull(),
+  symbol: text('symbol').notNull(),
+  exchange_rate: real('exchange_rate').default(1),
+  is_default: integer('is_default').default(0),
+  is_active: integer('is_active').default(1),
+  created_at: text('created_at').notNull(),
+})
+
+export const barangBatches = sqliteTable('mediasoft_barang_batches', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  kd_barang: text('kd_barang').notNull(),
+  batch_no: text('batch_no').notNull(),
+  stok: integer('stok').default(0),
+  expired_date: text('expired_date'),
+  warehouse_id: integer('warehouse_id'),
+  created_at: text('created_at').notNull(),
+})
+
+export const barangSerials = sqliteTable('mediasoft_barang_serials', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  kd_barang: text('kd_barang').notNull(),
+  serial_no: text('serial_no').notNull(),
+  status: text('status').default('AVAILABLE'), // AVAILABLE, SOLD, RETURNED
+  warehouse_id: integer('warehouse_id'),
+  created_at: text('created_at').notNull(),
+})
+
+export const warehouses = sqliteTable('mediasoft_warehouses', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  location: text('location'),
+  is_active: integer('is_active').default(1),
+  created_at: text('created_at').notNull(),
+})
+
+export const stockTransfers = sqliteTable('mediasoft_stock_transfers', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  kd_barang: text('kd_barang').notNull(),
+  from_warehouse_id: integer('from_warehouse_id').notNull(),
+  to_warehouse_id: integer('to_warehouse_id').notNull(),
+  qty: integer('qty').default(0),
+  username: text('username').notNull(),
+  created_at: text('created_at').notNull(),
+})
+
+export const promos = sqliteTable('mediasoft_promos', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  code: text('code').notNull(),
+  name: text('name').notNull(),
+  type: text('type').notNull(), // PERCENTAGE, FIXED, BUY_X_GET_Y, BUNDLE, HAPPY_HOUR
+  value: real('value').default(0),
+  min_purchase: real('min_purchase').default(0),
+  max_discount: real('max_discount'),
+  start_date: text('start_date'),
+  end_date: text('end_date'),
+  start_time: text('start_time'), // For happy hour
+  end_time: text('end_time'), // For happy hour
+  usage_limit: integer('usage_limit'),
+  usage_count: integer('usage_count').default(0),
+  is_active: integer('is_active').default(1),
+  conditions: text('conditions'), // JSON
+  created_at: text('created_at').notNull(),
+})
+
+export const auditTrail = sqliteTable('mediasoft_audit_trail', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  username: text('username').notNull(),
+  action: text('action').notNull(),
+  table_name: text('table_name'),
+  record_id: text('record_id'),
+  old_values: text('old_values'), // JSON
+  new_values: text('new_values'), // JSON
+  ip_address: text('ip_address'),
   created_at: text('created_at').notNull(),
 })
