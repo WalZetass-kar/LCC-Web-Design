@@ -13,14 +13,14 @@ function renderContent(text: string) {
   const lines = text.split('\n')
   return lines.map((line, i) => {
     if (line.startsWith('## '))
-      return <h2 key={i} className="text-lg font-bold text-slate-800 dark:text-white mt-6 mb-3 first:mt-0">{line.slice(3)}</h2>
+      return <h2 key={i} className="text-lg font-bold text-slate-800 dark:text-white mt-6 mb-3 first:mt-0">{renderInline(line.slice(3))}</h2>
     if (line.startsWith('### '))
-      return <h3 key={i} className="text-base font-semibold text-slate-700 dark:text-slate-200 mt-4 mb-2">{line.slice(4)}</h3>
+      return <h3 key={i} className="text-base font-semibold text-slate-700 dark:text-slate-200 mt-4 mb-2">{renderInline(line.slice(4))}</h3>
     if (line.startsWith('- ') || line.startsWith('* '))
       return (
         <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300 ml-4 mb-1.5">
           <span className="mt-2 w-1.5 h-1.5 rounded-full bg-primary-500 shrink-0" />
-          <span dangerouslySetInnerHTML={{ __html: boldify(line.slice(2)) }} />
+          <span>{renderInline(line.slice(2))}</span>
         </li>
       )
     if (/^\d+\./.test(line)) {
@@ -28,23 +28,30 @@ function renderContent(text: string) {
       return (
         <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300 ml-4 mb-1.5">
           <span className="shrink-0 font-semibold text-primary-600 dark:text-primary-500 min-w-[1.5rem]">{num}.</span>
-          <span dangerouslySetInnerHTML={{ __html: boldify(rest.join('. ')) }} />
+          <span>{renderInline(rest.join('. '))}</span>
         </li>
       )
     }
     if (line.trim() === '') return <div key={i} className="h-3" />
     return (
-      <p key={i} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-2"
-        dangerouslySetInnerHTML={{ __html: boldify(line) }}
-      />
+      <p key={i} className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-2">
+        {renderInline(line)}
+      </p>
     )
   })
 }
 
-function boldify(text: string) {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-slate-800 dark:text-white">$1</strong>')
-    .replace(/`(.+?)`/g, '<code class="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-xs font-mono text-primary-600 dark:text-primary-400">$1</code>')
+function renderInline(text: string) {
+  const parts = text.split(/(\*\*.+?\*\*|`.+?`)/g)
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index} className="font-semibold text-slate-800 dark:text-white">{part.slice(2, -2)}</strong>
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={index} className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-xs font-mono text-primary-600 dark:text-primary-400">{part.slice(1, -1)}</code>
+    }
+    return part
+  })
 }
 
 function formatDate(iso: string) {

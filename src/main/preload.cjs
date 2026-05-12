@@ -24,6 +24,7 @@ const ALLOWED_CHANNELS = new Set([
   // Auth
   'auth:login',
   'auth:checkIdentitas',
+  'auth:restoreSession',
   'auth:logout',
 
   // Demo status
@@ -74,6 +75,8 @@ const ALLOWED_CHANNELS = new Set([
   'user:resetPassword',
   'user:delete',
   'user:toggleStatus',
+  'user:block',
+  'user:extendAccess',
   'user:getPermissions',
   'user:savePermissions',
 
@@ -158,6 +161,7 @@ const ALLOWED_CHANNELS = new Set([
   // Scheduler
   'scheduler:runStokCheck',
   'scheduler:runExpiredCheck',
+  'scheduler:runDebtCheck',
   'scheduler:runBackup',
   'scheduler:runCleanLogs',
 
@@ -172,6 +176,9 @@ const ALLOWED_CHANNELS = new Set([
   'payment:create',
   'payment:update',
   'payment:delete',
+  'payment:createQris',
+  'payment:checkStatus',
+  'payment:cancelQris',
 
   // Tax
   'tax:getActive',

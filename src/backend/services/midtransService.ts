@@ -138,6 +138,22 @@ export class MidtransService {
         return { success: false, message: 'Midtrans not initialized' }
       }
 
+      const itemDetails = request.items.map(item => ({
+        id: item.id,
+        price: item.price,
+        quantity: item.quantity,
+        name: item.name,
+      }))
+      const itemTotal = itemDetails.reduce((sum, item) => sum + item.price * item.quantity, 0)
+      if (itemTotal !== request.amount) {
+        itemDetails.push({
+          id: 'ADJUSTMENT',
+          price: request.amount - itemTotal,
+          quantity: 1,
+          name: 'Penyesuaian total',
+        })
+      }
+
       const parameter = {
         payment_type: 'qris',
         transaction_details: {
@@ -149,15 +165,20 @@ export class MidtransService {
           email: request.customerEmail || 'customer@example.com',
           phone: request.customerPhone || '08123456789',
         },
+        item_details: itemDetails,
       }
 
       const charge = await this.core.charge(parameter)
+      const qrAction = charge.actions?.find((action: any) => action.name === 'generate-qr-code')
       
       return {
         success: true,
         data: {
-          qrString: charge.actions?.[0]?.url || charge.qr_string,
+          orderId: charge.order_id,
+          qrImageUrl: qrAction?.url || charge.actions?.[0]?.url,
+          qrString: charge.qr_string,
           transactionId: charge.transaction_id,
+          transactionStatus: charge.transaction_status,
         },
       }
     } catch (error: any) {

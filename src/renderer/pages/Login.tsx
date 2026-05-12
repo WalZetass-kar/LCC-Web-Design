@@ -35,12 +35,14 @@ export default function Login() {
     // Check auth and db status
     const checkStatus = async () => {
       try {
-        // Check if remembered
+        // Check if remembered. Keep only the username; never restore a saved password.
         const remembered = localStorage.getItem('rememberMe')
         if (remembered) {
-          const { username: savedUser, password: savedPass } = JSON.parse(remembered)
-          setUsername(savedUser)
-          setPassword(savedPass)
+          const { username: savedUser } = JSON.parse(remembered)
+          if (savedUser) {
+            setUsername(savedUser)
+            localStorage.setItem('rememberMe', JSON.stringify({ username: savedUser }))
+          }
           setRememberMe(true)
         }
         
@@ -91,9 +93,9 @@ export default function Login() {
         return
       }
 
-      // Save credentials if remember me is checked
+      // Save only the username. Passwords must not be persisted in renderer storage.
       if (rememberMe) {
-        localStorage.setItem('rememberMe', JSON.stringify({ username, password }))
+        localStorage.setItem('rememberMe', JSON.stringify({ username }))
       } else {
         localStorage.removeItem('rememberMe')
       }
@@ -290,7 +292,7 @@ export default function Login() {
                       onChange={e => setRememberMe(e.target.checked)}
                       className="w-3 h-3 rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500/40"
                     />
-                    Ingat Saya
+                    Ingat Username
                   </label>
                   <button
                     type="button"

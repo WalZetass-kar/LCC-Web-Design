@@ -52,7 +52,7 @@ function RequireRole({ children, minRole }: { children: React.ReactNode; minRole
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
   
-  // Demo users can ACCESS all pages (read-only) — security is in IPC layer
+  // Demo users can ACCESS role-gated operational pages (read-only) — security is in IPC layer
   if (user.hak_akses === 'demo') return <>{children}</>
   
   // Hierarchy: developer > superadmin > admin > operator > kasir
@@ -69,8 +69,7 @@ function RequireRole({ children, minRole }: { children: React.ReactNode; minRole
 function RequireExactRoles({ children, allowedRoles }: { children: React.ReactNode; allowedRoles: string[] }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
-  // Demo users can ACCESS all pages (read-only) — security is in IPC layer
-  if (user.hak_akses === 'demo') return <>{children}</>
+  if (user.hak_akses === 'demo') return <Navigate to="/" replace />
   if (!allowedRoles.includes(user.hak_akses ?? '')) return <Navigate to="/" replace />
   return <>{children}</>
 }

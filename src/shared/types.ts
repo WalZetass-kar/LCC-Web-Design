@@ -35,10 +35,12 @@ export interface Penjualan {
   username_transaksi: string | null
   total_qty: number | null
   sub_total: number | null
+  discount_amount?: number | null
   pajak: number | null
   yang_dibayar: number | null
   kembalian: number | null
   jenis_pembayaran: string | null
+  shift_id?: number | null
   kd_customer: string | null
 }
 
@@ -205,6 +207,7 @@ export interface Pengguna {
   status_user: string | null
   terakhir_login: string | null
   tgl_wkt_simpan: string | null
+  access_expires_at: string | null
 }
 
 export interface ActivityLog {
@@ -238,6 +241,8 @@ export interface UserSession {
   nama_pengguna: string
   nama_lengkap: string | null
   hak_akses: string | null
+  access_expires_at?: string | null
+  access_days_remaining?: number | null
 }
 
 export interface SubscriptionPlan {
@@ -280,6 +285,9 @@ declare global {
 
 export interface StrukSettings {
   id: number
+  printer_type: string
+  paper_size: string
+  layout_type: string
   show_logo: number
   show_alamat: number
   show_telepon: number

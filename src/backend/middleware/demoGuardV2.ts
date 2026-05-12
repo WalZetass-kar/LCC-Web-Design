@@ -23,6 +23,11 @@ export const DEMO_BLOCKED_RESPONSE: IpcResponse = {
   message: '🔒 Mode Demo (READ ONLY): Aksi ini tidak diizinkan. Silakan login dengan akun biasa untuk menggunakan fitur penuh.',
 }
 
+const ACCESS_DENIED_RESPONSE: IpcResponse = {
+  success: false,
+  message: 'Akses ditolak. Akun Anda tidak memiliki izin untuk menjalankan aksi ini.',
+}
+
 /**
  * EXHAUSTIVE list of all mutation IPC channels.
  * If a channel is in this set, it is BLOCKED for demo users.
@@ -33,11 +38,17 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   'barang:create',
   'barang:update',
   'barang:delete',
+  'barang:bulkImport',
 
   // Kategori
   'kategori:create',
   'kategori:update',
   'kategori:delete',
+
+  // Satuan
+  'satuan:create',
+  'satuan:update',
+  'satuan:delete',
 
   // Penjualan (Sales/Transactions)
   'penjualan:create',
@@ -67,6 +78,8 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   'user:resetPassword',
   'user:delete',
   'user:toggleStatus',
+  'user:block',
+  'user:extendAccess',
   'user:savePermissions',
 
   // Customer
@@ -119,10 +132,14 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   'payment:create',
   'payment:update',
   'payment:delete',
+  'payment:createQris',
+  'payment:cancelQris',
 
   // Tax
   'tax:setActive',
   'tax:create',
+  'tax:update',
+  'tax:delete',
 
   // Returns
   'return:create',
@@ -159,40 +176,62 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   'tutorial:create',
   'tutorial:update',
   'tutorial:delete',
-// HPP Calculator (delete own record)
-'hpp:delete',
 
-// Advanced Features (Mutations)
-'currency:create',
-'currency:update',
-'currency:delete',
-'currency:setDefault',
+  // Subscription plans
+  'plan:create',
+  'plan:update',
+  'plan:deactivate',
 
-'warehouse:create',
-'warehouse:update',
-'warehouse:delete',
+  // HPP Calculator (delete own record)
+  'hpp:delete',
 
-'inventory:addBatch',
-'inventory:updateBatch',
-'inventory:deleteBatch',
-'inventory:addSerial',
-'inventory:updateSerial',
-'inventory:deleteSerial',
-'inventory:transfer',
+  // Advanced Features (Mutations)
+  'currency:create',
+  'currency:update',
+  'currency:delete',
+  'currency:setDefault',
 
-'promo:create',
-'promo:update',
-'promo:delete',
-'promo:toggleStatus',
+  'warehouse:create',
+  'warehouse:update',
+  'warehouse:delete',
 
-'audit:clear',
-'audit:deleteOld',
+  'inventory:addBatch',
+  'inventory:updateBatch',
+  'inventory:deleteBatch',
+  'inventory:addSerial',
+  'inventory:updateSerial',
+  'inventory:deleteSerial',
+  'inventory:transfer',
 
-'mobile:processScan',
+  'promo:create',
+  'promo:update',
+  'promo:delete',
+  'promo:toggleStatus',
+  'promo:apply',
 
-// Note: strukSettings channels have custom role-based access control
+  'branch:create',
+  'branch:update',
+  'branch:delete',
+  'branch:transferStock',
 
-// See shouldBlockChannel() function
+  'loyalty:redeemPoints',
+  'loyalty:createTier',
+  'loyalty:updateTier',
+  'loyalty:deleteTier',
+
+  'strukSettings:update',
+  'strukSettings:uploadQris',
+  'strukSettings:removeQris',
+
+  'audit:log',
+  'audit:clear',
+  'audit:deleteOld',
+
+  'mobile:processScan',
+
+  // Note: strukSettings channels have custom role-based access control
+
+  // See shouldBlockChannel() function
 ])
 
 
@@ -315,6 +354,7 @@ const READ_CHANNELS: Set<string> = new Set([
   // Scheduler checks (read-only triggers)
   'scheduler:runStokCheck',
   'scheduler:runExpiredCheck',
+  'scheduler:runDebtCheck',
 
   // Barcode
   'barcode:search',
@@ -322,6 +362,7 @@ const READ_CHANNELS: Set<string> = new Set([
 
   // Payment Methods
   'payment:getAll',
+  'payment:checkStatus',
 
   // Tax
   'tax:getActive',
@@ -358,6 +399,23 @@ const READ_CHANNELS: Set<string> = new Set([
   'plan:getAll',
   'plan:getActive',
 
+  // Branch / multi-outlet
+  'branch:getAll',
+  'branch:getActive',
+  'branch:getWarehouses',
+  'branch:getById',
+
+  // Loyalty
+  'loyalty:getTiers',
+  'loyalty:getCustomerTier',
+  'loyalty:calculatePoints',
+
+  // Promo
+  'promo:validate',
+
+  // Mobile app
+  'mobile:getSummary',
+
   // Tutorials (all users can read)
   'tutorial:getAll',
   'tutorial:getById',
@@ -370,6 +428,55 @@ const READ_CHANNELS: Set<string> = new Set([
   // Struk Settings (all users can read)
   'strukSettings:get',
 ])
+
+const ADMIN_ROLES = new Set(['developer', 'superadmin'])
+
+const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
+  // User administration
+  'user:getAll',
+  'user:create',
+  'user:update',
+  'user:resetPassword',
+  'user:delete',
+  'user:toggleStatus',
+  'user:block',
+  'user:extendAccess',
+  'user:savePermissions',
+
+  // App administration
+  'backup:getAll',
+  'backup:create',
+  'backup:restore',
+  'backup:delete',
+  'backup:download',
+  'backup:import',
+  'activityLog:getAll',
+  'activityLog:getByUsername',
+  'activityLog:getByModul',
+  'activityLog:search',
+  'activityLog:delete',
+  'activityLog:deleteOldLogs',
+  'security:get',
+  'security:save',
+  'ecommerce:get',
+  'ecommerce:save',
+  'system:resetData',
+
+  // Commercial/admin setup
+  'plan:getAll',
+  'plan:create',
+  'plan:update',
+  'plan:deactivate',
+
+  // Audit maintenance
+  'audit:getAll',
+  'audit:clear',
+  'audit:deleteOld',
+])
+
+function canAccessAdminChannel(role: string | null): boolean {
+  return role !== null && ADMIN_ROLES.has(role)
+}
 
 
 /**
@@ -403,7 +510,12 @@ export function isMutationChannel(channel: string): boolean {
  */
 export function shouldBlockChannel(channel: string): boolean {
   const role = demoSession.getRole()
-  
+
+  // Admin-only channels are blocked for every non-privileged role, including demo.
+  if (ADMIN_ONLY_CHANNELS.has(channel)) {
+    return !canAccessAdminChannel(role)
+  }
+
   // Demo users blocked from all mutations
   if (demoSession.isDemoMode()) {
     return isMutationChannel(channel)
@@ -450,10 +562,13 @@ export function withDemoGuard<T extends (...args: any[]) => any>(
   const wrapped = (async (...args: any[]) => {
     // Check if this channel should be blocked
     if (shouldBlockChannel(channel)) {
-      // Log the violation
-      demoSession.logViolation(channel, args.slice(1)) // Skip IPC event arg
-      
-      return { ...DEMO_BLOCKED_RESPONSE }
+      if (demoSession.isDemoMode()) {
+        demoSession.logViolation(channel, args.slice(1)) // Skip IPC event arg
+        return { ...DEMO_BLOCKED_RESPONSE }
+      }
+
+      console.warn(`🚫 ACCESS DENIED: channel="${channel}" user="${demoSession.getUsername()}" role="${demoSession.getRole()}"`)
+      return { ...ACCESS_DENIED_RESPONSE }
     }
 
     // Execute the original handler

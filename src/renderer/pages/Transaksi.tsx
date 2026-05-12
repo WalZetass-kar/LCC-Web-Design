@@ -14,6 +14,35 @@ import type { Barang, CartItem, Customer, Identitas } from '../../shared/types'
 import Struk from '../components/Struk'
 import { useReactToPrint } from 'react-to-print'
 
+interface SalePayload {
+  username: string
+  items: CartItem[]
+  yang_dibayar: number
+  jenis_pembayaran: 'TUNAI' | 'TRANSFER' | 'QRIS'
+  kd_customer?: string
+  pajak: number
+  diskon_promo: number
+  kode_promo?: string
+  shift_id?: number
+}
+
+interface QrisPayment {
+  provider?: 'static' | 'midtrans'
+  orderId: string
+  qrImageUrl?: string
+  qrString?: string
+  transactionId?: string
+  transactionStatus?: string
+}
+
+interface QrisStatus {
+  paid: boolean
+  failed: boolean
+  pending: boolean
+  transactionStatus?: string
+  fraudStatus?: string
+}
+
 export default function Transaksi() {
   const toast = useToast()
   const { user } = useAuth()
@@ -27,6 +56,14 @@ export default function Transaksi() {
   const [lastKd, setLastKd] = useState<string | null>(null)
   const [showStruk, setShowStruk] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showQris, setShowQris] = useState(false)
+  const [qrisPayment, setQrisPayment] = useState<QrisPayment | null>(null)
+  const [qrisStatus, setQrisStatus] = useState('Menyiapkan QRIS...')
+  const [qrisChecking, setQrisChecking] = useState(false)
+  const [qrisCompleting, setQrisCompleting] = useState(false)
+  const pendingQrisPayloadRef = useRef<SalePayload | null>(null)
+  const qrisCheckingRef = useRef(false)
+  const qrisCompletingRef = useRef(false)
   const searchRef = useRef<HTMLInputElement>(null)
   const strukRef = useRef<HTMLDivElement>(null)
 
@@ -63,10 +100,10 @@ export default function Transaksi() {
   useEffect(() => {
     api<Customer[]>('customer:getAll').then(r => { if (r.success) setCustomers(r.data ?? []) })
     api<Identitas>('identitas:get').then(r => { if (r.success && r.data) setPajakPersen(r.data.pajak_persen ?? 0) })
-    if (user?.id) {
-      api<any>('shift:getCurrent', user.id).then(r => { if (r.success && r.data) setActiveShiftId(r.data.id) })
+    if (user?.nama_pengguna) {
+      api<any>('shift:getCurrent', user.nama_pengguna).then(r => { if (r.success && r.data) setActiveShiftId(r.data.id) })
     }
-  }, [user?.id])
+  }, [user?.nama_pengguna])
 
   // Close customer dropdown on outside click
   useEffect(() => {
@@ -99,7 +136,7 @@ export default function Transaksi() {
       // F5: Process payment
       if (e.key === 'F5') {
         e.preventDefault()
-        if (cart.length && bayar) handleBayar()
+        if (cart.length && (jenisBayar === 'QRIS' || bayar)) handleBayar()
         return
       }
 
@@ -143,7 +180,7 @@ export default function Transaksi() {
       document.removeEventListener('keydown', handleKeyDown)
       if (barcodeTimeoutRef.current) clearTimeout(barcodeTimeoutRef.current)
     }
-  }, [products, cart.length, bayar])
+  }, [products, cart.length, bayar, jenisBayar])
 
   const filteredCustomers = customers.filter(c =>
     c.status === 'Aktif' &&
@@ -204,8 +241,17 @@ export default function Transaksi() {
 
   const pajakAmount = Math.round(subTotal * pajakPersen / 100)
   const totalBayar = subTotal + pajakAmount - promoDiskon
-  const kembalian = (parseFloat(bayar) || 0) - totalBayar
+  const paidAmount = jenisBayar === 'QRIS' ? totalBayar : (parseFloat(bayar) || 0)
+  const kembalian = paidAmount - totalBayar
   const poinEarned = selectedCustomer ? Math.floor(subTotal / 10000) : 0
+  const qrisCanPay = Boolean(cart.length && totalBayar > 0)
+  const isStaticQrisPayment = qrisPayment?.provider === 'static'
+
+  useEffect(() => {
+    if (jenisBayar === 'QRIS') {
+      setBayar(totalBayar > 0 ? String(totalBayar) : '')
+    }
+  }, [jenisBayar, totalBayar])
 
   const applyPromo = async () => {
     if (!promoCode.trim()) return
@@ -233,29 +279,24 @@ export default function Transaksi() {
 
   const handlePrint = useReactToPrint({ content: () => strukRef.current })
 
-  const handleBayar = async () => {
-    if (!cart.length) return toast('Keranjang kosong', 'error')
-    if ((parseFloat(bayar) || 0) < totalBayar) return toast('Jumlah bayar kurang', 'error')
-    // Warn demo users approaching limit
-    if (isDemo && isOverLimit) {
-      toast('Batas transaksi demo tercapai. Upgrade untuk melanjutkan.', 'error')
-      return
-    }
-    setLoading(true)
+  const buildSalePayload = (paymentType: 'TUNAI' | 'TRANSFER' | 'QRIS', amount: number): SalePayload => ({
+    username: user?.nama_pengguna ?? 'KASIR',
+    items: cart.map(item => ({ ...item })),
+    yang_dibayar: amount,
+    jenis_pembayaran: paymentType,
+    kd_customer: selectedCustomer?.kd_customer,
+    pajak: pajakAmount,
+    diskon_promo: promoDiskon,
+    kode_promo: promoCode || undefined,
+    shift_id: activeShiftId ?? undefined,
+  })
+
+  const completeSale = useCallback(async (payload: SalePayload) => {
     const r = await api<{ kd_transaksi: string }>('penjualan:create', {
-      username: user?.nama_pengguna ?? 'KASIR',
-      items: cart,
-      yang_dibayar: parseFloat(bayar),
-      jenis_pembayaran: jenisBayar,
-      kd_customer: selectedCustomer?.kd_customer,
-      pajak: pajakAmount,
-      diskon_promo: promoDiskon,
-      kode_promo: promoCode || undefined,
-      shift_id: activeShiftId ?? undefined,
+      ...payload,
     })
-    setLoading(false)
     if (r.success) {
-      if (promoCode) await api('promo:apply', promoCode.toUpperCase())
+      if (payload.kode_promo) await api('promo:apply', payload.kode_promo.toUpperCase())
       setLastKd(r.kd_transaksi ?? null)
       toast(r.message as string)
       setShowStruk(true)
@@ -264,15 +305,185 @@ export default function Transaksi() {
       if (isDemo && remainingUsage <= 3 && remainingUsage > 0) {
         toast(`⚠️ Sisa ${remainingUsage - 1} transaksi demo`, 'error')
       }
+      return true
     } else {
       toast(r.message as string, 'error')
+      return false
     }
+  }, [isDemo, remainingUsage, toast, trackUsage])
+
+  const createQrisPayment = async () => {
+    const payload = buildSalePayload('QRIS', totalBayar)
+    const qrisItems = cart.map(item => {
+      const disc = (item.harga_jual * item.disc) / 100
+      return {
+        id: item.kd_barang,
+        name: item.nama_barang,
+        price: item.harga_jual - disc,
+        quantity: item.qty,
+      }
+    })
+    if (pajakAmount > 0) {
+      qrisItems.push({
+        id: 'PPN',
+        name: `PPN ${pajakPersen}%`,
+        price: pajakAmount,
+        quantity: 1,
+      })
+    }
+    if (promoDiskon > 0) {
+      qrisItems.push({
+        id: 'PROMO',
+        name: promoCode ? `Diskon ${promoCode}` : 'Diskon promo',
+        price: -promoDiskon,
+        quantity: 1,
+      })
+    }
+
+    pendingQrisPayloadRef.current = payload
+    setBayar(String(totalBayar))
+    setQrisStatus('Menyiapkan QRIS...')
+    setQrisPayment(null)
+    setShowQris(true)
+
+    const r = await api<QrisPayment>('payment:createQris', {
+      amount: totalBayar,
+      customerName: selectedCustomer?.nama_customer ?? 'Customer POS',
+      customerEmail: selectedCustomer?.email ?? undefined,
+      customerPhone: selectedCustomer?.no_telp ?? undefined,
+      items: qrisItems,
+    })
+
+    if (r.success && r.data) {
+      setQrisPayment(r.data)
+      setQrisStatus(
+        r.data.provider === 'static'
+          ? 'Scan QRIS, lalu tekan Konfirmasi Dibayar setelah pembayaran diterima.'
+          : 'Menunggu pembayaran dari pelanggan...'
+      )
+    } else {
+      pendingQrisPayloadRef.current = null
+      setShowQris(false)
+      toast(r.message as string, 'error')
+    }
+  }
+
+  const completeQrisSale = useCallback(async () => {
+    const payload = pendingQrisPayloadRef.current
+    if (!payload || qrisCompletingRef.current) return
+
+    qrisCompletingRef.current = true
+    setQrisCompleting(true)
+    setQrisStatus('Pembayaran diterima. Menyimpan transaksi...')
+    let saved = false
+    try {
+      saved = await completeSale(payload)
+    } finally {
+      qrisCompletingRef.current = false
+      setQrisCompleting(false)
+    }
+
+    if (saved) {
+      pendingQrisPayloadRef.current = null
+      setShowQris(false)
+      setQrisPayment(null)
+    }
+  }, [completeSale])
+
+  const checkQrisStatus = useCallback(async () => {
+    if (!qrisPayment?.orderId || qrisCheckingRef.current || qrisCompletingRef.current) return
+
+    if (qrisPayment.provider === 'static') {
+      setQrisStatus('QRIS ini memakai gambar upload. Konfirmasi pembayaran secara manual setelah dana diterima.')
+      return
+    }
+
+    qrisCheckingRef.current = true
+    setQrisChecking(true)
+    try {
+      const r = await api<QrisStatus>('payment:checkStatus', qrisPayment.orderId)
+
+      if (!r.success) {
+        setQrisStatus(r.message ?? 'Gagal mengecek status pembayaran')
+        return
+      }
+
+      if (r.data?.paid) {
+        await completeQrisSale()
+        return
+      }
+
+      if (r.data?.failed) {
+        pendingQrisPayloadRef.current = null
+        setQrisStatus('Pembayaran QRIS gagal, dibatalkan, atau kedaluwarsa.')
+        return
+      }
+
+      setQrisStatus('Menunggu pembayaran dari pelanggan...')
+    } finally {
+      qrisCheckingRef.current = false
+      setQrisChecking(false)
+    }
+  }, [completeQrisSale, qrisPayment?.orderId, qrisPayment?.provider])
+
+  useEffect(() => {
+    if (!showQris || !qrisPayment?.orderId || qrisCompleting || qrisPayment.provider === 'static') return
+
+    const interval = setInterval(() => {
+      checkQrisStatus()
+    }, 3000)
+
+    checkQrisStatus()
+    return () => clearInterval(interval)
+  }, [checkQrisStatus, qrisCompleting, qrisPayment?.orderId, qrisPayment?.provider, showQris])
+
+  const cancelQrisPayment = async () => {
+    const orderId = qrisPayment?.orderId
+    const provider = qrisPayment?.provider
+    pendingQrisPayloadRef.current = null
+    qrisCheckingRef.current = false
+    qrisCompletingRef.current = false
+    setShowQris(false)
+    setQrisPayment(null)
+    setQrisChecking(false)
+    setQrisCompleting(false)
+    setQrisStatus('Menyiapkan QRIS...')
+    if (orderId && provider !== 'static') {
+      await api('payment:cancelQris', orderId)
+    }
+  }
+
+  const handleBayar = async () => {
+    if (!cart.length) return toast('Keranjang kosong', 'error')
+    if (jenisBayar !== 'QRIS' && (parseFloat(bayar) || 0) < totalBayar) return toast('Jumlah bayar kurang', 'error')
+    // Warn demo users approaching limit
+    if (isDemo && isOverLimit) {
+      toast('Batas transaksi demo tercapai. Upgrade untuk melanjutkan.', 'error')
+      return
+    }
+    setLoading(true)
+    if (jenisBayar === 'QRIS') {
+      await createQrisPayment()
+      setLoading(false)
+      return
+    }
+
+    await completeSale(buildSalePayload(jenisBayar, parseFloat(bayar)))
+    setLoading(false)
   }
 
   const resetTransaksi = () => {
     setCart([])
     setBayar('')
     setShowStruk(false)
+    setShowQris(false)
+    setQrisPayment(null)
+    setQrisChecking(false)
+    setQrisCompleting(false)
+    setQrisStatus('Menyiapkan QRIS...')
+    pendingQrisPayloadRef.current = null
+    qrisCheckingRef.current = false
+    qrisCompletingRef.current = false
     setLastKd(null)
     setSelectedCustomer(null)
     setCustomerSearch('')
@@ -284,21 +495,27 @@ export default function Transaksi() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-8rem)] p-4">
+    <div className="flex min-h-[calc(100vh-7rem)] flex-col gap-4 lg:h-[calc(100vh-7rem)] lg:min-h-[620px] lg:flex-row">
       {/* Left: Product Search */}
-      <div className="flex-1 flex flex-col gap-3 min-w-0 bg-white dark:bg-slate-800 rounded-xl p-4">
-        <div className="flex items-center gap-2 text-[10px] text-slate-400 mb-2">
-          <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-mono">F1</kbd> Cari
-          <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-mono">F2</kbd> Bayar
-          <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-mono">F5</kbd> Proses
-          <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-mono">Esc</kbd> Reset
+      <div className="flex min-w-0 flex-1 flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-base font-bold text-slate-800 dark:text-slate-100">Produk</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{filtered.length} item cocok</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
+            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">F1</kbd> Cari
+            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">F2</kbd> Bayar
+            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">F5</kbd> Proses
+            <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">Esc</kbd> Reset
+          </div>
         </div>
         <Input ref={searchRef} placeholder="Cari produk (Enter untuk tambah)..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={handleSearchKey} icon={<Search size={14} />} />
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {filtered.slice(0, 50).map(p => (
-              <button key={p.kd_barang} onClick={() => addToCart(p)} disabled={(p.stok ?? 0) <= 0} className={`p-3 rounded-xl border-2 text-left transition-all hover:border-primary-400 active:scale-95 ${(p.stok ?? 0) <= 0 ? 'opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-600' : 'border-slate-200 dark:border-slate-700 hover:shadow-lg'}`}>
-                <div className="w-full aspect-square rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center mb-2 overflow-hidden">
+              <button key={p.kd_barang} onClick={() => addToCart(p)} disabled={(p.stok ?? 0) <= 0} className={`rounded-lg border p-2.5 text-left transition-all hover:border-primary-400 hover:bg-slate-50 active:scale-[0.99] dark:hover:bg-slate-800 ${(p.stok ?? 0) <= 0 ? 'cursor-not-allowed border-slate-200 opacity-50 dark:border-slate-700' : 'border-slate-200 dark:border-slate-700'}`}>
+                <div className="mb-2 flex aspect-square w-full items-center justify-center overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800">
                   {p.foto_barang ? (
                     <img src={p.foto_barang} alt={p.nama_barang ?? ''} className="w-full h-full object-cover" />
                   ) : (
@@ -321,12 +538,12 @@ export default function Transaksi() {
       </div>
 
       {/* Right: Cart + Payment */}
-      <div className="w-full lg:w-96 flex flex-col gap-3 shrink-0 bg-white dark:bg-slate-800 rounded-xl p-4">
+      <div className="flex w-full shrink-0 flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 lg:w-[24rem]">
         {/* Customer selector */}
         <div ref={customerRef} className="relative">
           <div
             onClick={() => setShowCustomerDrop(v => !v)}
-            className="px-3 py-2.5 flex items-center gap-2 cursor-pointer border border-slate-200 dark:border-slate-600 rounded-lg hover:border-primary-400 transition-colors bg-slate-50 dark:bg-slate-700"
+            className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 transition-colors hover:border-primary-400 dark:border-slate-700 dark:bg-slate-800"
           >
             <UserCircle size={18} className={selectedCustomer ? 'text-primary-500' : 'text-slate-400'} />
             <span className={`flex-1 text-sm truncate ${selectedCustomer ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-400'}`}>
@@ -339,14 +556,14 @@ export default function Transaksi() {
             )}
           </div>
           {showCustomerDrop && (
-            <div className="absolute top-full left-0 right-0 mt-1 border border-slate-200 dark:border-slate-600 shadow-xl rounded-xl overflow-hidden z-20 bg-white dark:bg-slate-800">
+            <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
               <div className="p-2 border-b border-slate-100 dark:border-slate-700">
                 <input
                   autoFocus
                   placeholder="Cari nama / no. telp..."
                   value={customerSearch}
                   onChange={e => setCustomerSearch(e.target.value)}
-                  className="w-full text-sm px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-200 outline-none border-0"
+                  className="w-full rounded-lg border-0 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none dark:bg-slate-800 dark:text-slate-200"
                 />
               </div>
               <div className="max-h-48 overflow-y-auto">
@@ -388,17 +605,17 @@ export default function Transaksi() {
               const disc = (item.harga_jual * item.disc) / 100
               const total = (item.harga_jual - disc) * item.qty
               return (
-                <div key={item.kd_barang} className="flex items-center gap-2 p-2 rounded-xl bg-slate-50/80 dark:bg-slate-700/50">
+                <div key={item.kd_barang} className="flex items-center gap-2 rounded-lg bg-slate-50/80 p-2 dark:bg-slate-800">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{item.nama_barang}</p>
                     <p className="text-xs text-slate-400">{formatRupiah(item.harga_jual)}{item.disc > 0 ? ` -${item.disc}%` : ''}</p>
                     <p className="text-xs font-semibold text-primary-600 dark:text-primary-400">{formatRupiah(total)}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => updateQty(item.kd_barang, -1)} className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-600 flex items-center justify-center hover:bg-primary-100 transition-colors"><Minus size={10} /></button>
+                    <button onClick={() => updateQty(item.kd_barang, -1)} className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-200 transition-colors hover:bg-primary-100 dark:bg-slate-700"><Minus size={10} /></button>
                     <span className="w-6 text-center text-xs font-bold">{item.qty}</span>
-                    <button onClick={() => updateQty(item.kd_barang, 1)} className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-600 flex items-center justify-center hover:bg-primary-100 transition-colors"><Plus size={10} /></button>
-                    <button onClick={() => removeItem(item.kd_barang)} className="w-6 h-6 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-400 flex items-center justify-center transition-colors ml-1"><Trash2 size={10} /></button>
+                    <button onClick={() => updateQty(item.kd_barang, 1)} className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-200 transition-colors hover:bg-primary-100 dark:bg-slate-700"><Plus size={10} /></button>
+                    <button onClick={() => removeItem(item.kd_barang)} className="ml-1 flex h-6 w-6 items-center justify-center rounded-md text-red-400 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"><Trash2 size={10} /></button>
                   </div>
                 </div>
               )
@@ -466,23 +683,100 @@ export default function Transaksi() {
             <div className="flex gap-2">
               {(['TUNAI', 'TRANSFER', 'QRIS'] as const).map(j => (
                 <button key={j} onClick={() => setJenisBayar(j)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium border transition-all
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium border transition-all
                     ${jenisBayar === j ? 'bg-primary-500 text-white border-primary-500' : 'border-slate-200 dark:border-slate-600 text-slate-500 hover:border-primary-300'}`}>
                   {j === 'TUNAI' ? <Banknote size={14} /> : j === 'TRANSFER' ? <CreditCard size={14} /> : <QrCode size={14} />} {j}
                 </button>
               ))}
             </div>
-            <Input label="Jumlah Bayar" type="number" value={bayar} onChange={e => setBayar(e.target.value)} placeholder="0" />
-            {parseFloat(bayar) > 0 && (
+            <Input
+              label="Jumlah Bayar"
+              type="number"
+              value={jenisBayar === 'QRIS' ? String(totalBayar) : bayar}
+              onChange={e => {
+                if (jenisBayar !== 'QRIS') setBayar(e.target.value)
+              }}
+              placeholder="0"
+              disabled={jenisBayar === 'QRIS'}
+              helperText={jenisBayar === 'QRIS' ? 'Nominal QRIS otomatis mengikuti total transaksi.' : undefined}
+            />
+            {paidAmount > 0 && (
               <div className={`flex justify-between text-sm font-semibold ${kembalian >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                 <span>Kembalian</span>
                 <span>{formatRupiah(kembalian)}</span>
               </div>
             )}
-            <Button className="w-full" loading={loading} disabled={!cart.length || !bayar} onClick={handleBayar} icon={<ShoppingCart size={16} />}>Bayar</Button>
+            <Button
+              className="w-full"
+              loading={loading}
+              disabled={jenisBayar === 'QRIS' ? !qrisCanPay : (!cart.length || !bayar)}
+              onClick={handleBayar}
+              icon={jenisBayar === 'QRIS' ? <QrCode size={16} /> : <ShoppingCart size={16} />}
+            >
+              {jenisBayar === 'QRIS' ? 'Tampilkan QRIS' : 'Bayar'}
+            </Button>
           </div>
         </Card>
       </div>
+
+      {/* QRIS Modal */}
+      <Modal open={showQris} onClose={cancelQrisPayment} title="Pembayaran QRIS" size="sm"
+        footer={
+          <>
+            {isStaticQrisPayment ? (
+              <Button variant="success" onClick={completeQrisSale} loading={qrisCompleting} disabled={!qrisPayment} className="w-full sm:w-auto">
+                Konfirmasi Dibayar
+              </Button>
+            ) : (
+              <Button variant="secondary" onClick={checkQrisStatus} loading={qrisChecking} disabled={!qrisPayment || qrisCompleting} className="w-full sm:w-auto">
+                Cek Status
+              </Button>
+            )}
+            <Button variant="danger" onClick={cancelQrisPayment} disabled={qrisCompleting} className="w-full sm:w-auto">
+              Batal
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 p-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400">Total Pembayaran</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{formatRupiah(totalBayar)}</p>
+            {qrisPayment?.orderId && (
+              <p className="mt-1 text-[11px] text-slate-400 break-all">Order: {qrisPayment.orderId}</p>
+            )}
+          </div>
+
+          <div className="flex flex-col items-center gap-3">
+            {qrisPayment?.qrImageUrl ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-inner">
+                <img src={qrisPayment.qrImageUrl} alt="QRIS pembayaran" className="h-64 w-64 object-contain" />
+              </div>
+            ) : qrisPayment?.qrString ? (
+              <textarea
+                readOnly
+                value={qrisPayment.qrString}
+                className="h-32 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3 text-xs text-slate-700 dark:text-slate-200"
+              />
+            ) : (
+              <div className="flex h-64 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-400">
+                <QrCode size={48} className="mb-2" />
+                <p className="text-sm">Membuat QRIS...</p>
+              </div>
+            )}
+          </div>
+
+          <div className={`rounded-xl px-3 py-2 text-sm font-medium ${
+            qrisCompleting
+              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+              : qrisStatus.includes('gagal') || qrisStatus.includes('dibatalkan') || qrisStatus.includes('kedaluwarsa')
+                ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
+                : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
+          }`}>
+            {qrisStatus}
+          </div>
+        </div>
+      </Modal>
 
       {/* Struk Modal */}
       <Modal open={showStruk} onClose={resetTransaksi} title="Transaksi Berhasil" size="sm"
@@ -494,7 +788,7 @@ export default function Transaksi() {
         }
       >
         <div ref={strukRef}>
-          <Struk cart={cart} subTotal={subTotal} pajak={pajakAmount} pajakPersen={pajakPersen} totalBayar={totalBayar} promoDiskon={promoDiskon} bayar={parseFloat(bayar)} kembalian={kembalian} kdTransaksi={lastKd ?? ''} jenisBayar={jenisBayar} customerName={selectedCustomer?.nama_customer} poinEarned={poinEarned} kasirName={user?.nama_pengguna} />
+          <Struk cart={cart} subTotal={subTotal} pajak={pajakAmount} pajakPersen={pajakPersen} totalBayar={totalBayar} promoDiskon={promoDiskon} bayar={paidAmount} kembalian={kembalian} kdTransaksi={lastKd ?? ''} jenisBayar={jenisBayar} customerName={selectedCustomer?.nama_customer} poinEarned={poinEarned} kasirName={user?.nama_pengguna} />
         </div>
       </Modal>
 

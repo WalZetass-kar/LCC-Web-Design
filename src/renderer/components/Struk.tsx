@@ -42,6 +42,12 @@ interface Identitas {
   logo?: string
 }
 
+function boolFromDb(value: unknown, fallback: boolean) {
+  if (value === undefined || value === null) return fallback
+  if (typeof value === 'string') return value === '1' || value.toLowerCase() === 'true'
+  return Boolean(value)
+}
+
 const Struk = forwardRef<HTMLDivElement, StrukProps>(
   ({ cart, subTotal, pajak = 0, pajakPersen = 0, totalBayar, promoDiskon = 0, bayar, kembalian, kdTransaksi, jenisBayar, customerName, poinEarned, kasirName }, ref) => {
     const now = new Date().toLocaleString('id-ID')
@@ -72,15 +78,15 @@ const Struk = forwardRef<HTMLDivElement, StrukProps>(
             printer_type: r.data.printer_type || 'thermal',
             paper_size: r.data.paper_size || '58mm',
             layout_type: r.data.layout_type || 'classic',
-            show_logo: Boolean(r.data.show_logo),
-            show_alamat: Boolean(r.data.show_alamat),
-            show_telepon: Boolean(r.data.show_telepon),
-            show_email: Boolean(r.data.show_email),
-            show_kasir: Boolean(r.data.show_kasir),
-            show_customer: Boolean(r.data.show_customer),
-            footer_text: r.data.footer_text || 'Terima kasih atas kunjungan Anda!',
+            show_logo: boolFromDb(r.data.show_logo, true),
+            show_alamat: boolFromDb(r.data.show_alamat, true),
+            show_telepon: boolFromDb(r.data.show_telepon, true),
+            show_email: boolFromDb(r.data.show_email, true),
+            show_kasir: boolFromDb(r.data.show_kasir, true),
+            show_customer: boolFromDb(r.data.show_customer, true),
+            footer_text: r.data.footer_text ?? 'Terima kasih atas kunjungan Anda!',
             qris_image: r.data.qris_image || null,
-            qris_enabled: Boolean(r.data.qris_enabled),
+            qris_enabled: boolFromDb(r.data.qris_enabled, false),
           })
         }
       })

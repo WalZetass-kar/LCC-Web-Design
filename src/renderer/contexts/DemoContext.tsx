@@ -13,7 +13,7 @@ import { useAuth } from './AuthContext'
 export type SubscriptionType = 'daily' | 'monthly' | 'yearly' | null
 export type PopupTriggerReason =
   | 'first_login' | 'usage_limit' | 'premium_feature'
-  | 'session_start' | 'manual'
+  | 'session_start' | 'access_expiring' | 'manual'
 
 export interface DemoState {
   is_demo: boolean
@@ -141,11 +141,10 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   }, [state.is_demo, state.subscription_type, state.subscription_end])
 
   const openPricing = useCallback((reason: PopupTriggerReason) => {
-    if (!isDemo) return
     if (reason !== 'manual' && !isCooldownElapsed()) return
     setTriggerReason(reason)
     setIsPricingOpen(true)
-  }, [isDemo])
+  }, [])
 
   const closePricing = useCallback(() => {
     setIsPricingOpen(false)

@@ -24,12 +24,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           {...props}
-          className={`w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800
+          className={`w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800
             px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400
-            focus:outline-none focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500 
+            focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500
             transition-all duration-200
-            ${icon ? 'pl-10' : ''} 
-            ${error ? 'border-red-400 focus:ring-red-500/20 focus:border-red-500' : ''} 
+            ${icon ? 'pl-10' : ''}
+            ${error ? 'border-red-400 focus:ring-red-500/20 focus:border-red-500' : ''}
             ${className}`}
         />
       </div>

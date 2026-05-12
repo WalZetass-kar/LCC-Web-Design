@@ -11,6 +11,7 @@ export const pengguna = sqliteTable('mediasoft_pengguna', {
   hak_akses: text('hak_akses').default('kasir').notNull(), // developer, operator, kasir, superadmin, admin
   email: text('email'),
   no_telp: text('no_telp'),
+  access_expires_at: text('access_expires_at'),
   password_hash_type: text('password_hash_type').default('sha1'), // sha1, bcrypt
 })
 
@@ -59,6 +60,8 @@ export const penjualan = sqliteTable('mediasoft_penjualan', {
   yang_dibayar: real('yang_dibayar').default(0),
   kembalian: real('kembalian').default(0),
   jenis_pembayaran: text('jenis_pembayaran').default('TUNAI'),
+  discount_amount: real('discount_amount').default(0),
+  shift_id: integer('shift_id'),
   kd_customer: text('kd_customer'),
 })
 

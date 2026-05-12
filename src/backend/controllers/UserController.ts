@@ -1,11 +1,41 @@
 import { PenggunaModel } from '../models/PenggunaModel.js'
 import { ActivityLogModel } from '../models/ActivityLogModel.js'
 import { sqlite } from '../../database/connection.js'
+import { demoSession } from '../services/demoSessionManager.js'
 
 // Role hierarchy: developer > superadmin > admin > operator > kasir
 const ROLE_HIERARCHY = ['developer', 'superadmin', 'admin', 'operator', 'kasir']
-const PROTECTED_USERS = ['Developer'] // Only Developer account is locked
 const CAN_MANAGE_PERMISSIONS = ['developer', 'superadmin'] // Can set permissions for others
+const UNLIMITED_ACCESS_ROLES = ['developer', 'superadmin']
+
+type UserRoleRecord = { hak_akses?: string | null } | null | undefined
+
+function isDeveloperAccount(user: UserRoleRecord): boolean {
+  return user?.hak_akses === 'developer'
+}
+
+function developerLockedMessage(action: string): string {
+  return `Akun dengan role developer tidak dapat ${action}`
+}
+
+function normalizeAccessExpiresAt(value?: string | null): string | null | undefined {
+  if (value === undefined) return undefined
+  if (!value?.trim()) return null
+
+  const raw = value.trim()
+  const date = raw.includes('T')
+    ? new Date(raw)
+    : new Date(`${raw}T23:59:59.999`)
+
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString()
+}
+
+function addDays(base: Date, days: number): Date {
+  const next = new Date(base)
+  next.setDate(next.getDate() + days)
+  return next
+}
 
 export class UserController {
   static getAll() {
@@ -30,6 +60,8 @@ export class UserController {
     email?: string
     no_telp?: string
     hak_akses?: string
+    access_expires_at?: string | null
+    permissions?: Record<string, boolean>
     _caller?: string
   }) {
     try {
@@ -45,18 +77,21 @@ export class UserController {
         return { success: false, message: 'Password wajib diisi' }
       }
 
-      // Hash password using bcrypt (secure)
-      const { hashPassword } = await import('../services/crypto.js')
-      const hashed = await hashPassword(plainPassword)
-
-      PenggunaModel.create({
+      await PenggunaModel.create({
         nama_pengguna: data.nama_pengguna,
-        kata_sandi: hashed,
+        kata_sandi: plainPassword,
         nama_lengkap: data.nama_lengkap,
         email: data.email,
         no_telp: data.no_telp,
         hak_akses: data.hak_akses || 'kasir',
+        access_expires_at: UNLIMITED_ACCESS_ROLES.includes(data.hak_akses || 'kasir')
+          ? null
+          : normalizeAccessExpiresAt(data.access_expires_at),
       })
+
+      if (data.permissions) {
+        this.savePermissions(data.nama_pengguna, data.permissions)
+      }
 
       // Activity log
       if (data._caller) {
@@ -80,24 +115,40 @@ export class UserController {
     no_telp?: string
     hak_akses?: string
     status_user?: string
+    access_expires_at?: string | null
+    permissions?: Record<string, boolean>
     _caller?: string
   }) {
     try {
-      const { _caller, ...payload } = data
-      const callerIsPrivileged = _caller && CAN_MANAGE_PERMISSIONS.includes(
-        ROLE_HIERARCHY.find(r => _caller.toLowerCase().includes(r)) ?? ''
-      )
+      const { _caller, permissions, ...payload } = data
+      const callerIsPrivileged = CAN_MANAGE_PERMISSIONS.includes(demoSession.getRole() ?? '')
+      const existing = PenggunaModel.findByUsername(username)
+      if (!existing) {
+        return { success: false, message: 'User tidak ditemukan' }
+      }
 
-      if (PROTECTED_USERS.includes(username)) {
-        // Developer account: never allow any changes to hak_akses/status
-        const { hak_akses: _r, status_user: _s, ...safe } = payload
-        PenggunaModel.update(username, safe)
-      } else if (!callerIsPrivileged) {
-        // Non-privileged caller: strip hak_akses change
-        const { hak_akses: _r, ...safe } = payload
+      if (isDeveloperAccount(existing)) {
+        return { success: false, message: developerLockedMessage('diubah') }
+      }
+
+      const targetRole = payload.hak_akses ?? existing?.hak_akses ?? 'kasir'
+      const normalizedPayload = {
+        ...payload,
+        access_expires_at: UNLIMITED_ACCESS_ROLES.includes(targetRole)
+          ? null
+          : normalizeAccessExpiresAt(payload.access_expires_at),
+      }
+
+      if (!callerIsPrivileged) {
+        // Non-privileged caller: strip role/status/access controls.
+        const { hak_akses: _r, status_user: _s, access_expires_at: _e, ...safe } = normalizedPayload
         PenggunaModel.update(username, safe)
       } else {
-        PenggunaModel.update(username, payload)
+        PenggunaModel.update(username, normalizedPayload)
+      }
+
+      if (permissions && callerIsPrivileged) {
+        this.savePermissions(username, permissions)
       }
 
       // Activity log
@@ -124,8 +175,12 @@ export class UserController {
         return { success: false, message: 'User tidak ditemukan' }
       }
 
+      if (isDeveloperAccount(user)) {
+        return { success: false, message: developerLockedMessage('diubah passwordnya') }
+      }
+
       // Verify old password (support both SHA1 and bcrypt)
-      const { verifyPassword, isSHA1Hash, encryptPassword, hashPassword } = await import('../services/crypto.js')
+      const { verifyPassword, isSHA1Hash, encryptPassword } = await import('../services/crypto.js')
       
       let isValid = false
       if (isSHA1Hash(user.kata_sandi || '')) {
@@ -141,9 +196,7 @@ export class UserController {
         return { success: false, message: 'Password lama salah' }
       }
 
-      // Update with new password (bcrypt)
-      const newHashed = await hashPassword(newPassword)
-      PenggunaModel.update(username, { kata_sandi: newHashed })
+      await PenggunaModel.updatePassword(username, newPassword)
 
       return { success: true, message: 'Password berhasil diubah' }
     } catch (error) {
@@ -153,9 +206,16 @@ export class UserController {
 
   static async resetPassword(username: string, newPassword: string, caller?: string) {
     try {
-      const { hashPassword } = await import('../services/crypto.js')
-      const hashed = await hashPassword(newPassword)
-      PenggunaModel.update(username, { kata_sandi: hashed })
+      const user = PenggunaModel.findByUsername(username)
+      if (!user) {
+        return { success: false, message: 'User tidak ditemukan' }
+      }
+
+      if (isDeveloperAccount(user)) {
+        return { success: false, message: developerLockedMessage('direset passwordnya') }
+      }
+
+      await PenggunaModel.updatePassword(username, newPassword)
 
       // Activity log
       if (caller) {
@@ -174,22 +234,35 @@ export class UserController {
 
   static delete(username: string, caller?: string) {
     try {
-      if (PROTECTED_USERS.includes(username)) {
-        return { success: false, message: `Akun ${username} tidak dapat dihapus` }
+      if (caller && username === caller) {
+        return { success: false, message: 'Anda tidak dapat menghapus akun yang sedang digunakan' }
       }
 
       const user = PenggunaModel.findByUsername(username)
-      PenggunaModel.delete(username)
-
-      // Activity log
-      if (caller && user) {
-        ActivityLogModel.log(
-          caller,
-          `Menghapus user: ${username}`,
-          'USER_MANAGEMENT',
-          `Nama: ${user.nama_lengkap}, Hak akses: ${user.hak_akses}`
-        )
+      if (!user) {
+        return { success: false, message: 'User tidak ditemukan' }
       }
+
+      if (isDeveloperAccount(user)) {
+        return { success: false, message: developerLockedMessage('dihapus') }
+      }
+
+      const deleteUser = sqlite.transaction(() => {
+        sqlite.prepare('DELETE FROM mediasoft_grup_pengguna_hak_akses WHERE nama_grup = ?').run(username)
+        sqlite.prepare('DELETE FROM mediasoft_grup_pengguna WHERE nama_grup = ?').run(username)
+        PenggunaModel.delete(username)
+
+        if (caller) {
+          ActivityLogModel.log(
+            caller,
+            `Menghapus user: ${username}`,
+            'USER_MANAGEMENT',
+            `Nama: ${user.nama_lengkap}, Hak akses: ${user.hak_akses}`
+          )
+        }
+      })
+
+      deleteUser()
 
       return { success: true, message: 'User berhasil dihapus' }
     } catch (error) {
@@ -204,8 +277,8 @@ export class UserController {
         return { success: false, message: 'User tidak ditemukan' }
       }
 
-      if (PROTECTED_USERS.includes(username) && user.status_user === 'Aktif') {
-        return { success: false, message: `Akun ${username} tidak dapat dinonaktifkan` }
+      if (isDeveloperAccount(user)) {
+        return { success: false, message: developerLockedMessage('diubah statusnya') }
       }
 
       const newStatus = user.status_user === 'Aktif' ? 'Nonaktif' : 'Aktif'
@@ -227,6 +300,72 @@ export class UserController {
     }
   }
 
+  static extendAccess(username: string, days: number, caller?: string) {
+    try {
+      if (!Number.isFinite(days) || days <= 0) {
+        return { success: false, message: 'Jumlah hari perpanjangan harus lebih dari 0' }
+      }
+
+      const user = PenggunaModel.findByUsername(username)
+      if (!user) {
+        return { success: false, message: 'User tidak ditemukan' }
+      }
+
+      if (isDeveloperAccount(user)) {
+        return { success: false, message: developerLockedMessage('diubah masa aksesnya') }
+      }
+
+      const now = new Date()
+      const currentExpiry = user.access_expires_at ? new Date(user.access_expires_at) : null
+      const base = currentExpiry && currentExpiry > now ? currentExpiry : now
+      const nextExpiry = addDays(base, Math.floor(days)).toISOString()
+
+      PenggunaModel.update(username, { access_expires_at: nextExpiry })
+
+      if (caller) {
+        ActivityLogModel.log(
+          caller,
+          `Memperpanjang masa akses user: ${username}`,
+          'USER_MANAGEMENT',
+          `Tambah ${Math.floor(days)} hari, berlaku sampai ${nextExpiry}`
+        )
+      }
+
+      return { success: true, message: 'Masa akses berhasil diperpanjang', data: { access_expires_at: nextExpiry } }
+    } catch (error) {
+      return { success: false, message: String(error) }
+    }
+  }
+
+  static block(username: string, blocked: boolean, caller?: string) {
+    try {
+      const user = PenggunaModel.findByUsername(username)
+      if (!user) {
+        return { success: false, message: 'User tidak ditemukan' }
+      }
+
+      if (isDeveloperAccount(user)) {
+        return { success: false, message: developerLockedMessage('diblokir atau diaktifkan') }
+      }
+
+      const status_user = blocked ? 'Nonaktif' : 'Aktif'
+      PenggunaModel.update(username, { status_user })
+
+      if (caller) {
+        ActivityLogModel.log(
+          caller,
+          `${blocked ? 'Memblokir' : 'Membuka blokir'} user: ${username}`,
+          'USER_MANAGEMENT',
+          `Status: ${user.status_user} → ${status_user}`
+        )
+      }
+
+      return { success: true, message: blocked ? 'User berhasil diblokir' : 'User berhasil diaktifkan' }
+    } catch (error) {
+      return { success: false, message: String(error) }
+    }
+  }
+
   static getPermissions(username: string) {
     try {
       const rows = sqlite.prepare(
@@ -242,15 +381,25 @@ export class UserController {
 
   static savePermissions(username: string, permissions: Record<string, boolean>) {
     try {
+      const user = PenggunaModel.findByUsername(username)
+      if (!user) {
+        return { success: false, message: 'User tidak ditemukan' }
+      }
+
+      if (isDeveloperAccount(user)) {
+        return { success: false, message: developerLockedMessage('diubah izinnya') }
+      }
+
       sqlite.prepare('INSERT OR IGNORE INTO mediasoft_grup_pengguna (nama_grup) VALUES (?)').run(username)
-      const upsert = sqlite.prepare(`
+      const removeExisting = sqlite.prepare('DELETE FROM mediasoft_grup_pengguna_hak_akses WHERE nama_grup = ?')
+      const insert = sqlite.prepare(`
         INSERT INTO mediasoft_grup_pengguna_hak_akses (nama_grup, menu_code, status)
         VALUES (?, ?, ?)
-        ON CONFLICT(nama_grup, menu_code) DO UPDATE SET status = excluded.status
       `)
       const run = sqlite.transaction(() => {
+        removeExisting.run(username)
         for (const [menu_code, allowed] of Object.entries(permissions)) {
-          upsert.run(username, menu_code, allowed ? 'True' : 'False')
+          insert.run(username, menu_code, allowed ? 'True' : 'False')
         }
       })
       run()

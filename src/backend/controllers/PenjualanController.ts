@@ -1,9 +1,10 @@
 import { PenjualanModel } from '../models/PenjualanModel.js'
 import { CustomerModel } from '../models/CustomerModel.js'
+import { IdentitasModel } from '../models/IdentitasModel.js'
+import { sqlite } from '../../database/connection.js'
 import { validateDemoMode } from '../utils/demoMode.js'
 import { withTransaction } from '../utils/transaction.js'
 import { WhatsAppController } from './WhatsAppController.js'
-import { WhatsAppService } from '../services/whatsappService.js'
 
 interface CartItem {
   kd_barang: string
@@ -27,6 +28,59 @@ interface CreateTransaksiPayload {
 }
 
 export class PenjualanController {
+  private static getLowStockProducts(items: CartItem[]) {
+    const productIds = [...new Set(items.map(item => item.kd_barang).filter(Boolean))]
+    if (!productIds.length) return []
+
+    const placeholders = productIds.map(() => '?').join(',')
+    return sqlite.prepare(`
+      SELECT nama_barang as name, COALESCE(stok, 0) as stock
+      FROM mediasoft_barang
+      WHERE kd_barang IN (${placeholders})
+        AND COALESCE(stok_minimum, 0) > 0
+        AND COALESCE(stok, 0) <= COALESCE(stok_minimum, 0)
+    `).all(...productIds) as Array<{ name: string; stock: number }>
+  }
+
+  private static async sendWhatsAppAfterSale(payload: CreateTransaksiPayload, invoice: string, total: number) {
+    try {
+      const tasks: Promise<unknown>[] = []
+
+      if (payload.kd_customer) {
+        const customer = CustomerModel.getById(payload.kd_customer) as any
+        tasks.push(
+          WhatsAppController.sendSaleNotification({
+            phone: customer?.no_telp,
+            customerName: customer?.nama_customer,
+            invoice,
+            total,
+          }).then(result => {
+            if (result.attempted && !result.success) {
+              console.warn('WhatsApp sale notification failed:', result.message)
+            }
+          })
+        )
+      }
+
+      const lowStockProducts = this.getLowStockProducts(payload.items)
+      if (lowStockProducts.length) {
+        const identitas = IdentitasModel.get() as any
+        tasks.push(
+          WhatsAppController.sendLowStockNotification(identitas?.nomorwaowner, lowStockProducts)
+            .then(result => {
+              if (result.attempted && !result.success) {
+                console.warn('WhatsApp low stock notification failed:', result.message)
+              }
+            })
+        )
+      }
+
+      await Promise.all(tasks)
+    } catch (error) {
+      console.warn('WhatsApp notification skipped:', error)
+    }
+  }
+
   static getAll() {
     return { success: true, data: PenjualanModel.getAll() }
   }
@@ -110,21 +164,7 @@ export class PenjualanController {
       return { success: false, message: `Transaksi gagal: ${result.error}` }
     }
 
-    // Send WhatsApp notification if enabled and customer has phone
-    try {
-      const waSetting = WhatsAppController.getSettings()
-      if (waSetting?.enabled && waSetting?.notify_on_sale && waSetting?.api_key && payload.kd_customer) {
-        const cust = CustomerModel.getById(payload.kd_customer) as any
-        if (cust?.no_telp) {
-          WhatsAppService.init(waSetting.api_key)
-          const msg = (waSetting.message_template as string)
-            .replace('{customer}', cust.nama_customer ?? '')
-            .replace('{total}', `Rp ${total_bayar.toLocaleString('id-ID')}`)
-            .replace('{invoice}', kd_transaksi)
-          WhatsAppService.sendMessage({ to: cust.no_telp, message: msg }).catch(() => {})
-        }
-      }
-    } catch (_) {}
+    void PenjualanController.sendWhatsAppAfterSale(payload, kd_transaksi, total_bayar)
 
     return { success: true, message: 'Transaksi berhasil disimpan', kd_transaksi: result.data }
   }

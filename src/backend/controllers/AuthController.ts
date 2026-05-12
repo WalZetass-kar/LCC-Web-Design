@@ -5,6 +5,23 @@ import { encryptPassword, verifyPassword, isSHA1Hash } from '../services/crypto.
 import { rateLimiter } from '../services/rateLimiter.js'
 import { sanitizeString, validatePasswordStrength } from '../services/sanitizer.js'
 
+function isAccessExpired(expiresAt?: string | null): boolean {
+  if (!expiresAt) return false
+  const expires = new Date(expiresAt)
+  return !Number.isNaN(expires.getTime()) && expires.getTime() < Date.now()
+}
+
+function hasUnlimitedAccessRole(role?: string | null): boolean {
+  return role === 'developer' || role === 'superadmin'
+}
+
+function getAccessDaysRemaining(expiresAt?: string | null): number | null {
+  if (!expiresAt) return null
+  const expires = new Date(expiresAt)
+  if (Number.isNaN(expires.getTime())) return null
+  return Math.max(0, Math.ceil((expires.getTime() - Date.now()) / 86400000))
+}
+
 export class AuthController {
   /**
    * Login with enhanced security
@@ -128,6 +145,22 @@ export class AuthController {
       }
     }
 
+    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(user.access_expires_at)) {
+      ActivityLogModel.create({
+        username,
+        aktivitas: 'LOGIN_EXPIRED',
+        modul: 'AUTH',
+        tgl_aktivitas: new Date().toISOString(),
+        ip_address: ipAddress,
+        detail: `Masa akses akun berakhir pada ${user.access_expires_at}`,
+      })
+
+      return {
+        success: false,
+        message: 'Masa akses akun sudah berakhir. Silakan hubungi admin untuk perpanjangan atau upgrade paket.',
+      }
+    }
+
     // Login successful - reset rate limiter
     rateLimiter.resetAttempts(username)
     PenggunaModel.updateLastLogin(username)
@@ -152,6 +185,8 @@ export class AuthController {
         nama_pengguna: user.nama_pengguna,
         nama_lengkap: user.nama_lengkap,
         hak_akses: user.hak_akses || 'kasir',
+        access_expires_at: hasUnlimitedAccessRole(user.hak_akses) ? null : user.access_expires_at ?? null,
+        access_days_remaining: hasUnlimitedAccessRole(user.hak_akses) ? null : getAccessDaysRemaining(user.access_expires_at),
       },
     }
   }
@@ -170,6 +205,37 @@ export class AuthController {
     })
 
     return { success: true, message: 'Logout berhasil' }
+  }
+
+  /**
+   * Restore renderer session into the main-process session guard.
+   * The renderer only sends username; role/status are reloaded from database.
+   */
+  static restoreSession(username: string) {
+    username = (username?.trim() || '')
+    if (!username) {
+      return { success: false, message: 'Session tidak valid' }
+    }
+
+    const user = PenggunaModel.findActiveByUsername(username)
+    if (!user) {
+      return { success: false, message: 'User tidak ditemukan atau tidak aktif' }
+    }
+
+    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(user.access_expires_at)) {
+      return { success: false, message: 'Masa akses akun sudah berakhir' }
+    }
+
+    return {
+      success: true,
+      data: {
+        nama_pengguna: user.nama_pengguna,
+        nama_lengkap: user.nama_lengkap,
+        hak_akses: user.hak_akses || 'kasir',
+        access_expires_at: hasUnlimitedAccessRole(user.hak_akses) ? null : user.access_expires_at ?? null,
+        access_days_remaining: hasUnlimitedAccessRole(user.hak_akses) ? null : getAccessDaysRemaining(user.access_expires_at),
+      },
+    }
   }
 
   /**

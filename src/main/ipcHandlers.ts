@@ -75,6 +75,15 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   })
   
   ipcMain.handle('auth:checkIdentitas', () => AuthController.checkIdentitas())
+
+  ipcMain.handle('auth:restoreSession', (_e, username: string) => {
+    const result = AuthController.restoreSession(username)
+    if (result.success && result.data) {
+      const userData = result.data as { nama_pengguna: string; hak_akses: string }
+      demoSession.setSession(userData.nama_pengguna, userData.hak_akses || 'kasir')
+    }
+    return result
+  })
   
   // Auth logout — clear the session
   ipcMain.handle('auth:logout', (_e, username: string) => {
@@ -151,6 +160,8 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     UserController.resetPassword(username, newPass, caller))
   handle(ipcMain, 'user:delete', (username: string, caller?: string) => UserController.delete(username, caller))
   handle(ipcMain, 'user:toggleStatus', (username: string, caller?: string) => UserController.toggleStatus(username, caller))
+  handle(ipcMain, 'user:block', (username: string, blocked: boolean, caller?: string) => UserController.block(username, blocked, caller))
+  handle(ipcMain, 'user:extendAccess', (username: string, days: number, caller?: string) => UserController.extendAccess(username, days, caller))
   handle(ipcMain, 'user:getPermissions', (username: string) => UserController.getPermissions(username))
   handle(ipcMain, 'user:savePermissions', (username: string, permissions: Record<string, boolean>) => UserController.savePermissions(username, permissions))
 
@@ -270,6 +281,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'payment:create', (data: any) => PaymentMethodController.create(data))
   handle(ipcMain, 'payment:update', (id: number, data: any) => PaymentMethodController.update(id, data))
   handle(ipcMain, 'payment:delete', (id: number) => PaymentMethodController.delete(id))
+  handle(ipcMain, 'payment:createQris', (data: any) => PaymentMethodController.createQris(data))
+  handle(ipcMain, 'payment:checkStatus', (orderId: string) => PaymentMethodController.checkStatus(orderId))
+  handle(ipcMain, 'payment:cancelQris', (orderId: string) => PaymentMethodController.cancelQris(orderId))
 
   // ─── TAX ───────────────────────────────────────────────────────────
   handle(ipcMain, 'tax:getActive', () => TaxController.getActive())
@@ -289,7 +303,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── SHIFTS ────────────────────────────────────────────────────────
   handle(ipcMain, 'shift:open', (data: any) => ShiftController.open(data))
   handle(ipcMain, 'shift:close', (id: number, data: any) => ShiftController.close(id, data))
-  handle(ipcMain, 'shift:getCurrent', (userId: number) => ShiftController.getCurrent(userId))
+  handle(ipcMain, 'shift:getCurrent', (userId: string | number) => ShiftController.getCurrent(userId))
   handle(ipcMain, 'shift:getAll', () => ShiftController.getAll())
   handle(ipcMain, 'shift:delete', (id: number) => ShiftController.delete(id))
 
@@ -466,4 +480,3 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     }
   })
 }
-

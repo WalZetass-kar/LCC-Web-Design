@@ -70,7 +70,7 @@ export async function api<T>(channel: string, ...args: unknown[]): Promise<IpcRe
 
   // ─── INVOKE THE IPC CHANNEL ────────────────────────────────────────
   try {
-    return window.api.invoke(channel, ...args) as Promise<IpcResponse<T>>
+    return await window.api.invoke(channel, ...args) as IpcResponse<T>
   } catch (error: any) {
     // Handle errors from preload whitelist or main process
     console.error(`❌ API Error [${channel}]:`, error)

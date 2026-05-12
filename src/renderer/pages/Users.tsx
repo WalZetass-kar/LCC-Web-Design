@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, Pencil, Trash2, Key, ShieldCheck, Lock, Power } from 'lucide-react'
+import { Plus, Pencil, Trash2, Key, ShieldCheck, Lock, Power, CalendarPlus } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
@@ -14,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
 import { MENU_GROUPS } from '../layouts/Sidebar'
 import type { Pengguna } from '../../shared/types'
+import { formatDate } from '../utils/format'
 
 interface FormState {
   nama_pengguna: string
@@ -23,13 +24,20 @@ interface FormState {
   hak_akses: 'developer' | 'superadmin' | 'admin' | 'operator' | 'kasir'
   email: string
   no_telp: string
+  access_expires_at: string
 }
 
 const EMPTY: FormState = {
-  nama_pengguna: '', nama_lengkap: '', password: '', confirmPassword: '', hak_akses: 'kasir', email: '', no_telp: '',
+  nama_pengguna: '', nama_lengkap: '', password: '', confirmPassword: '', hak_akses: 'kasir', email: '', no_telp: '', access_expires_at: '',
 }
 
-const PROTECTED = ['Developer'] // Only Developer is fully protected
+function isDeveloperAccount(user?: Pick<Pengguna, 'hak_akses'> | null) {
+  return user?.hak_akses === 'developer'
+}
+
+function isPrivilegedRole(role?: string | null) {
+  return ['developer', 'superadmin'].includes(role ?? '')
+}
 
 // Password validation
 const validatePassword = (password: string): string | null => {
@@ -45,12 +53,42 @@ const PERMISSION_MENUS = MENU_GROUPS.flatMap(g =>
   g.items.map(item => ({ group: g.label, label: item.label, code: item.code }))
 ).filter((item, idx, arr) => arr.findIndex(x => x.code === item.code && x.label === item.label) === idx)
 
+const ALL_PERMISSION_CODES = [...new Set(PERMISSION_MENUS.map(item => item.code))]
+
+function getDefaultPermissions() {
+  return Object.fromEntries(ALL_PERMISSION_CODES.map(code => [code, true]))
+}
+
+function normalizePermissions(saved: Record<string, boolean>) {
+  return { ...getDefaultPermissions(), ...saved }
+}
+
+function toDateInputValue(value: string | null | undefined) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString().slice(0, 10)
+}
+
+function isExpired(value: string | null | undefined) {
+  if (!value) return false
+  const date = new Date(value)
+  return !Number.isNaN(date.getTime()) && date.getTime() < Date.now()
+}
+
+function getDaysRemaining(value: string | null | undefined) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return Math.max(0, Math.ceil((date.getTime() - Date.now()) / 86400000))
+}
+
 export default function Users() {
   const toast = useToast()
   const { user: currentUser } = useAuth()
   const { guardPremiumFeature } = useDemoGuard()
   const [data, setData] = useState<Pengguna[]>([])
-  const [modal, setModal] = useState<'add' | 'edit' | 'delete' | 'password' | 'permissions' | null>(null)
+  const [modal, setModal] = useState<'add' | 'edit' | 'delete' | 'password' | 'permissions' | 'extend' | null>(null)
   const [form, setForm] = useState<FormState>({ ...EMPTY })
   const [selected, setSelected] = useState<Pengguna | null>(null)
   const [loading, setLoading] = useState(false)
@@ -58,11 +96,11 @@ export default function Users() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const [permissions, setPermissions] = useState<Record<string, boolean>>({})
+  const [extendDays, setExtendDays] = useState('30')
 
   const load = async () => {
     const r = await api<Pengguna[]>('user:getAll')
     if (r.success) {
-      console.log('Loaded users:', r.data?.length)
       setData(r.data ?? [])
     }
     setLoadingData(false)
@@ -72,9 +110,10 @@ export default function Users() {
 
   const openAdd = () => {
     if (guardPremiumFeature('multi_user', 'Tambah User')) return
+    setPermissions(getDefaultPermissions())
     setForm({ ...EMPTY }); setModal('add')
   }
-  const openEdit = (row: Pengguna) => {
+  const openEdit = async (row: Pengguna) => {
     setSelected(row)
     setForm({
       nama_pengguna: row.nama_pengguna,
@@ -84,18 +123,22 @@ export default function Users() {
       hak_akses: (row.hak_akses as FormState['hak_akses']) ?? 'kasir',
       email: row.email ?? '',
       no_telp: row.no_telp ?? '',
+      access_expires_at: toDateInputValue(row.access_expires_at),
     })
+    const r = await api<Record<string, boolean>>('user:getPermissions', row.nama_pengguna)
+    setPermissions(normalizePermissions(r.success ? (r.data ?? {}) : {}))
     setModal('edit')
   }
   const openDelete = (row: Pengguna) => { setSelected(row); setModal('delete') }
   const openPassword = (row: Pengguna) => { setSelected(row); setNewPassword(''); setConfirmNewPassword(''); setModal('password') }
+  const openExtend = (row: Pengguna) => { setSelected(row); setExtendDays('30'); setModal('extend') }
   const openPermissions = async (row: Pengguna) => {
     setSelected(row)
     const r = await api<Record<string, boolean>>('user:getPermissions', row.nama_pengguna)
-    setPermissions(r.success ? (r.data ?? {}) : {})
+    setPermissions(normalizePermissions(r.success ? (r.data ?? {}) : {}))
     setModal('permissions')
   }
-  const closeModal = () => { setModal(null); setSelected(null); setNewPassword(''); setConfirmNewPassword('') }
+  const closeModal = () => { setModal(null); setSelected(null); setNewPassword(''); setConfirmNewPassword(''); setExtendDays('30') }
 
   const handleSave = async () => {
     if (!form.nama_pengguna || !form.nama_lengkap) {
@@ -112,9 +155,15 @@ export default function Users() {
       }
     }
     setLoading(true)
+    const payload = {
+      ...form,
+      access_expires_at: form.access_expires_at || null,
+      permissions,
+      _caller: currentUser?.nama_pengguna,
+    }
     const r = modal === 'add'
-      ? await api('user:create', { ...form, _caller: currentUser?.nama_pengguna })
-      : await api('user:update', selected!.nama_pengguna, { ...form, _caller: currentUser?.nama_pengguna })
+      ? await api('user:create', payload)
+      : await api('user:update', selected!.nama_pengguna, payload)
     setLoading(false)
     if (r.success) { toast(r.message as string); closeModal(); load() }
     else toast(r.message as string, 'error')
@@ -150,14 +199,25 @@ export default function Users() {
     else toast(r.message as string, 'error')
   }
 
+  const handleExtendAccess = async () => {
+    const days = parseInt(extendDays)
+    if (!days || days <= 0) return toast('Jumlah hari perpanjangan harus lebih dari 0', 'error')
+    setLoading(true)
+    const r = await api('user:extendAccess', selected!.nama_pengguna, days, currentUser?.nama_pengguna)
+    setLoading(false)
+    if (r.success) { toast(r.message as string); closeModal(); load() }
+    else toast(r.message as string, 'error')
+  }
+
   const handleToggleStatus = async (user: Pengguna) => {
-    const r = await api('user:toggleStatus', user.nama_pengguna, currentUser?.nama_pengguna)
+    const shouldBlock = user.status_user === 'Aktif'
+    const r = await api('user:block', user.nama_pengguna, shouldBlock, currentUser?.nama_pengguna)
     if (r.success) { toast(r.message as string); load() }
     else toast(r.message as string, 'error')
   }
 
   const togglePerm = (code: string) =>
-    setPermissions(prev => ({ ...prev, [code]: !prev[code] }))
+    setPermissions(prev => ({ ...prev, [code]: prev[code] === false }))
 
   const toggleGroup = (codes: string[], checked: boolean) =>
     setPermissions(prev => {
@@ -173,9 +233,30 @@ export default function Users() {
     { accessorKey: 'no_telp', header: 'No. Telp', size: 120 },
     {
       accessorKey: 'status_user', header: 'Status', size: 100,
-      cell: ({ getValue }) => {
+      cell: ({ getValue, row }) => {
         const status = getValue() as string
+        const expired = isExpired(row.original.access_expires_at)
+        if (expired) return <Badge label="KADALUARSA" variant="amber" />
         return <Badge label={status ?? 'Aktif'} variant={status === 'Aktif' ? 'green' : 'red'} />
+      },
+    },
+    {
+      accessorKey: 'access_expires_at', header: 'Masa Akses', size: 130,
+      cell: ({ getValue, row }) => {
+        if (['developer', 'superadmin'].includes(row.original.hak_akses ?? '')) {
+          return <span className="text-xs text-slate-400">Tanpa batas</span>
+        }
+        const value = getValue() as string | null
+        const days = getDaysRemaining(value)
+        if (!value) return <span className="text-xs text-slate-400">Tanpa batas</span>
+        return (
+          <div className="space-y-0.5">
+            <p className="text-xs font-medium text-slate-700 dark:text-slate-200">{formatDate(value)}</p>
+            <p className={`text-[10px] ${days === 0 ? 'text-red-500' : days !== null && days <= 7 ? 'text-amber-500' : 'text-slate-400'}`}>
+              {days === 0 ? 'Berakhir' : `${days} hari lagi`}
+            </p>
+          </div>
+        )
       },
     },
     {
@@ -193,14 +274,16 @@ export default function Users() {
     {
       id: 'actions', header: 'Aksi',
       cell: ({ row }) => {
-        const isProtected = PROTECTED.includes(row.original.nama_pengguna)
-        const canManagePermissions = ['developer', 'superadmin'].includes(currentUser?.hak_akses ?? '')
+        const isProtected = isDeveloperAccount(row.original)
+        const canManagePermissions = isPrivilegedRole(currentUser?.hak_akses)
+        const hasUnlimitedAccess = isPrivilegedRole(row.original.hak_akses)
+        const isCurrentUser = row.original.nama_pengguna === currentUser?.nama_pengguna
         
-        // Developer account: only show lock icon
+        // Every developer-role account is locked from user management actions.
         if (isProtected) {
           return (
             <div className="flex gap-1">
-              <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-400" title="Akun Terkunci">
+              <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-400" title="Akun developer terkunci">
                 <Lock size={14} />
               </div>
             </div>
@@ -215,6 +298,11 @@ export default function Users() {
             <button onClick={() => openPassword(row.original)} className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-500 transition-colors" title="Ubah Password">
               <Key size={14} />
             </button>
+            {!hasUnlimitedAccess && (
+              <button onClick={() => openExtend(row.original)} className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 transition-colors" title="Perpanjang Akses">
+                <CalendarPlus size={14} />
+              </button>
+            )}
             <button 
               onClick={() => handleToggleStatus(row.original)} 
               className={`p-1.5 rounded-lg transition-colors ${
@@ -222,7 +310,7 @@ export default function Users() {
                   ? 'hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500' 
                   : 'hover:bg-green-50 dark:hover:bg-green-900/20 text-green-500'
               }`}
-              title={row.original.status_user === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}
+              title={row.original.status_user === 'Aktif' ? 'Blokir' : 'Aktifkan'}
             >
               <Power size={14} />
             </button>
@@ -231,9 +319,11 @@ export default function Users() {
                 <ShieldCheck size={14} />
               </button>
             )}
-            <button onClick={() => openDelete(row.original)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors" title="Hapus">
-              <Trash2 size={14} />
-            </button>
+            {!isCurrentUser && (
+              <button onClick={() => openDelete(row.original)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors" title="Hapus">
+                <Trash2 size={14} />
+              </button>
+            )}
           </div>
         )
       },
@@ -242,12 +332,52 @@ export default function Users() {
 
   const f = (k: keyof FormState, v: string) =>
     setForm(prev => ({ ...prev, [k]: v }))
+  const formHasUnlimitedAccess = isPrivilegedRole(form.hak_akses)
 
   // Group permission menus by group label
   const permGroups = MENU_GROUPS.map(g => ({
     label: g.label,
     items: g.items.filter((item, idx, arr) => arr.findIndex(x => x.code === item.code) === idx),
   }))
+
+  const permissionGroupsView = (
+    <div className="space-y-3">
+      {permGroups.map(group => {
+        const uniqueCodes = [...new Set(group.items.map(i => i.code))]
+        const allChecked = uniqueCodes.every(c => permissions[c] !== false)
+        const someChecked = uniqueCodes.some(c => permissions[c] !== false)
+        return (
+          <div key={group.label} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                ref={el => { if (el) el.indeterminate = !allChecked && someChecked }}
+                onChange={e => toggleGroup(uniqueCodes, e.target.checked)}
+                className="w-4 h-4 rounded accent-primary-500 cursor-pointer"
+              />
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                {group.label}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 dark:divide-slate-700/50">
+              {group.items.map(item => (
+                <label key={`${item.code}-${item.label}`} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-primary-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={permissions[item.code] !== false}
+                    onChange={() => togglePerm(item.code)}
+                    className="w-4 h-4 rounded accent-primary-500 cursor-pointer"
+                  />
+                  <span className="text-sm text-slate-700 dark:text-slate-200">{item.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 
   return (
     <div className="space-y-4">
@@ -270,7 +400,7 @@ export default function Users() {
         open={modal === 'add' || modal === 'edit'}
         onClose={closeModal}
         title={modal === 'add' ? 'Tambah User' : 'Edit User'}
-        size="md"
+        size="lg"
         footer={
           <>
             <Button variant="secondary" onClick={closeModal} className="w-full sm:w-auto">Batal</Button>
@@ -294,8 +424,8 @@ export default function Users() {
               onChange={e => f('hak_akses', e.target.value)}
               disabled={
                 modal === 'edit' && (
-                  PROTECTED.includes(selected?.nama_pengguna ?? '') ||
-                  !['developer', 'superadmin'].includes(currentUser?.hak_akses ?? '')
+                  isDeveloperAccount(selected) ||
+                  !isPrivilegedRole(currentUser?.hak_akses)
                 )
               }
               className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -309,6 +439,23 @@ export default function Users() {
           </div>
           <Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} />
           <Input label="No. Telepon" value={form.no_telp} onChange={e => f('no_telp', e.target.value)} />
+          <Input
+            label="Masa Akses"
+            type="date"
+            value={form.access_expires_at}
+            onChange={e => f('access_expires_at', e.target.value)}
+            helperText={formHasUnlimitedAccess ? 'Developer dan superadmin selalu tanpa batas' : 'Kosongkan untuk akses tanpa batas'}
+            disabled={formHasUnlimitedAccess || (modal === 'edit' && isDeveloperAccount(selected))}
+          />
+        </div>
+        <div className="mt-5">
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldCheck size={16} className="text-primary-500" />
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Izin Fitur</h3>
+          </div>
+          <div className="max-h-64 overflow-y-auto pr-1 scrollbar-thin">
+            {permissionGroupsView}
+          </div>
         </div>
       </Modal>
 
@@ -346,6 +493,34 @@ export default function Users() {
         </div>
       </Modal>
 
+      {/* Extend Access Modal */}
+      <Modal
+        open={modal === 'extend'}
+        onClose={closeModal}
+        title="Perpanjang Akses"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal} className="w-full sm:w-auto">Batal</Button>
+            <Button loading={loading} onClick={handleExtendAccess} className="w-full sm:w-auto">Perpanjang</Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            User <strong>{selected?.nama_lengkap}</strong> aktif sampai {formatDate(selected?.access_expires_at)}.
+          </p>
+          <Input
+            label="Tambah Hari *"
+            type="number"
+            min={1}
+            value={extendDays}
+            onChange={e => setExtendDays(e.target.value)}
+            helperText="Perpanjangan dihitung dari tanggal berakhir saat ini jika masih aktif"
+          />
+        </div>
+      </Modal>
+
       {/* Delete Modal */}
       <Modal
         open={modal === 'delete'}
@@ -377,45 +552,7 @@ export default function Users() {
           </>
         }
       >
-        <div className="space-y-4">
-          {permGroups.map(group => {
-            const codes = group.items.map(i => i.code)
-            const uniqueCodes = [...new Set(codes)]
-            const allChecked = uniqueCodes.every(c => permissions[c])
-            const someChecked = uniqueCodes.some(c => permissions[c])
-            return (
-              <div key={group.label} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                {/* Group header with select-all */}
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={allChecked}
-                    ref={el => { if (el) el.indeterminate = !allChecked && someChecked }}
-                    onChange={e => toggleGroup(uniqueCodes, e.target.checked)}
-                    className="w-4 h-4 rounded accent-primary-500 cursor-pointer"
-                  />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    {group.label}
-                  </span>
-                </div>
-                {/* Menu items */}
-                <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                  {group.items.map(item => (
-                    <label key={`${item.code}-${item.label}`} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-primary-50/50 dark:hover:bg-slate-700/30 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={!!permissions[item.code]}
-                        onChange={() => togglePerm(item.code)}
-                        className="w-4 h-4 rounded accent-primary-500 cursor-pointer"
-                      />
-                      <span className="text-sm text-slate-700 dark:text-slate-200">{item.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        {permissionGroupsView}
       </Modal>
     </div>
   )

@@ -58,6 +58,7 @@ export class PenggunaModel {
     email?: string
     no_telp?: string
     hak_akses?: string
+    access_expires_at?: string | null
   }) {
     // Hash password with bcrypt
     const hashedPassword = await hashPassword(data.kata_sandi)

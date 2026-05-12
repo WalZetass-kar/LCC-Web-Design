@@ -36,6 +36,8 @@ function restoreSession(): UserSession | null {
       nama_pengguna: parsed.nama_pengguna,
       nama_lengkap: parsed.nama_lengkap,
       hak_akses: parsed.hak_akses,
+      access_expires_at: parsed.access_expires_at ?? null,
+      access_days_remaining: parsed.access_days_remaining ?? null,
     }
   } catch {
     localStorage.removeItem('pos_session')
@@ -57,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null)
     localStorage.removeItem('pos_session')
-  }, [user])
+  }, [user?.nama_pengguna])
 
   const login = useCallback((u: UserSession) => {
     const stored: StoredSession = {
@@ -68,6 +70,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u)
     localStorage.setItem('pos_session', JSON.stringify(stored))
   }, [])
+
+  useEffect(() => {
+    if (!user?.nama_pengguna) return
+
+    let cancelled = false
+    window.api.invoke('auth:restoreSession', user.nama_pengguna)
+      .then(raw => {
+        if (cancelled) return
+        const result = raw as { success?: boolean; data?: UserSession }
+        if (!result?.success || !result.data) {
+          logout()
+          return
+        }
+
+        const restored = result.data as UserSession
+        setUser(restored)
+        localStorage.setItem('pos_session', JSON.stringify({
+          ...restored,
+          loginAt: Date.now(),
+          expiresAt: Date.now() + SESSION_TTL_MS,
+        }))
+      })
+      .catch(() => {
+        if (!cancelled) logout()
+      })
+
+    return () => { cancelled = true }
+  }, [user?.nama_pengguna, logout])
 
   // Auto-logout when session expires
   useEffect(() => {

@@ -2,10 +2,20 @@ import { db, sqlite } from '../../database/connection.js'
 import { penjualan, penjualanDetail, barang, customer, kasDrawer, pembelian, pembelianDetail, supplier } from '../../database/schema.js'
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm'
 
+function salesStartDate(date: string) {
+  return date.includes(' ') || date.includes('T') ? date : `${date} 00:00:00`
+}
+
+function salesEndDate(date: string) {
+  return date.includes(' ') || date.includes('T') ? date : `${date} 23:59:59`
+}
+
 export class LaporanController {
   // Laporan Penjualan
   static getLaporanPenjualan(startDate: string, endDate: string) {
     try {
+      const start = salesStartDate(startDate)
+      const end = salesEndDate(endDate)
       const result = db
         .select({
           kd_tansaksi_jual: penjualan.kd_tansaksi_jual,
@@ -18,7 +28,7 @@ export class LaporanController {
           jenis_pembayaran: penjualan.jenis_pembayaran,
         })
         .from(penjualan)
-        .where(and(gte(penjualan.tgl_wkt_transaksi, startDate), lte(penjualan.tgl_wkt_transaksi, endDate)))
+        .where(and(gte(penjualan.tgl_wkt_transaksi, start), lte(penjualan.tgl_wkt_transaksi, end)))
         .orderBy(desc(penjualan.tgl_wkt_transaksi))
         .all()
 
@@ -38,13 +48,15 @@ export class LaporanController {
   // Laporan Laba Rugi
   static getLaporanLabaRugi(startDate: string, endDate: string) {
     try {
+      const start = salesStartDate(startDate)
+      const end = salesEndDate(endDate)
       const transaksi = db
         .select({
           kd_tansaksi_jual: penjualan.kd_tansaksi_jual,
           tgl_wkt_transaksi: penjualan.tgl_wkt_transaksi,
         })
         .from(penjualan)
-        .where(and(gte(penjualan.tgl_wkt_transaksi, startDate), lte(penjualan.tgl_wkt_transaksi, endDate)))
+        .where(and(gte(penjualan.tgl_wkt_transaksi, start), lte(penjualan.tgl_wkt_transaksi, end)))
         .all()
 
       let total_penjualan = 0
@@ -94,10 +106,12 @@ export class LaporanController {
   // Laporan Produk Terlaris
   static getLaporanProdukTerlaris(startDate: string, endDate: string, limit: number = 10) {
     try {
+      const start = salesStartDate(startDate)
+      const end = salesEndDate(endDate)
       const transaksi = db
         .select({ kd_tansaksi_jual: penjualan.kd_tansaksi_jual })
         .from(penjualan)
-        .where(and(gte(penjualan.tgl_wkt_transaksi, startDate), lte(penjualan.tgl_wkt_transaksi, endDate)))
+        .where(and(gte(penjualan.tgl_wkt_transaksi, start), lte(penjualan.tgl_wkt_transaksi, end)))
         .all()
 
       const kdTransaksiList = transaksi.map((t) => t.kd_tansaksi_jual)

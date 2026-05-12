@@ -1,5 +1,8 @@
 import { sqlite } from '../../database/connection.js'
 
+const MAX_QRIS_IMAGE_BYTES = 5 * 1024 * 1024
+const QRIS_IMAGE_PATTERN = /^data:image\/(png|jpe?g|webp);base64,/i
+
 interface StrukSettings {
   id: number
   printer_type: string
@@ -18,25 +21,41 @@ interface StrukSettings {
 }
 
 export class StrukSettingsController {
+  static ensureRow() {
+    sqlite.prepare(`
+      INSERT OR IGNORE INTO mediasoft_struk_settings (id, updated_at)
+      VALUES (1, ?)
+    `).run(new Date().toISOString())
+  }
+
+  static normalizeQrisImage(base64Image: string): string {
+    const image = base64Image?.trim()
+    if (!image || !QRIS_IMAGE_PATTERN.test(image)) {
+      throw new Error('Format gambar QRIS harus PNG, JPG, JPEG, atau WEBP')
+    }
+
+    const base64Payload = image.split(',')[1]
+    if (!base64Payload) {
+      throw new Error('File QRIS tidak valid')
+    }
+
+    const estimatedBytes = Math.floor((base64Payload.length * 3) / 4)
+    if (estimatedBytes > MAX_QRIS_IMAGE_BYTES) {
+      throw new Error('Ukuran gambar QRIS maksimal 5MB')
+    }
+
+    return image
+  }
+
   /**
    * Get struk settings
    */
   static get(): { success: boolean; data?: StrukSettings; message?: string } {
     try {
+      this.ensureRow()
       const row = sqlite
         .prepare('SELECT * FROM mediasoft_struk_settings WHERE id = 1')
         .get() as StrukSettings | undefined
-
-      if (!row) {
-        // Create default if not exists
-        const now = new Date().toISOString()
-        sqlite.prepare(`
-          INSERT INTO mediasoft_struk_settings (id, updated_at) 
-          VALUES (1, ?)
-        `).run(now)
-        
-        return this.get()
-      }
 
       return { success: true, data: row }
     } catch (error) {
@@ -49,6 +68,7 @@ export class StrukSettingsController {
    */
   static update(data: Partial<StrukSettings>) {
     try {
+      this.ensureRow()
       const now = new Date().toISOString()
       
       const fields: string[] = []
@@ -129,15 +149,21 @@ export class StrukSettingsController {
    */
   static uploadQris(base64Image: string) {
     try {
+      this.ensureRow()
       const now = new Date().toISOString()
+      const qrisImage = this.normalizeQrisImage(base64Image)
       
       sqlite.prepare(`
         UPDATE mediasoft_struk_settings 
         SET qris_image = ?, qris_enabled = 1, updated_at = ?
         WHERE id = 1
-      `).run(base64Image, now)
+      `).run(qrisImage, now)
 
-      return { success: true, message: 'QRIS berhasil diupload' }
+      const row = sqlite
+        .prepare('SELECT * FROM mediasoft_struk_settings WHERE id = 1')
+        .get() as StrukSettings | undefined
+
+      return { success: true, message: 'QRIS berhasil diupload', data: row }
     } catch (error) {
       return { success: false, message: String(error) }
     }
@@ -148,6 +174,7 @@ export class StrukSettingsController {
    */
   static removeQris() {
     try {
+      this.ensureRow()
       const now = new Date().toISOString()
       
       sqlite.prepare(`
@@ -156,7 +183,11 @@ export class StrukSettingsController {
         WHERE id = 1
       `).run(now)
 
-      return { success: true, message: 'QRIS berhasil dihapus' }
+      const row = sqlite
+        .prepare('SELECT * FROM mediasoft_struk_settings WHERE id = 1')
+        .get() as StrukSettings | undefined
+
+      return { success: true, message: 'QRIS berhasil dihapus', data: row }
     } catch (error) {
       return { success: false, message: String(error) }
     }

@@ -1,4 +1,4 @@
-import { db, sqlite } from '../../database/connection.js'
+import { db } from '../../database/connection.js'
 import { penjualan, penjualanDetail, barang } from '../../database/schema.js'
 import { eq, desc } from 'drizzle-orm'
 
@@ -26,17 +26,9 @@ export class PenjualanModel {
     return { header, details }
   }
 
-  static create(
-    header: typeof penjualan.$inferInsert & { discount_amount?: number },
-    details: (typeof penjualanDetail.$inferInsert)[]
-  ) {
+  static create(header: typeof penjualan.$inferInsert, details: (typeof penjualanDetail.$inferInsert)[]) {
     try {
       db.insert(penjualan).values(header).run()
-      // Save discount_amount and shift_id (not in Drizzle schema but exist in DB)
-      if (header.discount_amount || header.shift_id) {
-        sqlite.prepare('UPDATE mediasoft_penjualan SET discount_amount = ?, shift_id = ? WHERE kd_tansaksi_jual = ?')
-          .run(header.discount_amount ?? 0, header.shift_id ?? null, header.kd_tansaksi_jual)
-      }
       for (const d of details) {
         db.insert(penjualanDetail).values(d).run()
         if (d.kd_barang && d.qty) {

@@ -1,6 +1,6 @@
 # 🏪 MediaSoft POS - Point of Sale System
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Electron](https://img.shields.io/badge/electron-30.0.6-47848F.svg)
 ![React](https://img.shields.io/badge/react-18.3.1-61DAFB.svg)
@@ -183,25 +183,9 @@ npm install
 npx electron-rebuild
 ```
 
-4. **Setup database**
+4. **Database**
 
-⚠️ **IMPORTANT:** You will see "duplicate column name" errors - **THIS IS NORMAL!**
-See `SETUP_README.md` for explanation.
-
-```bash
-# Automated setup (recommended)
-# Linux/Mac
-chmod +x setup.sh
-./setup.sh
-
-# Windows
-setup.bat
-
-# OR manual setup
-sqlite3 sistem_pos.db < SETUP_DATABASE.sql
-```
-
-📖 **Read `SETUP_README.md` before running setup!**
+Saat development, aplikasi memakai file `sistem_pos.db` di root project. Jika database belum ada, siapkan file SQLite tersebut terlebih dahulu atau jalankan migrasi/schema internal yang sesuai sebelum membuka aplikasi. File database, backup, export, log, dan build output sudah masuk `.gitignore`.
 
 5. **Run development**
 ```bash
@@ -309,6 +293,11 @@ npm run build            # Build for production
 npm run build:vite       # Build Vite only
 npm run build:electron   # Build Electron only
 
+# Quality checks
+npm run typecheck        # Type-check renderer and Electron/backend code
+npm run test             # Run unit/security regression tests
+npm run check            # Run typecheck and tests
+
 # Database
 npx drizzle-kit generate # Generate migrations
 npx drizzle-kit push     # Push schema to database
@@ -347,25 +336,22 @@ npx electron-rebuild
 - ✅ **Rate limiting** - 5 attempts, 15-minute lockout
 - ✅ **Session management** - 30-minute inactivity timeout
 - ✅ **Input sanitization** - XSS & SQL injection prevention
+- ✅ **Safe tutorial rendering** - Markdown-like content rendered without raw HTML injection
 - ✅ **Password strength validation** - Min 8 chars, uppercase, lowercase, number
+- ✅ **No password persistence in localStorage** - Remember-me stores only username
 - ✅ **Centralized error handling** - Structured logging with severity levels
 - ✅ **React Error Boundary** - Graceful error recovery
 - ✅ **AES-256 encryption** - For sensitive data
 - ✅ **Activity logging** - All auth attempts and data modifications
-- ✅ **Protected routes** - Role-based access control
+- ✅ **Protected routes & admin IPC guard** - Admin channels are blocked server-side for non-privileged users
 - ✅ **Secure IPC communication** - Input validation on all channels
+- ✅ **IPC whitelist regression test** - Registered handlers must also be exposed in preload whitelist
 
-### Security Migration
-Run these commands to enable enhanced security:
-```bash
-# Add password_hash_type column
-sqlite3 sistem_pos.db < MIGRATION_PASSWORD_HASH_TYPE.sql
+### Security Notes
 
-# Create performance indexes
-sqlite3 sistem_pos.db < CREATE_INDEXES.sql
-```
-
-See `SECURITY_IMPLEMENTATION_GUIDE.md` for complete details.
+- Jangan menyimpan password user di `localStorage`, file konfigurasi, atau dokumentasi.
+- Channel IPC baru harus didaftarkan di `src/main/ipcHandlers.ts` dan `src/main/preload.cjs`; `tests/ipcChannels.test.ts` akan gagal jika keduanya tidak sinkron.
+- Endpoint administrasi seperti user management, backup, security, ecommerce API, activity log, dan subscription plan dibatasi ke role `developer`/`superadmin` di main process.
 
 ---
 
@@ -416,10 +402,11 @@ npx electron-rebuild
 
 ## 📚 Documentation
 
-- [FITUR_LENGKAP.md](./FITUR_LENGKAP.md) - Dokumentasi lengkap semua fitur
-- [CHANGELOG.md](./CHANGELOG.md) - Changelog & update history
-- [PASSWORD_INFO.md](./PASSWORD_INFO.md) - Info login & password
-- [CREATE_NEW_TABLES.sql](./CREATE_NEW_TABLES.sql) - SQL script untuk tabel baru
+- `README.md` - Dokumentasi utama project
+- `src/database/schema.ts` - Definisi schema Drizzle
+- `src/database/connection.ts` - Koneksi SQLite dan migrasi startup
+- `src/main/ipcHandlers.ts` - Daftar handler IPC main process
+- `src/main/preload.cjs` - Whitelist channel IPC yang boleh dipanggil renderer
 
 ---
 

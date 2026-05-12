@@ -121,7 +121,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   return (
     <header className="h-14 glass border-b border-white/30 dark:border-slate-700/30 flex items-center justify-between px-4 sm:px-6 shrink-0 relative z-30">
       <div className="flex items-center gap-3 min-w-0">
-        <button onClick={onMenuClick} className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors shrink-0">
+        <button onClick={onMenuClick} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors shrink-0" title="Buka/tutup sidebar">
           <Menu size={20} />
         </button>
         <nav className="flex items-center gap-1 text-sm min-w-0">

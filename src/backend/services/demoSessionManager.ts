@@ -40,7 +40,7 @@ class DemoSessionManager {
       loginTime: Date.now(),
       isDemo: hakAkses === 'demo',
     }
-    console.log(`🔐 DemoSessionManager: Session set for "${username}" (role: ${hakAkses}, demo: ${hakAkses === 'demo'})`)
+    console.log(`🔐 DemoSessionManager: Session set for "${username}" (role: ${hakAkses}, demoMode: ${hakAkses === 'demo' ? 'active' : 'inactive'})`)
   }
 
   /**

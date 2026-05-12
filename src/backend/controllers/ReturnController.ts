@@ -1,4 +1,6 @@
 import { sqlite } from '../../database/connection.js'
+import { CustomerModel } from '../models/CustomerModel.js'
+import { WhatsAppController } from './WhatsAppController.js'
 
 export class ReturnController {
   static create(data: any) {
@@ -11,6 +13,23 @@ export class ReturnController {
       // Update stok menggunakan kd_barang
       const kd = item.kd_barang ?? item.barang_id
       sqlite.prepare('UPDATE mediasoft_barang SET stok = stok + ? WHERE kd_barang = ?').run(item.quantity, kd)
+    }
+
+    if (data.customer_id) {
+      const customer = CustomerModel.getById(data.customer_id) as any
+      void WhatsAppController.sendReturnNotification({
+        phone: customer?.no_telp,
+        customerName: customer?.nama_customer,
+        returnNumber,
+        total: Number(data.total_amount ?? 0),
+        refundMethod: data.refund_method,
+      }).then(result => {
+        if (result.attempted && !result.success) {
+          console.warn('WhatsApp return notification failed:', result.message)
+        }
+      }).catch(error => {
+        console.warn('WhatsApp return notification skipped:', error)
+      })
     }
     
     return { success: true, data: { id: returnId, return_number: returnNumber } }

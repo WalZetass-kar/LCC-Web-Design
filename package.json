@@ -13,6 +13,9 @@
     "build": "tsc -p tsconfig.electron.json && vite build && electron-builder",
     "build:vite": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run test",
     "rebuild:electron": "./node_modules/.bin/electron-rebuild -f -w better-sqlite3",
     "rebuild:node": "npm rebuild better-sqlite3",
     "postinstall": "npm run rebuild:electron"

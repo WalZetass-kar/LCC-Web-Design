@@ -71,6 +71,10 @@ const TRIGGER_MESSAGES: Record<string, { title: string; subtitle: string }> = {
     title: 'Upgrade Akun Anda 🚀',
     subtitle: 'Anda sedang menggunakan akun demo dengan fitur terbatas.',
   },
+  access_expiring: {
+    title: 'Perpanjang Akses Akun',
+    subtitle: 'Pilih paket untuk memperpanjang masa aktif dan membuka fitur sesuai kebutuhan.',
+  },
   manual: {
     title: 'Upgrade Akun Anda 🚀',
     subtitle: 'Pilih paket yang sesuai untuk bisnis Anda.',

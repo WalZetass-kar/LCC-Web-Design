@@ -16,7 +16,7 @@ export class ShiftController {
     return { success: true, data: { difference } }
   }
 
-  static getCurrent(userId: number) {
+  static getCurrent(userId: string | number) {
     const data = sqlite.prepare('SELECT * FROM mediasoft_shifts WHERE user_id = ? AND status = ? ORDER BY start_time DESC LIMIT 1').get(userId, 'OPEN')
     return { success: true, data }
   }

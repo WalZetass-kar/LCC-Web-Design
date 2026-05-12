@@ -1,5 +1,19 @@
 import { useState } from 'react'
 import { TrendingUp, Package, Users, DollarSign, Search, BarChart2, FileSpreadsheet, FileText } from 'lucide-react'
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -45,6 +59,32 @@ type TabType = 'penjualan' | 'laba-rugi' | 'produk' | 'stok' | 'customer'
 
 const today = new Date().toISOString().split('T')[0]
 const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+
+function shortDate(value: string) {
+  if (!value) return '-'
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return value.slice(0, 10)
+  return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
+}
+
+function compactNumber(value: number) {
+  if (value >= 1000000000) return `${(value / 1000000000).toFixed(1)}M`
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}jt`
+  if (value >= 1000) return `${Math.round(value / 1000)}rb`
+  return String(value)
+}
+
+function moneyTooltip(value: unknown, name: unknown) {
+  return [formatRupiah(Number(value ?? 0)), String(name)]
+}
+
+function numberTooltip(value: unknown, name: unknown) {
+  return [Number(value ?? 0).toLocaleString('id-ID'), String(name)]
+}
+
+function chartAxisStyle() {
+  return { fontSize: 11, fill: '#94a3b8' }
+}
 
 export default function Laporan() {
   const toast = useToast()
@@ -165,6 +205,36 @@ export default function Laporan() {
   ]
 
   const needsDate = tab !== 'stok' && tab !== 'customer'
+  const penjualanChartData = (penjualanData?.transaksi ?? []).reduce((rows, item) => {
+    const key = (item.tgl_wkt_transaksi ?? '').slice(0, 10) || '-'
+    const existing = rows.find(row => row.key === key)
+    if (existing) {
+      existing.total += Number(item.yang_dibayar ?? 0)
+      existing.transaksi += 1
+    } else {
+      rows.push({ key, tanggal: shortDate(key), total: Number(item.yang_dibayar ?? 0), transaksi: 1 })
+    }
+    return rows
+  }, [] as Array<{ key: string; tanggal: string; total: number; transaksi: number }>).sort((a, b) => a.key.localeCompare(b.key))
+  const labaRugiChartData = labaRugiData ? [
+    { label: 'Penjualan', value: labaRugiData.total_penjualan, color: '#db2777' },
+    { label: 'Modal', value: labaRugiData.total_modal, color: '#d97706' },
+    { label: 'Laba', value: labaRugiData.laba_kotor, color: labaRugiData.laba_kotor >= 0 ? '#059669' : '#dc2626' },
+  ] : []
+  const produkChartData = produkData.map(p => ({
+    label: p.nama_barang || p.kd_barang,
+    qty: p.total_qty,
+    penjualan: p.total_penjualan,
+  }))
+  const stokChartData = stokData ? [
+    { label: 'Aman', value: Math.max(0, (stokData.all.length ?? 0) - stokData.stok_menipis.length), color: '#059669' },
+    { label: 'Menipis', value: stokData.stok_menipis.length, color: '#dc2626' },
+  ] : []
+  const customerChartData = (customerData?.customers ?? []).slice(0, 8).map(customer => ({
+    label: customer.nama_customer,
+    belanja: customer.total_belanja ?? 0,
+    poin: customer.poin ?? 0,
+  }))
 
   return (
     <div className="space-y-4">
@@ -190,6 +260,7 @@ export default function Laporan() {
             <>
               <Input label="Dari" type="date" value={dateRange.start} onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))} className="w-40" />
               <Input label="Sampai" type="date" value={dateRange.end} onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))} className="w-40" />
+              <Button variant="secondary" onClick={() => setDateRange({ start: today, end: today })} className="text-sm">Hari Ini</Button>
               <Button variant="secondary" onClick={() => setDateRange({ start: firstDay, end: today })} className="text-sm">Bulan Ini</Button>
             </>
           )}
@@ -235,6 +306,27 @@ export default function Laporan() {
               </Card>
             ))}
           </div>
+          <Card title="Grafik Penjualan" subtitle="Tren omzet per tanggal sesuai periode yang ditampilkan">
+            {penjualanChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart data={penjualanChartData} margin={{ top: 10, right: 14, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="laporanPenjualanTotal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#db2777" stopOpacity={0.28} />
+                      <stop offset="95%" stopColor="#db2777" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" vertical={false} />
+                  <XAxis dataKey="tanggal" tick={chartAxisStyle()} axisLine={false} tickLine={false} />
+                  <YAxis tick={chartAxisStyle()} axisLine={false} tickLine={false} tickFormatter={v => compactNumber(Number(v))} />
+                  <Tooltip formatter={moneyTooltip} />
+                  <Area type="monotone" dataKey="total" name="Omzet" stroke="#db2777" strokeWidth={3} fill="url(#laporanPenjualanTotal)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="py-12 text-center text-sm text-slate-400">Belum ada transaksi pada periode ini</div>
+            )}
+          </Card>
           <Card title="Detail Transaksi">
             <div className="overflow-x-auto -mx-6">
               <table className="w-full text-sm min-w-[600px]">
@@ -264,52 +356,115 @@ export default function Laporan() {
       )}
 
       {tab === 'laba-rugi' && labaRugiData && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            { label: 'Total Transaksi', value: labaRugiData.total_transaksi, currency: false, color: 'text-slate-800 dark:text-white' },
-            { label: 'Total Penjualan', value: labaRugiData.total_penjualan, currency: true, color: 'text-primary-600 dark:text-primary-400' },
-            { label: 'Total Modal', value: labaRugiData.total_modal, currency: true, color: 'text-amber-600 dark:text-amber-400' },
-            { label: 'Laba Kotor', value: labaRugiData.laba_kotor, currency: true, color: labaRugiData.laba_kotor >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400' },
-            { label: 'Margin', value: labaRugiData.margin_persen, currency: false, suffix: '%', color: 'text-pink-600 dark:text-pink-400' },
-          ].map(s => (
-            <Card key={s.label} className="text-center">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{s.label}</p>
-              <p className={`text-2xl font-bold ${s.color}`}>
-                {s.currency ? formatRupiah(s.value as number) : `${(s.value as number).toLocaleString('id-ID')}${s.suffix ?? ''}`}
-              </p>
-            </Card>
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              { label: 'Total Transaksi', value: labaRugiData.total_transaksi, currency: false, color: 'text-slate-800 dark:text-white' },
+              { label: 'Total Penjualan', value: labaRugiData.total_penjualan, currency: true, color: 'text-primary-600 dark:text-primary-400' },
+              { label: 'Total Modal', value: labaRugiData.total_modal, currency: true, color: 'text-amber-600 dark:text-amber-400' },
+              { label: 'Laba Kotor', value: labaRugiData.laba_kotor, currency: true, color: labaRugiData.laba_kotor >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400' },
+              { label: 'Margin', value: labaRugiData.margin_persen, currency: false, suffix: '%', color: 'text-pink-600 dark:text-pink-400' },
+            ].map(s => (
+              <Card key={s.label} className="text-center">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{s.label}</p>
+                <p className={`text-2xl font-bold ${s.color}`}>
+                  {s.currency ? formatRupiah(s.value as number) : `${(s.value as number).toLocaleString('id-ID')}${s.suffix ?? ''}`}
+                </p>
+              </Card>
+            ))}
+          </div>
+          <Card title="Grafik Laba Rugi" subtitle="Perbandingan penjualan, modal, dan laba kotor">
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={labaRugiChartData} margin={{ top: 10, right: 14, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" vertical={false} />
+                <XAxis dataKey="label" tick={chartAxisStyle()} axisLine={false} tickLine={false} />
+                <YAxis tick={chartAxisStyle()} axisLine={false} tickLine={false} tickFormatter={v => compactNumber(Number(v))} />
+                <Tooltip formatter={moneyTooltip} />
+                <Bar dataKey="value" name="Nominal" radius={[8, 8, 0, 0]}>
+                  {labaRugiChartData.map(item => <Cell key={item.label} fill={item.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </>
       )}
 
       {tab === 'produk' && produkData.length > 0 && (
-        <Card title="Produk Terlaris">
-          <div className="overflow-x-auto -mx-6">
-            <table className="w-full text-sm min-w-[400px]">
-              <thead className="bg-slate-50/80 dark:bg-slate-800/80">
-                <tr>
-                  {['#', 'Produk', 'Total Qty', 'Total Penjualan'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                {produkData.map((p, i) => (
-                  <tr key={p.kd_barang} className={`transition-colors hover:bg-primary-50/50 dark:hover:bg-slate-700/30 ${i % 2 === 1 ? 'bg-slate-50/50 dark:bg-slate-800/30' : ''}`}>
-                    <td className="px-4 py-2.5 text-slate-400 font-bold">{i + 1}</td>
-                    <td className="px-4 py-2.5 font-medium text-slate-700 dark:text-slate-200">{p.nama_barang}</td>
-                    <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{p.total_qty.toLocaleString('id-ID')}</td>
-                    <td className="px-4 py-2.5 font-semibold text-primary-600 dark:text-primary-400">{formatRupiah(p.total_penjualan)}</td>
+        <>
+          <Card title="Grafik Produk Terlaris" subtitle="Jumlah item terjual sesuai periode yang ditampilkan">
+            <ResponsiveContainer width="100%" height={Math.max(280, produkChartData.length * 38)}>
+              <BarChart data={produkChartData} layout="vertical" margin={{ top: 8, right: 18, left: 12, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" horizontal={false} />
+                <XAxis type="number" tick={chartAxisStyle()} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="label" tick={chartAxisStyle()} axisLine={false} tickLine={false} width={120} />
+                <Tooltip formatter={numberTooltip} />
+                <Bar dataKey="qty" name="Qty Terjual" radius={[0, 8, 8, 0]} fill="#db2777" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+          <Card title="Produk Terlaris">
+            <div className="overflow-x-auto -mx-6">
+              <table className="w-full text-sm min-w-[400px]">
+                <thead className="bg-slate-50/80 dark:bg-slate-800/80">
+                  <tr>
+                    {['#', 'Produk', 'Total Qty', 'Total Penjualan'].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                  {produkData.map((p, i) => (
+                    <tr key={p.kd_barang} className={`transition-colors hover:bg-primary-50/50 dark:hover:bg-slate-700/30 ${i % 2 === 1 ? 'bg-slate-50/50 dark:bg-slate-800/30' : ''}`}>
+                      <td className="px-4 py-2.5 text-slate-400 font-bold">{i + 1}</td>
+                      <td className="px-4 py-2.5 font-medium text-slate-700 dark:text-slate-200">{p.nama_barang}</td>
+                      <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{p.total_qty.toLocaleString('id-ID')}</td>
+                      <td className="px-4 py-2.5 font-semibold text-primary-600 dark:text-primary-400">{formatRupiah(p.total_penjualan)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
       )}
 
       {tab === 'stok' && stokData && (
         <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card title="Grafik Status Stok" subtitle="Perbandingan produk aman dan stok menipis">
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Tooltip formatter={numberTooltip} />
+                  <Pie data={stokChartData} dataKey="value" nameKey="label" innerRadius={62} outerRadius={92} paddingAngle={4}>
+                    {stokChartData.map(item => <Cell key={item.label} fill={item.color} />)}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-2 flex justify-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                {stokChartData.map(item => (
+                  <div key={item.label} className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                    {item.label}: {item.value.toLocaleString('id-ID')}
+                  </div>
+                ))}
+              </div>
+            </Card>
+            <Card title="Grafik Stok Menipis" subtitle="Produk dengan stok terendah">
+              {stokData.stok_menipis.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={stokData.stok_menipis.slice(0, 8).map(s => ({ label: s.nama_barang || s.kd_barang, stok: s.stok ?? 0 }))} layout="vertical" margin={{ top: 8, right: 18, left: 12, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" horizontal={false} />
+                    <XAxis type="number" tick={chartAxisStyle()} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="label" tick={chartAxisStyle()} axisLine={false} tickLine={false} width={120} />
+                    <Tooltip formatter={numberTooltip} />
+                    <Bar dataKey="stok" name="Stok" radius={[0, 8, 8, 0]} fill="#dc2626" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="py-12 text-center text-sm text-slate-400">Tidak ada stok menipis</div>
+              )}
+            </Card>
+          </div>
           {stokData.stok_menipis.length > 0 && (
             <Card title={`⚠️ Stok Menipis (${stokData.stok_menipis.length} produk)`}>
               <div className="overflow-x-auto -mx-6">
@@ -381,6 +536,21 @@ export default function Laporan() {
               </Card>
             ))}
           </div>
+          <Card title="Grafik Customer" subtitle="Top customer berdasarkan total belanja">
+            {customerChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={Math.max(280, customerChartData.length * 38)}>
+                <BarChart data={customerChartData} layout="vertical" margin={{ top: 8, right: 18, left: 12, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" horizontal={false} />
+                  <XAxis type="number" tick={chartAxisStyle()} axisLine={false} tickLine={false} tickFormatter={v => compactNumber(Number(v))} />
+                  <YAxis type="category" dataKey="label" tick={chartAxisStyle()} axisLine={false} tickLine={false} width={120} />
+                  <Tooltip formatter={moneyTooltip} />
+                  <Bar dataKey="belanja" name="Total Belanja" radius={[0, 8, 8, 0]} fill="#059669" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="py-12 text-center text-sm text-slate-400">Belum ada data customer</div>
+            )}
+          </Card>
           <Card title="Data Customer">
             <div className="overflow-x-auto -mx-6">
               <table className="w-full text-sm min-w-[500px]">
