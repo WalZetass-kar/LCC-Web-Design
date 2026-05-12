@@ -169,8 +169,8 @@
 
 1. **Clone repository**
 ```bash
-git clone https://github.com/yourusername/mediasoft-pos.git
-cd mediasoft-pos
+git clone https://github.com/WalZetass-Kar/LCC-Web-Design
+cd LCC-Web-Design
 ```
 
 2. **Install dependencies**
