@@ -1,6 +1,6 @@
 # 🏪 MediaSoft POS - Point of Sale System
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Electron](https://img.shields.io/badge/electron-30.0.6-47848F.svg)
 ![React](https://img.shields.io/badge/react-18.3.1-61DAFB.svg)
