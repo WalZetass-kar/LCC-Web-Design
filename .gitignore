@@ -39,8 +39,13 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.keys/
+*.keystore
+*.jks
 
 # Temporary files
 *.tmp
 *.temp
 .cache/
+.local-jdk21/
+openjdk-*.deb

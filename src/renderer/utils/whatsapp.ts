@@ -8,14 +8,15 @@
  *
  * Format: https://wa.me/<number>?text=<encoded_text>
  *
- * Best practice:
- * - Number stored in DB (Identitas.nomorwaowner), NOT hardcoded
- * - Fallback number configurable here for safety
- * - Message auto-populated with user + plan context
+ * Subscription upgrade target is fixed to the official admin number.
+ * Other WhatsApp flows can still pass a custom number.
  */
 
-/** Fallback WhatsApp number if DB returns null */
-const FALLBACK_WA_NUMBER = '6281234567890'
+/** Official WhatsApp target for subscription package upgrades. */
+export const SUBSCRIPTION_UPGRADE_WA_NUMBER = '08988098238'
+
+/** Fallback WhatsApp number if a custom number is missing or invalid. */
+const FALLBACK_WA_NUMBER = SUBSCRIPTION_UPGRADE_WA_NUMBER
 
 /**
  * Normalize a phone number to international format (without +).
@@ -33,6 +34,10 @@ export function normalizePhoneNumber(phone: string): string {
   return cleaned
 }
 
+function isValidPhoneNumber(phone: string): boolean {
+  return phone.length >= 10 && /^\d+$/.test(phone)
+}
+
 export interface WhatsAppUpgradeParams {
   /** Owner/admin phone number (will be normalized) */
   phone?: string | null
@@ -48,6 +53,27 @@ export interface WhatsAppUpgradeParams {
   storeName?: string | null
   /** User's email (optional) */
   email?: string | null
+}
+
+function openExternalUrl(url: string): void {
+  if (window.api?.invoke) {
+    window.api.invoke('app:openExternal', url)
+      .then(result => {
+        const response = result as { success?: boolean } | undefined
+        if (response?.success === false) {
+          window.location.href = url
+        }
+      })
+      .catch(() => {
+        window.location.href = url
+      })
+    return
+  }
+
+  const opened = window.open(url, '_blank', 'noopener,noreferrer')
+  if (!opened) {
+    window.location.href = url
+  }
 }
 
 /**
@@ -85,21 +111,21 @@ export function buildUpgradeMessage(params: WhatsAppUpgradeParams): string {
  * @returns true if successfully opened, false if number is invalid
  */
 export function openWhatsAppUpgrade(params: WhatsAppUpgradeParams): boolean {
-  const rawPhone = params.phone || FALLBACK_WA_NUMBER
-  const phone = normalizePhoneNumber(rawPhone)
+  const phone = normalizePhoneNumber(params.phone || '')
+  const fallbackPhone = normalizePhoneNumber(FALLBACK_WA_NUMBER)
+  const targetPhone = isValidPhoneNumber(phone) ? phone : fallbackPhone
 
   // Basic validation
-  if (phone.length < 10 || !/^\d+$/.test(phone)) {
-    console.error('[WhatsApp] Invalid phone number:', phone)
+  if (!isValidPhoneNumber(targetPhone)) {
+    console.error('[WhatsApp] Invalid phone number:', targetPhone)
     return false
   }
 
   const message = buildUpgradeMessage(params)
   const encodedMessage = encodeURIComponent(message)
-  const url = `https://wa.me/${phone}?text=${encodedMessage}`
+  const url = `https://wa.me/${targetPhone}?text=${encodedMessage}`
 
-  // Use window.open for Electron compatibility
-  window.open(url, '_blank')
+  openExternalUrl(url)
   return true
 }
 
@@ -109,5 +135,5 @@ export function openWhatsAppUpgrade(params: WhatsAppUpgradeParams): boolean {
 export function openWhatsApp(phone: string, message: string): void {
   const normalized = normalizePhoneNumber(phone)
   const url = `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`
-  window.open(url, '_blank')
+  openExternalUrl(url)
 }

@@ -1,6 +1,6 @@
 import { db } from '../../database/connection.js'
 import { backup } from '../../database/schema.js'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, lt } from 'drizzle-orm'
 
 export class BackupModel {
   static getAll() {
@@ -27,5 +27,9 @@ export class BackupModel {
         this.delete(b.kd_backup)
       }
     }
+  }
+
+  static getOlderThan(cutoffIso: string) {
+    return db.select().from(backup).where(lt(backup.tgl_backup, cutoffIso)).all()
   }
 }

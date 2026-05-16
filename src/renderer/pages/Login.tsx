@@ -1,13 +1,26 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { User, Lock, Store, Eye, EyeOff, Sparkles, Info, Key, Keyboard, Database, Globe } from 'lucide-react'
+import { User, Lock, Store, Eye, EyeOff, Sparkles, Info, Key, Keyboard, Database, Globe, MessageCircle } from 'lucide-react'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Modal from '../components/Modal'
 import { api } from '../utils/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
-import type { UserSession, Identitas } from '../../shared/types'
+import { openWhatsApp, openWhatsAppUpgrade, SUBSCRIPTION_UPGRADE_WA_NUMBER } from '../utils/whatsapp'
+import type { UserSession, Identitas, SubscriptionPlan } from '../../shared/types'
+
+function formatPrice(n: number): string {
+  return 'Rp ' + n.toLocaleString('id-ID')
+}
+
+function getPlanPeriod(days: number): string {
+  if (days === 1) return '/hari'
+  if (days === 7) return '/minggu'
+  if (days >= 28 && days <= 31) return '/bulan'
+  if (days >= 360 && days <= 366) return '/tahun'
+  return `/${days} hari`
+}
 
 export default function Login() {
   const { login } = useAuth()
@@ -22,6 +35,7 @@ export default function Login() {
   const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'error'>('checking')
   const [showDefaultLogin, setShowDefaultLogin] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
+  const [activePlans, setActivePlans] = useState<SubscriptionPlan[]>([])
 
   // Identitas dialog state
   const [showIdentitas, setShowIdentitas] = useState(false)
@@ -57,6 +71,13 @@ export default function Login() {
       }
     }
     checkStatus()
+  }, [])
+
+  useEffect(() => {
+    api<SubscriptionPlan[] | SubscriptionPlan>('plan:getActive').then(r => {
+      const plans = Array.isArray(r.data) ? r.data : (r.data ? [r.data] : [])
+      if (r.success) setActivePlans(plans)
+    })
   }, [])
 
   // Keyboard shortcuts
@@ -142,6 +163,27 @@ export default function Login() {
   }
 
   const fi = (k: string, v: string) => setIdentitas(prev => ({ ...prev, [k]: v }))
+  const renewalPlan = activePlans.find(plan => plan.is_recommended) ?? activePlans[0]
+  const isExpiredAccessError = /masa akses|berakhir|kadaluarsa|kedaluwarsa/i.test(error)
+
+  const handleForgotPassword = () => {
+    openWhatsApp(
+      SUBSCRIPTION_UPGRADE_WA_NUMBER,
+      'Halo Admin, saya lupa password akun MediaSoft POS'
+    )
+  }
+
+  const handleRenewAccess = () => {
+    openWhatsAppUpgrade({
+      phone: SUBSCRIPTION_UPGRADE_WA_NUMBER,
+      planName: renewalPlan?.name ?? 'Perpanjangan Akses',
+      planPrice: renewalPlan ? formatPrice(renewalPlan.price) : 'Harga menyesuaikan',
+      planPeriod: renewalPlan ? getPlanPeriod(renewalPlan.duration_days) : '',
+      userName: username.trim() || 'User kadaluarsa',
+      storeName: null,
+      email: null,
+    })
+  }
 
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 relative overflow-hidden">
@@ -296,7 +338,7 @@ export default function Login() {
                   </label>
                   <button
                     type="button"
-                    onClick={() => window.open('https://wa.me/6208988098238?text=Halo%20Admin,%20saya%20lupa%20password%20akun%20MediaSoft%20POS', '_blank')}
+                    onClick={handleForgotPassword}
                     className="text-primary-400 hover:text-primary-300 transition-colors"
                   >
                     Lupa Password?
@@ -304,9 +346,31 @@ export default function Login() {
                 </div>
 
                 {error && (
-                  <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-                    <span className="text-red-400 mt-0.5 shrink-0">⚠️</span>
-                    <p className="text-sm text-red-400">{error}</p>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                      <span className="text-red-400 mt-0.5 shrink-0">⚠️</span>
+                      <p className="text-sm text-red-400">{error}</p>
+                    </div>
+                    {isExpiredAccessError && (
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                        <div className="mb-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Perpanjangan Akses</p>
+                          <p className="mt-1 text-xs text-slate-300">
+                            {renewalPlan
+                              ? `${renewalPlan.name} ${formatPrice(renewalPlan.price)}${getPlanPeriod(renewalPlan.duration_days)}`
+                              : 'Paket aktif belum tersedia. Chat admin untuk info harga terbaru.'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRenewAccess}
+                          className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-600"
+                        >
+                          <MessageCircle size={16} />
+                          Perpanjang via WhatsApp
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 

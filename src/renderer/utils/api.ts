@@ -12,6 +12,7 @@
 
 import type { IpcResponse } from '../../shared/types'
 import { isDemoMode, getDemoBlockedMessage } from './demo'
+import { mobileApi } from './mobileApi'
 
 /**
  * READ-ONLY channel patterns — these are always allowed even in demo mode.
@@ -26,7 +27,7 @@ const READ_PATTERNS: readonly string[] = [
   'getSettings', 'getPermissions', 'getBirthdayToday',
   'getTransaksi', 'getKasById', 'getAllKas', 'getActiveKas',
   'getUnreadCount', 'getHistory', 'getDetails', 'getUsageCount',
-  'calculate',
+  'calculate', 'ask', 'testGoogleSheets', 'exportDashboardToSheets',
 ] as const
 
 /**
@@ -70,6 +71,10 @@ export async function api<T>(channel: string, ...args: unknown[]): Promise<IpcRe
 
   // ─── INVOKE THE IPC CHANNEL ────────────────────────────────────────
   try {
+    if (!window.api?.invoke) {
+      return await mobileApi<T>(channel, ...args)
+    }
+
     return await window.api.invoke(channel, ...args) as IpcResponse<T>
   } catch (error: any) {
     // Handle errors from preload whitelist or main process

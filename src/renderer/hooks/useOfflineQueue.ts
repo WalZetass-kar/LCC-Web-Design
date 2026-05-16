@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useToast } from '../contexts/ToastContext'
+import { api } from '../utils/api'
 
 interface QueuedOperation {
   id: string
@@ -80,7 +81,7 @@ export function useOfflineQueue() {
     for (const op of queue) {
       try {
         // Execute the queued operation
-        await window.api.invoke(op.type, op.data)
+        await api(op.type, op.data)
       } catch (error) {
         console.error(`Failed to sync operation ${op.id}:`, error)
         

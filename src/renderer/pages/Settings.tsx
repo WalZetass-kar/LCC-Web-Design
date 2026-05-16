@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Sun, Moon, Palette, Store, Receipt, Barcode, Printer, Database, Bell, AlertTriangle } from 'lucide-react'
+import { toDataURL } from 'qrcode'
+import { Sun, Moon, Palette, Store, Receipt, Barcode, Printer, Database, Bell, AlertTriangle, Server, RefreshCw, Wifi, Bot, FileSpreadsheet, KeyRound, QrCode, Copy, CheckCircle2 } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -9,6 +10,7 @@ import { useTheme, type ThemeColor } from '../contexts/ThemeContext'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { playDangerSound, playWarningSound } from '../utils/sound'
+import { DEFAULT_INDUSTRY_SETTINGS, defaultModelForProvider, normalizeIndustrySettings, type AiProvider, type IndustrySettings } from '../../shared/industrySettings'
 import type { Identitas } from '../../shared/types'
 
 const COLORS: { key: ThemeColor; label: string; hex: string }[] = [
@@ -24,6 +26,14 @@ export default function Settings() {
   const { color, mode, setColor, setMode } = useTheme()
   const toast = useToast()
   const [identitas, setIdentitas] = useState<Partial<Identitas>>({})
+  const [syncStatus, setSyncStatus] = useState<any>(null)
+  const [syncForm, setSyncForm] = useState({ enabled: false, port: '38573', baseUrl: '', token: '' })
+  const [syncQr, setSyncQr] = useState('')
+  const [pairingText, setPairingText] = useState('')
+  const [industrySettings, setIndustrySettings] = useState<IndustrySettings>(DEFAULT_INDUSTRY_SETTINGS)
+  const [industryLoading, setIndustryLoading] = useState(false)
+  const [testingSheets, setTestingSheets] = useState(false)
+  const [syncLoading, setSyncLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmText, setConfirmText] = useState('')
@@ -33,7 +43,31 @@ export default function Settings() {
     api<Identitas>('identitas:get').then(r => {
       if (r.success && r.data) setIdentitas(r.data)
     })
+    loadSyncStatus()
+    loadIndustrySettings()
   }, [])
+
+  const loadSyncStatus = async () => {
+    const r = await api<any>('sync:getStatus')
+    if (!r.success || !r.data) return
+
+    setSyncStatus(r.data)
+    if (r.data.mode === 'android-client') {
+      setSyncForm({
+        enabled: Boolean(r.data.client?.enabled),
+        port: '38573',
+        baseUrl: r.data.client?.baseUrl ?? '',
+        token: r.data.client?.token ?? '',
+      })
+    } else {
+      setSyncForm({
+        enabled: Boolean(r.data.enabled),
+        port: String(r.data.port ?? 38573),
+        baseUrl: r.data.urls?.[1] ?? r.data.urls?.[0] ?? '',
+        token: r.data.token ?? '',
+      })
+    }
+  }
 
   const saveIdentitas = async () => {
     setLoading(true)
@@ -41,6 +75,142 @@ export default function Settings() {
     setLoading(false)
     if (r.success) toast(r.message as string)
     else toast(r.message as string, 'error')
+  }
+
+  const isAndroidSyncClient = syncStatus?.mode === 'android-client'
+
+  const getSyncPairingPayload = () => {
+    const baseUrl = syncForm.baseUrl || (syncStatus?.urls ?? []).find((url: string) => !url.includes('127.0.0.1')) || syncStatus?.urls?.[0] || ''
+    return JSON.stringify({
+      type: 'mediasoft-pos-zetass-sync',
+      app: 'MediaSoft POS Zetass v2.0',
+      baseUrl,
+      token: syncForm.token,
+      generatedAt: new Date().toISOString(),
+    })
+  }
+
+  useEffect(() => {
+    if (isAndroidSyncClient || !syncForm.token || !(syncStatus?.urls ?? []).length) {
+      setSyncQr('')
+      return
+    }
+
+    let cancelled = false
+    toDataURL(getSyncPairingPayload(), { width: 180, margin: 1, errorCorrectionLevel: 'M' })
+      .then(url => {
+        if (!cancelled) setSyncQr(url)
+      })
+      .catch(() => {
+        if (!cancelled) setSyncQr('')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isAndroidSyncClient, syncForm.token, syncForm.baseUrl, syncStatus?.urls])
+
+  const loadIndustrySettings = async () => {
+    const r = await api<IndustrySettings>('integrations:get')
+    if (r.success && r.data) setIndustrySettings(normalizeIndustrySettings(r.data))
+  }
+
+  const saveIndustrySettings = async () => {
+    setIndustryLoading(true)
+    const r = await api<IndustrySettings>('integrations:save', industrySettings)
+    setIndustryLoading(false)
+    if (r.success && r.data) {
+      setIndustrySettings(normalizeIndustrySettings(r.data))
+      toast('Pengaturan industri disimpan', 'success')
+    } else {
+      toast(r.message as string || 'Gagal menyimpan pengaturan industri', 'error')
+    }
+  }
+
+  const changeIndustrySetting = <K extends keyof IndustrySettings>(key: K, value: IndustrySettings[K]) => {
+    setIndustrySettings(prev => ({ ...prev, [key]: value }))
+  }
+
+  const changeAiProvider = (provider: AiProvider) => {
+    setIndustrySettings(prev => ({
+      ...prev,
+      aiProvider: provider,
+      aiModel: prev.aiModel || defaultModelForProvider(provider),
+    }))
+  }
+
+  const testGoogleSheets = async () => {
+    setTestingSheets(true)
+    const r = await api('integrations:testGoogleSheets')
+    setTestingSheets(false)
+    toast(r.message as string || (r.success ? 'Google Sheets tersambung' : 'Google Sheets gagal'), r.success ? 'success' : 'error')
+  }
+
+  const copyPairingData = async () => {
+    try {
+      await navigator.clipboard.writeText(getSyncPairingPayload())
+      toast('Data pairing disalin', 'success')
+    } catch {
+      toast('Clipboard tidak tersedia', 'error')
+    }
+  }
+
+  const applyPairingData = () => {
+    try {
+      const data = JSON.parse(pairingText)
+      if (data?.type !== 'mediasoft-pos-zetass-sync' || !data.baseUrl || !data.token) {
+        throw new Error('Format pairing tidak valid')
+      }
+      setSyncForm(prev => ({
+        ...prev,
+        enabled: true,
+        baseUrl: String(data.baseUrl),
+        token: String(data.token),
+      }))
+      toast('Data pairing diterapkan. Tekan Simpan lalu Tes.', 'success')
+      setPairingText('')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Format pairing tidak valid', 'error')
+    }
+  }
+
+  const saveSync = async () => {
+    setSyncLoading(true)
+    const payload = isAndroidSyncClient
+      ? { enabled: syncForm.enabled, baseUrl: syncForm.baseUrl, token: syncForm.token }
+      : { enabled: syncForm.enabled, port: parseInt(syncForm.port, 10), token: syncForm.token }
+    const r = await api<any>('sync:saveConfig', payload)
+    setSyncLoading(false)
+    if (r.success) {
+      toast(r.message as string || 'Sinkronisasi disimpan', 'success')
+      await loadSyncStatus()
+    } else {
+      toast(r.message as string || 'Gagal menyimpan sinkronisasi', 'error')
+    }
+  }
+
+  const testSync = async () => {
+    setSyncLoading(true)
+    const r = await api<any>('sync:testConnection', isAndroidSyncClient ? { baseUrl: syncForm.baseUrl, token: syncForm.token } : undefined)
+    setSyncLoading(false)
+    if (r.success) {
+      toast(r.message as string || 'Sinkronisasi tersambung', 'success')
+      await loadSyncStatus()
+    } else {
+      toast(r.message as string || 'Sinkronisasi gagal', 'error')
+    }
+  }
+
+  const rotateSyncToken = async () => {
+    setSyncLoading(true)
+    const r = await api<any>('sync:rotateToken')
+    setSyncLoading(false)
+    if (r.success) {
+      toast(r.message as string || 'Token diganti', 'success')
+      await loadSyncStatus()
+    } else {
+      toast(r.message as string || 'Gagal mengganti token', 'error')
+    }
   }
 
   const openResetDialog = () => {
@@ -145,9 +315,248 @@ export default function Settings() {
             <Button loading={loading} onClick={saveIdentitas} className="w-full sm:w-auto">Simpan Pengaturan Pajak</Button>
           </div>
         </Card>
+
+        <Card title="Asisten AI & Google Sheets" action={<Bot size={16} className={industrySettings.aiEnabled ? 'text-emerald-500' : 'text-slate-400'} />}>
+          <div className="space-y-4 mt-1">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
+              <div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">AI Online Opsional</p>
+                <p className="text-xs text-slate-400 mt-0.5">Fallback lokal tetap aktif saat API tidak tersedia</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={industrySettings.aiEnabled}
+                  onChange={e => changeIndustrySetting('aiEnabled', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Provider AI</label>
+                <select
+                  value={industrySettings.aiProvider}
+                  onChange={e => changeAiProvider(e.target.value as AiProvider)}
+                  className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                >
+                  <option value="local">Lokal gratis</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="custom">Custom OpenAI-Compatible</option>
+                </select>
+              </div>
+              <Input
+                label="Model"
+                value={industrySettings.aiModel}
+                onChange={e => changeIndustrySetting('aiModel', e.target.value)}
+                placeholder={defaultModelForProvider(industrySettings.aiProvider) || 'nama-model'}
+              />
+            </div>
+
+            {industrySettings.aiProvider !== 'local' && (
+              <>
+                <Input
+                  label="API Key AI"
+                  type="password"
+                  value={industrySettings.aiApiKey}
+                  onChange={e => changeIndustrySetting('aiApiKey', e.target.value)}
+                  placeholder="Masukkan API key provider"
+                  icon={<KeyRound size={16} />}
+                />
+                {industrySettings.aiProvider === 'custom' && (
+                  <Input
+                    label="Base URL Custom"
+                    value={industrySettings.aiBaseUrl}
+                    onChange={e => changeIndustrySetting('aiBaseUrl', e.target.value)}
+                    placeholder="https://provider.com/v1/chat/completions"
+                  />
+                )}
+              </>
+            )}
+
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-700 space-y-3">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
+                <div>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Export Google Sheets Otomatis</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Gunakan URL Web App Apps Script</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={industrySettings.googleSheetsEnabled}
+                    onChange={e => changeIndustrySetting('googleSheetsEnabled', e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
+                </label>
+              </div>
+              <Input
+                label="Apps Script Web App URL"
+                value={industrySettings.googleSheetsWebAppUrl}
+                onChange={e => changeIndustrySetting('googleSheetsWebAppUrl', e.target.value)}
+                placeholder="https://script.google.com/macros/s/.../exec"
+                icon={<FileSpreadsheet size={16} />}
+              />
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
+                <div>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Backup Otomatis Produksi</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Dipakai scheduler harian desktop</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={industrySettings.autoBackupEnabled}
+                    onChange={e => changeIndustrySetting('autoBackupEnabled', e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
+                </label>
+              </div>
+              <Input
+                label="Retensi Backup (hari)"
+                type="number"
+                min={1}
+                max={365}
+                value={industrySettings.backupRetentionDays}
+                onChange={e => changeIndustrySetting('backupRetentionDays', Number(e.target.value))}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 justify-end">
+              <Button variant="secondary" loading={testingSheets} onClick={testGoogleSheets} icon={<CheckCircle2 size={14} />} className="w-full sm:w-auto">
+                Tes Google Sheets
+              </Button>
+              <Button loading={industryLoading} onClick={saveIndustrySettings} className="w-full sm:w-auto">
+                Simpan Integrasi
+              </Button>
+            </div>
+          </div>
+        </Card>
       </div>
 
       <div className="space-y-6">
+        <Card title="Sinkronisasi Android/Desktop" action={<Server size={16} className={syncStatus?.running || syncForm.enabled ? 'text-emerald-500' : 'text-slate-400'} />}>
+          <div className="space-y-4 mt-1">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
+              <div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {isAndroidSyncClient ? 'Mode Sinkron ke Desktop' : 'Server Sinkron Desktop'}
+                </p>
+                <p className={`text-xs mt-0.5 ${syncStatus?.running || syncForm.enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                  {isAndroidSyncClient
+                    ? (syncForm.enabled ? 'Aktif' : 'Offline lokal')
+                    : (syncStatus?.running ? 'Aktif' : 'Nonaktif')}
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={syncForm.enabled}
+                  onChange={e => setSyncForm(prev => ({ ...prev, enabled: e.target.checked }))}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
+              </label>
+            </div>
+
+            {isAndroidSyncClient ? (
+              <>
+                <Input
+                  label="URL Desktop"
+                  value={syncForm.baseUrl}
+                  onChange={e => setSyncForm(prev => ({ ...prev, baseUrl: e.target.value }))}
+                  placeholder="http://192.168.1.10:38573"
+                  icon={<Wifi size={16} />}
+                />
+                <Input
+                  label="Token"
+                  value={syncForm.token}
+                  onChange={e => setSyncForm(prev => ({ ...prev, token: e.target.value }))}
+                  placeholder="Token dari desktop"
+                />
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Data Pairing QR</label>
+                  <textarea
+                    value={pairingText}
+                    onChange={e => setPairingText(e.target.value)}
+                    placeholder="Tempel data pairing dari QR desktop"
+                    className="w-full min-h-[90px] rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-mono text-slate-700 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  />
+                  <Button type="button" variant="secondary" onClick={applyPairingData} icon={<QrCode size={14} />} className="w-full">
+                    Terapkan Pairing
+                  </Button>
+                </div>
+                {syncStatus?.client?.lastConnectedAt && (
+                  <p className="text-xs text-slate-400">Terakhir tersambung: {new Date(syncStatus.client.lastConnectedAt).toLocaleString('id-ID')}</p>
+                )}
+              </>
+            ) : (
+              <>
+                <Input
+                  label="Port"
+                  type="number"
+                  value={syncForm.port}
+                  onChange={e => setSyncForm(prev => ({ ...prev, port: e.target.value }))}
+                />
+                <Input
+                  label="Token"
+                  value={syncForm.token}
+                  onChange={e => setSyncForm(prev => ({ ...prev, token: e.target.value }))}
+                />
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">URL Desktop</p>
+                  {(syncStatus?.urls ?? []).map((url: string) => (
+                    <div key={url} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {url}
+                    </div>
+                  ))}
+                </div>
+                {syncQr && (
+                  <div className="grid grid-cols-1 sm:grid-cols-[180px_minmax(0,1fr)] gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
+                    <img src={syncQr} alt="QR pairing sinkronisasi" className="w-[180px] h-[180px] rounded-lg bg-white p-2" />
+                    <div className="flex flex-col justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">QR Pairing Android</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          QR berisi URL desktop dan token sinkronisasi. Simpan token ini seperti password.
+                        </p>
+                      </div>
+                      <Button type="button" variant="secondary" onClick={copyPairingData} icon={<Copy size={14} />} className="w-full sm:w-auto">
+                        Salin Data Pairing
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {syncStatus?.lastRequestAt && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+                    Request terakhir: {syncStatus.lastChannel || '-'} pada {new Date(syncStatus.lastRequestAt).toLocaleString('id-ID')} ({syncStatus.requestCount || 0} request)
+                  </div>
+                )}
+                {syncStatus?.error && (
+                  <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-400">
+                    {syncStatus.error}
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button loading={syncLoading} onClick={saveSync} className="w-full sm:w-auto">Simpan Sinkronisasi</Button>
+              <Button variant="secondary" loading={syncLoading} onClick={testSync} icon={<RefreshCw size={14} />} className="w-full sm:w-auto">Tes</Button>
+              {!isAndroidSyncClient && (
+                <Button variant="secondary" loading={syncLoading} onClick={rotateSyncToken} className="w-full sm:w-auto">Ganti Token</Button>
+              )}
+            </div>
+          </div>
+        </Card>
+
         <Card title="Pengaturan Barcode" action={<Barcode size={16} className="text-slate-400" />}>
           <div className="mt-1 space-y-3">
             <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">

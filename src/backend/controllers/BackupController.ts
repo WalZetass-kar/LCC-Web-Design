@@ -1,6 +1,31 @@
 import { BackupModel } from '../models/BackupModel.js'
+import { IndustrySettingsController } from './IndustrySettingsController.js'
 import * as fs from 'fs'
 import * as path from 'path'
+
+function backupDir() {
+  const dir = path.join(process.cwd(), 'backups')
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+function dbPath() {
+  return path.join(process.cwd(), 'sistem_pos.db')
+}
+
+function isSqliteDatabase(buffer: Buffer) {
+  return buffer.subarray(0, 16).toString('binary') === 'SQLite format 3\0'
+}
+
+function cleanOldBackupFiles(retentionDays: number) {
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString()
+  const oldBackups = BackupModel.getOlderThan(cutoff)
+  for (const backup of oldBackups) {
+    const file = path.join(backupDir(), backup.nama_file)
+    if (fs.existsSync(file)) fs.rmSync(file, { force: true })
+    BackupModel.delete(backup.kd_backup)
+  }
+}
 
 export class BackupController {
   /**
@@ -9,18 +34,14 @@ export class BackupController {
    */
   static autoBackup(operation: string): string | null {
     try {
-      const dbPath = path.join(process.cwd(), 'sistem_pos.db')
-      const backupDir = path.join(process.cwd(), 'backups')
-
-      if (!fs.existsSync(backupDir)) {
-        fs.mkdirSync(backupDir, { recursive: true })
-      }
+      const sourceDb = dbPath()
+      const dir = backupDir()
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const backupFileName = `auto_${operation}_${timestamp}.db`
-      const backupPath = path.join(backupDir, backupFileName)
+      const backupPath = path.join(dir, backupFileName)
 
-      fs.copyFileSync(dbPath, backupPath)
+      fs.copyFileSync(sourceDb, backupPath)
 
       const stats = fs.statSync(backupPath)
       BackupModel.create({
@@ -49,20 +70,16 @@ export class BackupController {
 
   static create(username: string, keterangan?: string) {
     try {
-      const dbPath = path.join(process.cwd(), 'sistem_pos.db')
-      const backupDir = path.join(process.cwd(), 'backups')
-
-      // Create backup directory if not exists
-      if (!fs.existsSync(backupDir)) {
-        fs.mkdirSync(backupDir, { recursive: true })
-      }
+      const settings = IndustrySettingsController.getSettings()
+      const sourceDb = dbPath()
+      const dir = backupDir()
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const backupFileName = `backup_${timestamp}.db`
-      const backupPath = path.join(backupDir, backupFileName)
+      const backupPath = path.join(dir, backupFileName)
 
       // Copy database file
-      fs.copyFileSync(dbPath, backupPath)
+      fs.copyFileSync(sourceDb, backupPath)
 
       // Get file size
       const stats = fs.statSync(backupPath)
@@ -78,8 +95,7 @@ export class BackupController {
         keterangan: keterangan || null,
       })
 
-      // Clean old backups (keep last 10)
-      BackupModel.deleteOldBackups(10)
+      cleanOldBackupFiles(settings.backupRetentionDays)
 
       return {
         success: true,
@@ -98,19 +114,23 @@ export class BackupController {
         return { success: false, message: 'Backup tidak ditemukan' }
       }
 
-      const backupPath = path.join(process.cwd(), 'backups', backup.nama_file)
-      const dbPath = path.join(process.cwd(), 'sistem_pos.db')
+      const backupPath = path.join(backupDir(), backup.nama_file)
+      const targetDb = dbPath()
 
       if (!fs.existsSync(backupPath)) {
         return { success: false, message: 'File backup tidak ditemukan' }
       }
+      const backupBuffer = fs.readFileSync(backupPath)
+      if (!isSqliteDatabase(backupBuffer)) {
+        return { success: false, message: 'File backup bukan database SQLite yang valid' }
+      }
 
       // Create backup of current database before restore
-      const currentBackupPath = path.join(process.cwd(), 'backups', `before_restore_${Date.now()}.db`)
-      fs.copyFileSync(dbPath, currentBackupPath)
+      const currentBackupPath = path.join(backupDir(), `before_restore_${Date.now()}.db`)
+      fs.copyFileSync(targetDb, currentBackupPath)
 
       // Restore from backup
-      fs.copyFileSync(backupPath, dbPath)
+      fs.copyFileSync(backupPath, targetDb)
 
       return {
         success: true,
@@ -128,7 +148,7 @@ export class BackupController {
         return { success: false, message: 'Backup tidak ditemukan' }
       }
 
-      const backupPath = path.join(process.cwd(), 'backups', backup.nama_file)
+      const backupPath = path.join(backupDir(), backup.nama_file)
 
       // Delete file
       if (fs.existsSync(backupPath)) {
@@ -146,21 +166,19 @@ export class BackupController {
   
   static import(base64Data: string, fileName: string) {
     try {
-      const dbPath = path.join(process.cwd(), 'sistem_pos.db')
-      const backupsDir = path.join(process.cwd(), 'backups')
-      
-      // Create backups directory if not exists
-      if (!fs.existsSync(backupsDir)) {
-        fs.mkdirSync(backupsDir, { recursive: true })
-      }
+      const targetDb = dbPath()
+      const backupsDir = backupDir()
       
       // Backup current database before import
       const currentBackupPath = path.join(backupsDir, `before_import_${Date.now()}.db`)
-      fs.copyFileSync(dbPath, currentBackupPath)
+      fs.copyFileSync(targetDb, currentBackupPath)
       
       // Write imported file
       const buffer = Buffer.from(base64Data, 'base64')
-      fs.writeFileSync(dbPath, buffer)
+      if (!isSqliteDatabase(buffer)) {
+        return { success: false, message: 'File import bukan database SQLite yang valid' }
+      }
+      fs.writeFileSync(targetDb, buffer)
       
       return {
         success: true,
@@ -178,7 +196,7 @@ export class BackupController {
         return { success: false, message: 'Backup tidak ditemukan' }
       }
 
-      const backupPath = path.join(process.cwd(), 'backups', backup.nama_file)
+      const backupPath = path.join(backupDir(), backup.nama_file)
 
       if (!fs.existsSync(backupPath)) {
         return { success: false, message: 'File backup tidak ditemukan' }

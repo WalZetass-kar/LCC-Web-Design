@@ -21,6 +21,9 @@ if (isDev) console.log('🔧 Preload script is running...')
  * Any channel not in this list is BLOCKED.
  */
 const ALLOWED_CHANNELS = new Set([
+  // App
+  'app:openExternal',
+
   // Auth
   'auth:login',
   'auth:checkIdentitas',
@@ -30,6 +33,12 @@ const ALLOWED_CHANNELS = new Set([
   // Demo status
   'demo:getStatus',
   'demo:getViolationLog',
+
+  // Sync
+  'sync:getStatus',
+  'sync:saveConfig',
+  'sync:testConnection',
+  'sync:rotateToken',
 
   // Barang
   'barang:getAll',
@@ -55,6 +64,9 @@ const ALLOWED_CHANNELS = new Set([
 
   // Dashboard
   'dashboard:getSummary',
+
+  // AI Assistant
+  'assistant:ask',
 
   // Identitas
   'identitas:get',
@@ -157,6 +169,12 @@ const ALLOWED_CHANNELS = new Set([
   'export:stokPDF',
   'export:toExcel',
   'export:toPDF',
+
+  // Industry Integrations
+  'integrations:get',
+  'integrations:save',
+  'integrations:testGoogleSheets',
+  'integrations:exportDashboardToSheets',
 
   // Scheduler
   'scheduler:runStokCheck',

@@ -9,7 +9,7 @@
  */
 
 import type { IpcMain } from 'electron'
-import { dialog, BrowserWindow } from 'electron'
+import { dialog, BrowserWindow, shell } from 'electron'
 import { BarangController } from '../backend/controllers/BarangController.js'
 import { KategoriController } from '../backend/controllers/KategoriController.js'
 import { SatuanController } from '../backend/controllers/SatuanController.js'
@@ -50,19 +50,64 @@ import { WhatsAppController } from '../backend/controllers/WhatsAppController.js
 import { LoyaltyController } from '../backend/controllers/LoyaltyController.js'
 import { SecurityController } from '../backend/controllers/SecurityController.js'
 import { EcommerceApiController } from '../backend/controllers/EcommerceApiController.js'
+import { IndustrySettingsController } from '../backend/controllers/IndustrySettingsController.js'
+import { AssistantController } from '../backend/controllers/AssistantController.js'
+import { SyncServerService, setSyncChannelInvoker } from './syncServer.js'
+
+type ChannelHandler = (...args: any[]) => any
+
+const channelHandlers = new Map<string, ChannelHandler>()
+
+function registerChannel(channel: string, handler: ChannelHandler) {
+  channelHandlers.set(channel, handler)
+  return handler
+}
+
+export async function invokeRegisteredChannel(channel: string, args: unknown[] = []) {
+  const handler = channelHandlers.get(channel)
+  if (!handler) {
+    return {
+      success: false,
+      message: `Channel tidak terdaftar: ${channel}`,
+    }
+  }
+
+  try {
+    return await handler(...args)
+  } catch (error) {
+    console.error(`❌ Sync channel error [${channel}]:`, error)
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
 
 /**
  * Helper to register an IPC handler with automatic demo guard.
  * Every channel goes through withDemoGuard which checks the server-side session.
  */
 function handle(ipcMain: IpcMain, channel: string, handler: (...args: any[]) => any) {
+  registerChannel(channel, handler)
   const guarded = withDemoGuard(channel, (_e: any, ...args: any[]) => handler(...args))
   ipcMain.handle(channel, guarded)
 }
 
 export function registerIpcHandlers(ipcMain: IpcMain) {
+  setSyncChannelInvoker(invokeRegisteredChannel)
+
+  ipcMain.handle('app:openExternal', async (_e, rawUrl: string) => {
+    const url = String(rawUrl ?? '')
+    if (!/^https?:\/\//i.test(url)) {
+      return { success: false, message: 'URL eksternal tidak valid' }
+    }
+
+    await shell.openExternal(url)
+    return { success: true }
+  })
+
   // ─── AUTH (always allowed — no demo guard needed) ───────────────────
-  ipcMain.handle('auth:login', async (_e, username: string, password: string) => {
+  const authLogin = registerChannel('auth:login', async (username: string, password: string) => {
     const result = await AuthController.login(username, password)
     
     // CRITICAL: Set the server-side session on successful login
@@ -73,10 +118,12 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     
     return result
   })
+  ipcMain.handle('auth:login', (_e, username: string, password: string) => authLogin(username, password))
   
-  ipcMain.handle('auth:checkIdentitas', () => AuthController.checkIdentitas())
+  const authCheckIdentitas = registerChannel('auth:checkIdentitas', () => AuthController.checkIdentitas())
+  ipcMain.handle('auth:checkIdentitas', () => authCheckIdentitas())
 
-  ipcMain.handle('auth:restoreSession', (_e, username: string) => {
+  const authRestoreSession = registerChannel('auth:restoreSession', (username: string) => {
     const result = AuthController.restoreSession(username)
     if (result.success && result.data) {
       const userData = result.data as { nama_pengguna: string; hak_akses: string }
@@ -84,15 +131,17 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     }
     return result
   })
+  ipcMain.handle('auth:restoreSession', (_e, username: string) => authRestoreSession(username))
   
   // Auth logout — clear the session
-  ipcMain.handle('auth:logout', (_e, username: string) => {
+  const authLogout = registerChannel('auth:logout', (_username: string) => {
     demoSession.clearSession()
     return { success: true, message: 'Logged out' }
   })
+  ipcMain.handle('auth:logout', (_e, username: string) => authLogout(username))
 
   // ─── DEMO STATUS (always allowed) ──────────────────────────────────
-  ipcMain.handle('demo:getStatus', () => {
+  const demoGetStatus = registerChannel('demo:getStatus', () => {
     return {
       success: true,
       data: {
@@ -103,13 +152,41 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
       },
     }
   })
+  ipcMain.handle('demo:getStatus', () => demoGetStatus())
 
-  ipcMain.handle('demo:getViolationLog', () => {
+  const demoGetViolationLog = registerChannel('demo:getViolationLog', () => {
     return {
       success: true,
       data: demoSession.getViolationLog(),
     }
   })
+  ipcMain.handle('demo:getViolationLog', () => demoGetViolationLog())
+
+  // ─── SYNC SERVER (always allowed) ──────────────────────────────────
+  ipcMain.handle('sync:getStatus', () => ({
+    success: true,
+    data: SyncServerService.getStatus(),
+  }))
+  ipcMain.handle('sync:saveConfig', (_e, config: { enabled?: boolean; port?: number; token?: string }) => ({
+    success: true,
+    data: SyncServerService.saveConfig(config),
+    message: 'Pengaturan sinkronisasi disimpan',
+  }))
+  ipcMain.handle('sync:testConnection', () => {
+    const status = SyncServerService.getStatus()
+    return {
+      success: status.running,
+      data: status,
+      message: status.running
+        ? 'Server sinkronisasi desktop aktif'
+        : 'Server sinkronisasi desktop belum aktif',
+    }
+  })
+  ipcMain.handle('sync:rotateToken', () => ({
+    success: true,
+    data: SyncServerService.rotateToken(),
+    message: 'Token sinkronisasi diganti',
+  }))
 
   // ─── BARANG (Products) ─────────────────────────────────────────────
   handle(ipcMain, 'barang:getAll', () => BarangController.getAll())
@@ -138,6 +215,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
 
   // ─── DASHBOARD ─────────────────────────────────────────────────────
   handle(ipcMain, 'dashboard:getSummary', () => DashboardController.getSummary())
+
+  // ─── AI ASSISTANT ──────────────────────────────────────────────────
+  handle(ipcMain, 'assistant:ask', (data: any) => AssistantController.ask(data))
 
   // ─── IDENTITAS TOKO ────────────────────────────────────────────────
   handle(ipcMain, 'identitas:get', () => IdentitasController.get())
@@ -262,6 +342,12 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     ExportController.exportToExcel(data, filename, sheetName, customPath))
   handle(ipcMain, 'export:toPDF', (title: string, headers: string[], data: any[][], filename: string, orientation?: 'portrait' | 'landscape', customPath?: string) => 
     ExportController.exportToPDF(title, headers, data, filename, orientation, customPath))
+
+  // ─── INDUSTRY INTEGRATIONS ─────────────────────────────────────────
+  handle(ipcMain, 'integrations:get', () => IndustrySettingsController.get())
+  handle(ipcMain, 'integrations:save', (data: any) => IndustrySettingsController.save(data))
+  handle(ipcMain, 'integrations:testGoogleSheets', () => IndustrySettingsController.testGoogleSheets())
+  handle(ipcMain, 'integrations:exportDashboardToSheets', (summary: any) => IndustrySettingsController.exportDashboardToSheets(summary))
 
   // ─── SCHEDULER ─────────────────────────────────────────────────────
   handle(ipcMain, 'scheduler:runStokCheck', () => SchedulerService.runStokCheck())

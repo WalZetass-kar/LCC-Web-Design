@@ -2,6 +2,7 @@ import cron from 'node-cron'
 import { NotifikasiController } from '../controllers/NotifikasiController.js'
 import { BackupController } from '../controllers/BackupController.js'
 import { ActivityLogController } from '../controllers/ActivityLogController.js'
+import { IndustrySettingsController } from '../controllers/IndustrySettingsController.js'
 
 export class SchedulerService {
   private static tasks: cron.ScheduledTask[] = []
@@ -33,6 +34,11 @@ export class SchedulerService {
     // Auto backup every day at 2 AM
     const backupTask = cron.schedule('0 2 * * *', () => {
       console.log('⏰ Running auto backup...')
+      const settings = IndustrySettingsController.getSettings()
+      if (!settings.autoBackupEnabled) {
+        console.log('Auto backup skipped: disabled in production settings')
+        return
+      }
       BackupController.create('system', 'Auto backup harian')
     })
     this.tasks.push(backupTask)

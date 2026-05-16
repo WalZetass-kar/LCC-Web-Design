@@ -1,15 +1,17 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShoppingCart, TrendingUp, Package, AlertTriangle, Calendar, BarChart2, RefreshCw } from 'lucide-react'
+import { ShoppingCart, TrendingUp, Package, AlertTriangle, Calendar, BarChart2, RefreshCw, Bot, Send, Table2 } from 'lucide-react'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart
 } from 'recharts'
 import Card from '../components/Card'
 import Button from '../components/Button'
-import { SkeletonCard, SkeletonChart, SkeletonSpinner } from '../components/Skeleton'
+import { SkeletonCard, SkeletonChart } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { formatRupiah } from '../utils/format'
+import { buildLocalAssistantResponse } from '../../shared/dashboardAssistant'
+import { dashboardSummaryToTsv as buildDashboardTsv } from '../../shared/googleSheetsExport'
 import type { DashboardSummary } from '../../shared/types'
 
 // Count-up hook
@@ -48,10 +50,53 @@ function ChartTooltip({ active, payload, label }: any) {
   )
 }
 
+const GOOGLE_SHEETS_CREATE_URL = 'https://docs.google.com/spreadsheets/u/0/create'
+
+const assistantSuggestions = [
+  'Pemasukan hari ini',
+  'Pemasukan minggu ini',
+  'Prediksi besok',
+  'Produk terlaris',
+  'Stok menipis',
+]
+
+function copyTextWithTextarea(text: string) {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.style.top = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  document.body.removeChild(textarea)
+  return copied
+}
+
+async function copyTextToClipboard(text: string) {
+  if (copyTextWithTextarea(text)) return
+
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return
+    } catch {
+      throw new Error('Clipboard tidak tersedia')
+    }
+  }
+
+  throw new Error('Clipboard tidak tersedia')
+}
+
 export default function Dashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [assistantInput, setAssistantInput] = useState('')
+  const [assistantAnswer, setAssistantAnswer] = useState('Saya Asisten Zetass-Kar. Saya membaca data dashboard lokal gratis tanpa API berbayar. Tanyakan pemasukan, prediksi, produk terlaris, atau stok menipis.')
+  const [assistantLoading, setAssistantLoading] = useState(false)
+  const [exportingSheets, setExportingSheets] = useState(false)
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -80,6 +125,80 @@ export default function Dashboard() {
       console.error('Failed to check minimum stock:', err)
     })
   }, [fetchData])
+
+  const askAssistant = useCallback(async (question?: string) => {
+    const prompt = (question ?? assistantInput).trim()
+    if (!prompt) return
+
+    if (!summary) {
+      toast('Data dashboard belum siap', 'error')
+      return
+    }
+
+    setAssistantLoading(true)
+    try {
+      const r = await api<{ answer: string; provider: string; online: boolean }>('assistant:ask', {
+        question: prompt,
+        summary,
+      })
+      if (r.success && r.data?.answer) {
+        setAssistantAnswer(r.data.answer)
+      } else {
+        setAssistantAnswer(buildLocalAssistantResponse(prompt, summary))
+        if (r.message) toast(r.message as string, 'error')
+      }
+      setAssistantInput('')
+    } catch {
+      setAssistantAnswer(buildLocalAssistantResponse(prompt, summary))
+    } finally {
+      setAssistantLoading(false)
+    }
+  }, [assistantInput, summary, toast])
+
+  const handleAssistantSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    askAssistant()
+  }, [askAssistant])
+
+  const handleExportGoogleSheets = useCallback(async () => {
+    if (!summary) {
+      toast('Data dashboard belum siap', 'error')
+      return
+    }
+
+    setExportingSheets(true)
+    try {
+      const automatic = await api<{ mode: 'apps-script' | 'clipboard'; result?: unknown }>('integrations:exportDashboardToSheets', summary)
+      if (automatic.success && automatic.data?.mode === 'apps-script') {
+        toast('Dashboard berhasil dikirim otomatis ke Google Sheets', 'success')
+        return
+      }
+
+      const tsv = buildDashboardTsv(summary)
+      const copiedBeforeOpen = copyTextWithTextarea(tsv)
+      const sheetsWindow = window.api?.invoke
+        ? null
+        : window.open(GOOGLE_SHEETS_CREATE_URL, '_blank', 'noopener,noreferrer')
+
+      if (!copiedBeforeOpen) await copyTextToClipboard(tsv)
+
+      if (window.api?.invoke) {
+        const result = await window.api.invoke('app:openExternal', GOOGLE_SHEETS_CREATE_URL) as { success?: boolean; error?: string } | undefined
+        if (result?.success === false) {
+          throw new Error(result.error || 'Google Sheets tidak bisa dibuka')
+        }
+      } else if (!sheetsWindow) {
+        window.location.href = GOOGLE_SHEETS_CREATE_URL
+      }
+
+      toast('Data dashboard disalin. Google Sheets dibuka, tempel di sel A1.', 'success')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Export gagal'
+      toast(`Gagal export Google Sheets: ${message}`, 'error')
+    } finally {
+      setExportingSheets(false)
+    }
+  }, [summary, toast])
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -143,6 +262,52 @@ export default function Dashboard() {
             )}
           </div>
 
+          {!loading && summary && (
+            <Card
+              title="Asisten Zetass-Kar"
+              subtitle="Pemasukan, prediksi, produk, dan stok"
+              action={<Bot size={18} className="text-primary-500" />}
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] gap-4">
+                <div className="flex gap-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700 p-4 min-h-[132px]">
+                  <div className="w-9 h-9 rounded-lg bg-primary-500 text-white flex items-center justify-center shrink-0">
+                    <Bot size={18} />
+                  </div>
+                  <p className="text-sm leading-6 text-slate-700 dark:text-slate-200 whitespace-pre-line">
+                    {assistantAnswer}
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {assistantSuggestions.map(suggestion => (
+                      <Button
+                      key={suggestion}
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => askAssistant(suggestion)}
+                      disabled={assistantLoading}
+                    >
+                      {suggestion}
+                    </Button>
+                    ))}
+                  </div>
+                  <form onSubmit={handleAssistantSubmit} className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      value={assistantInput}
+                      onChange={event => setAssistantInput(event.target.value)}
+                      placeholder="Tanya pemasukan hari ini..."
+                      className="flex-1 min-w-0 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    <Button type="submit" icon={<Send size={14} />} className="sm:w-auto" loading={assistantLoading}>
+                      Tanya
+                    </Button>
+                  </form>
+                </div>
+              </div>
+            </Card>
+          )}
+
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 sm:gap-4">
             {/* Area Chart with Gradient */}
             {loading ? <SkeletonChart className="xl:col-span-2" /> : (
@@ -156,8 +321,15 @@ export default function Dashboard() {
                       <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Prediksi Besok</p>
                       <p className="text-sm font-bold text-emerald-500">{formatRupiah(summary!.predictedTomorrow || 0)}</p>
                     </div>
-                    <Button variant="secondary" size="sm" onClick={() => toast('Fitur Export Google Sheets akan segera hadir!', 'info')} icon={<BarChart2 size={14} />}>
-                      Export
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleExportGoogleSheets}
+                      icon={<Table2 size={14} />}
+                      loading={exportingSheets}
+                      disabled={!summary}
+                    >
+                      Google Sheets
                     </Button>
                   </div>
                 }

@@ -12,7 +12,7 @@
  * - Smooth animations
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   X, Rocket, Crown, Zap, Star, Clock, Shield,
   ChevronRight, Check, Sparkles, Users, FileText,
@@ -21,7 +21,7 @@ import {
 import { useDemo } from '../contexts/DemoContext'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../utils/api'
-import { openWhatsAppUpgrade } from '../utils/whatsapp'
+import { openWhatsAppUpgrade, SUBSCRIPTION_UPGRADE_WA_NUMBER } from '../utils/whatsapp'
 import type { Identitas, SubscriptionPlan } from '../../shared/types'
 
 // ─── Dynamic plan helpers ────────────────────────────────────────────────────
@@ -94,26 +94,37 @@ export default function PricingPopup() {
   const [selectedPlan, setSelectedPlan] = useState<number | null>(null)
   const [isAnimating, setIsAnimating] = useState(false)
   const [countdown, setCountdown] = useState(0)
-  const [ownerPhone, setOwnerPhone] = useState<string | null>(null)
   const [storeName, setStoreName] = useState<string | null>(null)
 
-  // Fetch active plans + owner info on mount
+  const loadPlans = useCallback(async () => {
+    const r = await api<SubscriptionPlan[] | SubscriptionPlan>('plan:getActive')
+    const activePlans = Array.isArray(r.data) ? r.data : (r.data ? [r.data] : [])
+    if (r.success && activePlans.length) {
+      setPlans(activePlans)
+      setSelectedPlan(current => {
+        if (current && activePlans.some(plan => plan.id === current)) return current
+        const rec = activePlans.find(p => p.is_recommended)
+        return rec?.id ?? activePlans[0].id
+      })
+      return
+    }
+
+    setPlans([])
+    setSelectedPlan(null)
+  }, [])
+
+  // Fetch owner info once; refresh active plans every time the popup opens.
   useEffect(() => {
-    api<SubscriptionPlan[]>('plan:getActive').then(r => {
-      if (r.success && r.data?.length) {
-        setPlans(r.data)
-        // Auto-select recommended plan, or first
-        const rec = r.data.find(p => p.is_recommended)
-        setSelectedPlan(rec?.id ?? r.data[0].id)
-      }
-    })
     api<Identitas>('identitas:get').then(r => {
       if (r.success && r.data) {
-        setOwnerPhone(r.data.nomorwaowner)
         setStoreName(r.data.namatoko)
       }
     })
   }, [])
+
+  useEffect(() => {
+    if (isPricingOpen) void loadPlans()
+  }, [isPricingOpen, loadPlans])
 
   // Animation on open
   useEffect(() => {
@@ -163,18 +174,17 @@ export default function PricingPopup() {
       localStorage.setItem('pos_analytics', JSON.stringify(analytics.slice(-50)))
     } catch {}
 
-    // Open WhatsApp with pre-filled upgrade message
-    if (selectedPlanData) {
-      openWhatsAppUpgrade({
-        phone: ownerPhone,
-        planName: selectedPlanData.name,
-        planPrice: formatPrice(selectedPlanData.price),
-        planPeriod: getPlanPeriod(selectedPlanData.duration_days),
-        userName: user?.nama_lengkap ?? user?.nama_pengguna ?? 'Demo User',
-        storeName,
-        email: null,
-      })
-    }
+    // Open WhatsApp with pre-filled upgrade message. Still open chat if plans
+    // cannot be loaded, so the renewal CTA never becomes a dead button.
+    openWhatsAppUpgrade({
+      phone: SUBSCRIPTION_UPGRADE_WA_NUMBER,
+      planName: selectedPlanData?.name ?? 'Konsultasi Paket',
+      planPrice: selectedPlanData ? formatPrice(selectedPlanData.price) : 'Harga menyesuaikan',
+      planPeriod: selectedPlanData ? getPlanPeriod(selectedPlanData.duration_days) : '',
+      userName: user?.nama_lengkap ?? user?.nama_pengguna ?? 'Demo User',
+      storeName,
+      email: null,
+    })
 
     closePricing()
   }
@@ -276,6 +286,11 @@ export default function PricingPopup() {
 
         {/* Pricing Cards */}
         <div className="px-4 sm:px-8 pb-4">
+          {plans.length === 0 ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-5 text-center text-sm text-amber-700 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-300">
+              Paket aktif belum tersedia. Klik tombol WhatsApp untuk konsultasi perpanjangan.
+            </div>
+          ) : (
           <div className={`grid grid-cols-1 gap-4 ${plans.length === 2 ? 'md:grid-cols-2' : plans.length >= 3 ? 'md:grid-cols-3' : ''}`}>
             {plans.map((plan) => {
               const isSelected = selectedPlan === plan.id
@@ -367,6 +382,7 @@ export default function PricingPopup() {
               )
             })}
           </div>
+          )}
         </div>
 
         {/* Features highlights strip */}

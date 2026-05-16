@@ -19,6 +19,7 @@ import { registerIpcHandlers } from './ipcHandlers.js'
 import { SchedulerService } from '../backend/services/scheduler.js'
 import { demoSession } from '../backend/services/demoSessionManager.js'
 import { initDatabase } from '../backend/utils/dbInit.js'
+import { SyncServerService } from './syncServer.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -27,14 +28,21 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
 
+function getAppIconPath() {
+  return isDev
+    ? path.join(process.cwd(), 'build', 'icon.png')
+    : path.join(process.resourcesPath, 'app-icon.png')
+}
+
 function createWindow() {
   // Preload script path - use .cjs file (CommonJS) because package.json has "type": "module"
   const preloadPath = isDev 
     ? path.join(process.cwd(), 'src', 'main', 'preload.cjs')
-    : path.join(__dirname, 'preload.cjs')
+    : path.join(app.getAppPath(), 'dist-electron', 'main', 'preload.cjs')
 
   console.log('🔍 Preload path:', preloadPath)
   console.log('🔍 Preload exists:', existsSync(preloadPath))
+  const iconPath = getAppIconPath()
 
   const win = new BrowserWindow({
     width: 1280,
@@ -51,6 +59,7 @@ function createWindow() {
     titleBarStyle: 'default',
     show: false,
     backgroundColor: '#f8fafc',
+    icon: existsSync(iconPath) ? iconPath : undefined,
   })
 
   mainWindow = win
@@ -58,7 +67,10 @@ function createWindow() {
   if (isDev) {
     win.loadURL('http://localhost:5173')
   } else {
-    win.loadFile(path.join(__dirname, '../dist/index.html'))
+    const rendererIndexPath = path.join(app.getAppPath(), 'dist', 'index.html')
+    console.log('🔍 Renderer index path:', rendererIndexPath)
+    console.log('🔍 Renderer index exists:', existsSync(rendererIndexPath))
+    win.loadFile(rendererIndexPath)
   }
 
   // Log when preload script fails
@@ -111,6 +123,7 @@ app.whenReady().then(() => {
   initDatabase()
   
   registerIpcHandlers(ipcMain)
+  SyncServerService.init()
   
   // Start scheduler service
   SchedulerService.start()
@@ -125,6 +138,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   // Stop scheduler before quit
   SchedulerService.stop()
+  void SyncServerService.stop()
   
   // Clear demo session
   demoSession.clearSession()
@@ -135,6 +149,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   // Stop scheduler before quit
   SchedulerService.stop()
+  void SyncServerService.stop()
   
   // Clear demo session
   demoSession.clearSession()

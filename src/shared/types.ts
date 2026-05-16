@@ -277,7 +277,7 @@ export interface HppCalculation {
 // Extend window with our API bridge
 declare global {
   interface Window {
-    api: {
+    api?: {
       invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
     }
   }

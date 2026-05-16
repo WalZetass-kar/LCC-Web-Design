@@ -1,9 +1,9 @@
 export interface IElectronAPI {
-  invoke: (channel: string, ...args: any[]) => Promise<any>
+  invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
 }
 
 declare global {
   interface Window {
-    api: IElectronAPI
+    api?: IElectronAPI
   }
 }

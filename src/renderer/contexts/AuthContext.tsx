@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useMemo, useEffect, useCallback, type ReactNode } from 'react'
 import type { UserSession } from '../../shared/types'
+import { api } from '../utils/api'
 
 /** Session TTL: 8 hours in milliseconds */
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000
@@ -53,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     // Notify main process to clear server-side session
     try {
-      window.api.invoke('auth:logout', user?.nama_pengguna ?? '')
+      api('auth:logout', user?.nama_pengguna ?? '')
     } catch {
       // Ignore errors during logout
     }
@@ -75,10 +76,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user?.nama_pengguna) return
 
     let cancelled = false
-    window.api.invoke('auth:restoreSession', user.nama_pengguna)
-      .then(raw => {
+    api<UserSession>('auth:restoreSession', user.nama_pengguna)
+      .then(result => {
         if (cancelled) return
-        const result = raw as { success?: boolean; data?: UserSession }
         if (!result?.success || !result.data) {
           logout()
           return
