@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // Custom password validation
-const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/
 
 // Validation schemas
 export const BarangSchema = z.object({
@@ -49,7 +49,7 @@ export const StrongPasswordSchema = z.object({
     .string()
     .min(8, 'Password minimal 8 karakter')
     .max(100, 'Password maksimal 100 karakter')
-    .regex(passwordRegex, 'Password harus mengandung huruf besar, huruf kecil, dan angka'),
+    .regex(passwordRegex, 'Password harus mengandung huruf besar, huruf kecil, angka, dan simbol'),
 })
 
 export const KasSchema = z.object({
@@ -152,6 +152,10 @@ export class ValidationService {
 
     if (!/\d/.test(password)) {
       return { valid: false, error: 'Password harus mengandung angka' }
+    }
+
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      return { valid: false, error: 'Password harus mengandung simbol' }
     }
 
     return { valid: true }

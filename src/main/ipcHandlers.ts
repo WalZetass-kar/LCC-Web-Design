@@ -107,38 +107,66 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   })
 
   // ─── AUTH (always allowed — no demo guard needed) ───────────────────
-  const authLogin = registerChannel('auth:login', async (username: string, password: string) => {
-    const result = await AuthController.login(username, password)
+  const authHasUsers = registerChannel('auth:hasUsers', () => AuthController.hasUsers())
+  ipcMain.handle('auth:hasUsers', () => authHasUsers())
+
+  const authCreateInitialAdmin = registerChannel('auth:createInitialAdmin', (data: { username?: string; nama_lengkap?: string; password?: string }) => (
+    AuthController.createInitialAdmin(data)
+  ))
+  ipcMain.handle('auth:createInitialAdmin', (_e, data: { username?: string; nama_lengkap?: string; password?: string }) => authCreateInitialAdmin(data))
+
+  const authLogin = registerChannel('auth:login', async (username: string, password: string, deviceInfo?: any) => {
+    const result = await AuthController.login(username, password, deviceInfo)
     
     // CRITICAL: Set the server-side session on successful login
-    if (result.success && result.data) {
+    if (result.success && result.data && !(result.data as { must_change_password?: boolean }).must_change_password) {
       const userData = result.data as { nama_pengguna: string; hak_akses: string }
       demoSession.setSession(userData.nama_pengguna, userData.hak_akses || 'kasir')
     }
     
     return result
   })
-  ipcMain.handle('auth:login', (_e, username: string, password: string) => authLogin(username, password))
+  ipcMain.handle('auth:login', (_e, username: string, password: string, deviceInfo?: any) => authLogin(username, password, deviceInfo))
+
+  const authLoginPin = registerChannel('auth:loginPin', async (username: string, pin: string, deviceInfo?: any) => {
+    const result = await AuthController.loginWithPin(username, pin, deviceInfo)
+    if (result.success && result.data) {
+      const userData = result.data as { nama_pengguna: string; hak_akses: string }
+      demoSession.setSession(userData.nama_pengguna, userData.hak_akses || 'kasir')
+    }
+    return result
+  })
+  ipcMain.handle('auth:loginPin', (_e, username: string, pin: string, deviceInfo?: any) => authLoginPin(username, pin, deviceInfo))
+
+  const authChangePassword = registerChannel('auth:changePassword', (username: string, oldPass: string, newPass: string, deviceInfo?: any) => (
+    AuthController.changePassword(username, oldPass, newPass, deviceInfo)
+  ))
+  ipcMain.handle('auth:changePassword', (_e, username: string, oldPass: string, newPass: string, deviceInfo?: any) => authChangePassword(username, oldPass, newPass, deviceInfo))
   
   const authCheckIdentitas = registerChannel('auth:checkIdentitas', () => AuthController.checkIdentitas())
   ipcMain.handle('auth:checkIdentitas', () => authCheckIdentitas())
 
-  const authRestoreSession = registerChannel('auth:restoreSession', (username: string) => {
-    const result = AuthController.restoreSession(username)
+  const authRestoreSession = registerChannel('auth:restoreSession', (input: any) => {
+    const result = AuthController.restoreSession(input)
     if (result.success && result.data) {
       const userData = result.data as { nama_pengguna: string; hak_akses: string }
       demoSession.setSession(userData.nama_pengguna, userData.hak_akses || 'kasir')
     }
     return result
   })
-  ipcMain.handle('auth:restoreSession', (_e, username: string) => authRestoreSession(username))
+  ipcMain.handle('auth:restoreSession', (_e, input: any) => authRestoreSession(input))
   
   // Auth logout — clear the session
-  const authLogout = registerChannel('auth:logout', (_username: string) => {
+  const authLogout = registerChannel('auth:logout', (payload: { username?: string; sessionToken?: string; deviceInfo?: any } | string) => {
+    if (typeof payload === 'string') {
+      AuthController.logout(payload)
+    } else {
+      AuthController.logout(payload?.username ?? 'unknown', payload?.sessionToken, payload?.deviceInfo)
+    }
     demoSession.clearSession()
     return { success: true, message: 'Logged out' }
   })
-  ipcMain.handle('auth:logout', (_e, username: string) => authLogout(username))
+  ipcMain.handle('auth:logout', (_e, payload: { username?: string; sessionToken?: string; deviceInfo?: any } | string) => authLogout(payload))
 
   // ─── DEMO STATUS (always allowed) ──────────────────────────────────
   const demoGetStatus = registerChannel('demo:getStatus', () => {

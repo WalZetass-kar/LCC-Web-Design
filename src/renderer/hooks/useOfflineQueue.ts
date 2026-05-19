@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useToast } from '../contexts/ToastContext'
 import { api } from '../utils/api'
+import { secureStorage } from '../utils/secureStorage'
 
 interface QueuedOperation {
   id: string
@@ -19,9 +20,9 @@ export function useOfflineQueue() {
   const [syncing, setSyncing] = useState(false)
   const toast = useToast()
 
-  // Load queue from localStorage
+  // Load queue from encrypted local storage
   useEffect(() => {
-    const saved = localStorage.getItem(QUEUE_KEY)
+    const saved = secureStorage.getItem(QUEUE_KEY)
     if (saved) {
       try {
         setQueue(JSON.parse(saved))
@@ -31,9 +32,9 @@ export function useOfflineQueue() {
     }
   }, [])
 
-  // Save queue to localStorage
+  // Save queue to encrypted local storage
   useEffect(() => {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
+    secureStorage.setJSON(QUEUE_KEY, queue)
   }, [queue])
 
   // Monitor online/offline status
@@ -106,7 +107,7 @@ export function useOfflineQueue() {
   // Clear queue
   const clearQueue = () => {
     setQueue([])
-    localStorage.removeItem(QUEUE_KEY)
+    secureStorage.removeItem(QUEUE_KEY)
   }
 
   return {

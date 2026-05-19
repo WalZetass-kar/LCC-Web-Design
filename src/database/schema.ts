@@ -13,6 +13,10 @@ export const pengguna = sqliteTable('mediasoft_pengguna', {
   no_telp: text('no_telp'),
   access_expires_at: text('access_expires_at'),
   password_hash_type: text('password_hash_type').default('sha1'), // sha1, bcrypt
+  must_change_password: integer('must_change_password').default(0),
+  pin_hash: text('pin_hash'),
+  pin_hash_type: text('pin_hash_type').default('bcrypt'),
+  pin_enabled: integer('pin_enabled').default(0),
 })
 
 export const satuan = sqliteTable('mediasoft_satuan', {
@@ -206,7 +210,23 @@ export const activityLog = sqliteTable('mediasoft_activity_log', {
   modul: text('modul').notNull(), // LOGIN, PRODUK, TRANSAKSI, dll
   tgl_aktivitas: text('tgl_aktivitas').notNull(),
   ip_address: text('ip_address'),
+  device_id: text('device_id'),
+  user_agent: text('user_agent'),
   detail: text('detail'),
+})
+
+export const authSessions = sqliteTable('mediasoft_auth_sessions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  username: text('username').notNull(),
+  token_hash: text('token_hash').notNull().unique(),
+  issued_at: text('issued_at').notNull(),
+  expires_at: text('expires_at').notNull(),
+  revoked_at: text('revoked_at'),
+  last_seen_at: text('last_seen_at'),
+  ip_address: text('ip_address'),
+  device_id: text('device_id'),
+  device_name: text('device_name'),
+  user_agent: text('user_agent'),
 })
 
 export const subscriptionPlans = sqliteTable('mediasoft_subscription_plans', {

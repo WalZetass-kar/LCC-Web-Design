@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { secureStorage } from '../utils/secureStorage'
 
 export type ThemeColor = 'indigo' | 'emerald' | 'rose' | 'amber' | 'sky' | 'pink'
 export type ThemeMode = 'light' | 'dark'
@@ -15,20 +16,20 @@ const ThemeContext = createContext<ThemeContextValue | null>(null)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [color, setColorState] = useState<ThemeColor>(
-    () => (localStorage.getItem('theme-color') as ThemeColor) || 'pink'
+    () => (secureStorage.getItem('theme-color') as ThemeColor) || 'pink'
   )
   const [mode, setModeState] = useState<ThemeMode>(
-    () => (localStorage.getItem('theme-mode') as ThemeMode) || 'light'
+    () => (secureStorage.getItem('theme-mode') as ThemeMode) || 'light'
   )
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', color)
-    localStorage.setItem('theme-color', color)
+    secureStorage.setItem('theme-color', color)
   }, [color])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', mode === 'dark')
-    localStorage.setItem('theme-mode', mode)
+    secureStorage.setItem('theme-mode', mode)
   }, [mode])
 
   const setColor = (c: ThemeColor) => setColorState(c)

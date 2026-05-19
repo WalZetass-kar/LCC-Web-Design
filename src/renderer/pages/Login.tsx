@@ -9,6 +9,9 @@ import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { openWhatsApp, openWhatsAppUpgrade, SUBSCRIPTION_UPGRADE_WA_NUMBER } from '../utils/whatsapp'
 import type { UserSession, Identitas, SubscriptionPlan } from '../../shared/types'
+import { validatePasswordStrength } from '../../shared/passwordPolicy'
+import { secureStorage } from '../utils/secureStorage'
+import { collectAuthDeviceInfo } from '../utils/authDevice'
 
 function formatPrice(n: number): string {
   return 'Rp ' + n.toLocaleString('id-ID')
@@ -28,14 +31,22 @@ export default function Login() {
   const toast = useToast()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [pin, setPin] = useState('')
+  const [loginMode, setLoginMode] = useState<'password' | 'pin'>('password')
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'error'>('checking')
   const [showDefaultLogin, setShowDefaultLogin] = useState(false)
+  const [hasUsers, setHasUsers] = useState(true)
   const [authLoading, setAuthLoading] = useState(true)
   const [activePlans, setActivePlans] = useState<SubscriptionPlan[]>([])
+  const [setupForm, setSetupForm] = useState({ username: '', nama_lengkap: '', password: '', confirmPassword: '' })
+  const [forcePasswordUser, setForcePasswordUser] = useState<UserSession | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [changingPassword, setChangingPassword] = useState(false)
 
   // Identitas dialog state
   const [showIdentitas, setShowIdentitas] = useState(false)
@@ -49,13 +60,14 @@ export default function Login() {
     // Check auth and db status
     const checkStatus = async () => {
       try {
+        await secureStorage.ready(['rememberMe', 'pos_session', 'auth_device_id'])
         // Check if remembered. Keep only the username; never restore a saved password.
-        const remembered = localStorage.getItem('rememberMe')
+        const remembered = secureStorage.getItem('rememberMe')
         if (remembered) {
           const { username: savedUser } = JSON.parse(remembered)
           if (savedUser) {
             setUsername(savedUser)
-            localStorage.setItem('rememberMe', JSON.stringify({ username: savedUser }))
+            secureStorage.setJSON('rememberMe', { username: savedUser })
           }
           setRememberMe(true)
         }
@@ -63,6 +75,11 @@ export default function Login() {
         // Check DB status
         const dbCheck = await api('system:checkDb')
         setDbStatus(dbCheck.success ? 'connected' : 'error')
+
+        const userCheck = await api<{ hasUsers: boolean }>('auth:hasUsers')
+        if (userCheck.success) {
+          setHasUsers(!!userCheck.data?.hasUsers)
+        }
       } catch {
         setDbStatus('error')
       } finally {
@@ -89,12 +106,69 @@ export default function Login() {
       }
       if (e.key === 'F1') {
         e.preventDefault()
-        setShowDefaultLogin(true)
+        setShowDefaultLogin(v => !v)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [loading])
+
+  const completeLogin = async (user: UserSession) => {
+    // Save only the username. Passwords must not be persisted in renderer storage.
+    if (rememberMe) {
+      secureStorage.setJSON('rememberMe', { username: user.nama_pengguna })
+    } else {
+      secureStorage.removeItem('rememberMe')
+    }
+
+    const identitasCheck = await api<{ hasIdentitas: boolean }>('auth:checkIdentitas')
+    if (!identitasCheck.data?.hasIdentitas) {
+      setPendingUser(user)
+      setShowIdentitas(true)
+      return
+    }
+
+    login(user)
+    toast('Login berhasil! Selamat datang ' + user.nama_lengkap, 'success')
+    navigate('/', { replace: true })
+  }
+
+  const handleInitialSetup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+
+    const validation = validatePasswordStrength(setupForm.password)
+    if (!validation.valid) {
+      setError(validation.message ?? 'Password tidak valid')
+      return
+    }
+    if (setupForm.password !== setupForm.confirmPassword) {
+      setError('Password dan konfirmasi password tidak cocok')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const r = await api('auth:createInitialAdmin', {
+        username: setupForm.username,
+        nama_lengkap: setupForm.nama_lengkap,
+        password: setupForm.password,
+      })
+      if (!r.success) {
+        setError(r.message ?? 'Gagal membuat akun admin')
+        return
+      }
+      setHasUsers(true)
+      setUsername(setupForm.username.trim())
+      setPassword('')
+      setSetupForm({ username: '', nama_lengkap: '', password: '', confirmPassword: '' })
+      toast('Akun admin pertama berhasil dibuat. Silakan login.', 'success')
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -107,38 +181,94 @@ export default function Login() {
 
     setLoading(true)
     try {
-      const r = await api<UserSession>('auth:login', username, password)
+      const r = await api<UserSession>('auth:login', username, password, collectAuthDeviceInfo())
       if (!r.success || !r.data) {
         setError(r.message ?? 'Login gagal')
-        setLoading(false)
         return
       }
 
-      // Save only the username. Passwords must not be persisted in renderer storage.
-      if (rememberMe) {
-        localStorage.setItem('rememberMe', JSON.stringify({ username }))
-      } else {
-        localStorage.removeItem('rememberMe')
-      }
-
-      // Check if store identity is set
-      const identitasCheck = await api<{ hasIdentitas: boolean }>('auth:checkIdentitas')
-      if (!identitasCheck.data?.hasIdentitas) {
-        // Show identitas dialog before proceeding
-        setPendingUser(r.data)
-        setShowIdentitas(true)
-        setLoading(false)
+      if (r.data.must_change_password) {
+        setForcePasswordUser(r.data)
+        setNewPassword('')
+        setConfirmNewPassword('')
         return
       }
 
-      // Login success - navigate to dashboard
-      login(r.data)
-      toast('Login berhasil! Selamat datang ' + r.data.nama_lengkap, 'success')
-      navigate('/', { replace: true })
+      await completeLogin(r.data)
     } catch (err) {
       setError(String(err))
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
+  }
+
+  const handlePinLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+
+    if (!username.trim() || !pin.trim()) {
+      setError('Username dan PIN tidak boleh kosong')
+      return
+    }
+
+    if (!/^\d{4,8}$/.test(pin)) {
+      setError('PIN kasir harus 4-8 digit angka')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const r = await api<UserSession>('auth:loginPin', username, pin, collectAuthDeviceInfo())
+      if (!r.success || !r.data) {
+        setError(r.message ?? 'Login PIN gagal')
+        return
+      }
+
+      setPin('')
+      await completeLogin(r.data)
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleForcedPasswordChange = async () => {
+    if (!forcePasswordUser) return
+    const validation = validatePasswordStrength(newPassword)
+    if (!validation.valid) {
+      toast(validation.message ?? 'Password tidak valid', 'error')
+      return
+    }
+    if (newPassword !== confirmNewPassword) {
+      toast('Password dan konfirmasi password tidak cocok', 'error')
+      return
+    }
+
+    setChangingPassword(true)
+    try {
+      const change = await api('auth:changePassword', forcePasswordUser.nama_pengguna, password, newPassword, collectAuthDeviceInfo())
+      if (!change.success) {
+        toast(change.message ?? 'Gagal mengganti password', 'error')
+        return
+      }
+
+      const relogin = await api<UserSession>('auth:login', forcePasswordUser.nama_pengguna, newPassword, collectAuthDeviceInfo())
+      if (!relogin.success || !relogin.data) {
+        toast(relogin.message ?? 'Password berubah, tetapi login ulang gagal', 'error')
+        setForcePasswordUser(null)
+        setPassword('')
+        return
+      }
+
+      setPassword('')
+      setForcePasswordUser(null)
+      await completeLogin(relogin.data)
+    } catch (err) {
+      toast('Gagal mengganti password: ' + String(err), 'error')
+    } finally {
+      setChangingPassword(false)
+    }
   }
 
   const handleSaveIdentitas = async () => {
@@ -281,11 +411,91 @@ export default function Login() {
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center mb-4 shadow-lg shadow-primary-500/30 animate-pulse">
                   <Store size={22} className="text-white" />
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-1">Selamat datang 👋</h3>
-                <p className="text-slate-400 text-sm">Masuk ke akun Anda untuk melanjutkan</p>
+                <h3 className="text-2xl font-bold text-white mb-1">{hasUsers ? 'Selamat datang' : 'Setup Admin'}</h3>
+                <p className="text-slate-400 text-sm">
+                  {hasUsers ? 'Masuk ke akun Anda untuk melanjutkan' : 'Buat akun superadmin pertama untuk mengaktifkan aplikasi'}
+                </p>
               </div>
 
-              <form onSubmit={handleLogin} className="space-y-4">
+              {!hasUsers ? (
+              <form onSubmit={handleInitialSetup} className="space-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Username Admin</label>
+                  <div className="relative group">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
+                      <User size={16} />
+                    </span>
+                    <input
+                      value={setupForm.username}
+                      onChange={e => setSetupForm(prev => ({ ...prev, username: e.target.value }))}
+                      autoComplete="username"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                      placeholder="contoh: owner"
+                    />
+                  </div>
+                </div>
+
+                <Input
+                  label="Nama Lengkap"
+                  value={setupForm.nama_lengkap}
+                  onChange={e => setSetupForm(prev => ({ ...prev, nama_lengkap: e.target.value }))}
+                  placeholder="Nama pemilik/admin"
+                />
+
+                <Input
+                  label="Password"
+                  type="password"
+                  value={setupForm.password}
+                  onChange={e => setSetupForm(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder="Minimal 8 karakter"
+                  helperText="Wajib huruf besar, huruf kecil, angka, dan simbol"
+                />
+
+                <Input
+                  label="Konfirmasi Password"
+                  type="password"
+                  value={setupForm.confirmPassword}
+                  onChange={e => setSetupForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  placeholder="Ulangi password"
+                />
+
+                {error && (
+                  <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                    <span className="text-red-400 mt-0.5 shrink-0">!</span>
+                    <p className="text-sm text-red-400">{error}</p>
+                  </div>
+                )}
+
+                <Button type="submit" className="w-full mt-1 bg-gradient-to-r from-primary-500 to-primary-400 hover:from-primary-600 hover:to-primary-500 border-0" size="lg" loading={loading}>
+                  {loading ? 'Membuat akun...' : 'Buat Akun Admin'}
+                </Button>
+              </form>
+              ) : (
+              <>
+              <form onSubmit={loginMode === 'pin' ? handlePinLogin : handleLogin} className="space-y-4">
+                <div className="grid grid-cols-2 gap-2 rounded-xl bg-white/5 p-1 border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setLoginMode('password')}
+                    className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                      loginMode === 'password' ? 'bg-primary-500 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Lock size={14} />
+                    Password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLoginMode('pin')}
+                    className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                      loginMode === 'pin' ? 'bg-primary-500 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Key size={14} />
+                    PIN Kasir
+                  </button>
+                </div>
+
                 {/* Username */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Username</label>
@@ -304,26 +514,47 @@ export default function Login() {
                   </div>
                 </div>
 
-                {/* Password */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Password</label>
-                  <div className="relative group">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
-                      <Lock size={16} />
-                    </span>
-                    <input
-                      type={showPass ? 'text' : 'password'}
-                      placeholder="Masukkan password"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      autoComplete="current-password"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-12 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
-                    />
-                    <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1">
-                      {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
+                {loginMode === 'password' ? (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Password</label>
+                    <div className="relative group">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
+                        <Lock size={16} />
+                      </span>
+                      <input
+                        type={showPass ? 'text' : 'password'}
+                        placeholder="Masukkan password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        autoComplete="current-password"
+                        className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-12 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                      />
+                      <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1">
+                        {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">PIN Kasir</label>
+                    <div className="relative group">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
+                        <Key size={16} />
+                      </span>
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={8}
+                        placeholder="4-8 digit"
+                        value={pin}
+                        onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                        autoComplete="off"
+                        className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Remember Me & Forgot Password */}
                 <div className="flex items-center justify-between text-xs">
@@ -375,34 +606,26 @@ export default function Login() {
                 )}
 
                 <Button type="submit" className="w-full mt-1 bg-gradient-to-r from-primary-500 to-primary-400 hover:from-primary-600 hover:to-primary-500 border-0" size="lg" loading={loading}>
-                  {loading ? 'Memproses...' : 'Masuk ke Dashboard'}
+                  {loading ? 'Memproses...' : loginMode === 'pin' ? 'Masuk dengan PIN' : 'Masuk ke Dashboard'}
                 </Button>
 
                 {/* Keyboard Hint */}
                 <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
                   <Keyboard size={12} />
-                  Press Enter to login • F1 for default credentials
+                  Press Enter to login • F1 for account help
                 </div>
               </form>
 
-              {/* Default Login Info */}
+              {/* Login Help */}
               {showDefaultLogin && (
                 <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
                   <div className="flex items-start gap-2 mb-3">
                     <Info size={16} className="text-blue-400 mt-0.5" />
                     <div>
-                      <p className="text-sm font-semibold text-blue-400">Default Login</p>
-                      <p className="text-xs text-slate-400">Untuk first-time user</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Admin:</span>
-                      <span className="text-white font-mono">admin / admin</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Demo:</span>
-                      <span className="text-white font-mono">demo / demo</span>
+                      <p className="text-sm font-semibold text-blue-400">Bantuan Login</p>
+                      <p className="text-xs text-slate-400">
+                        Gunakan akun yang dibuat saat setup awal atau hubungi superadmin untuk reset password.
+                      </p>
                     </div>
                   </div>
                   <button
@@ -413,38 +636,8 @@ export default function Login() {
                   </button>
                 </div>
               )}
-
-              {/* Demo Login Section */}
-              <div className="mt-5 pt-5 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setError('')
-                    setLoading(true)
-                    try {
-                      const r = await api<UserSession>('auth:login', 'demo', 'demo')
-                      if (r.success && r.data) {
-                        login(r.data)
-                        toast('🔒 Mode Demo aktif — semua aksi tulis diblokir', 'info')
-                        navigate('/', { replace: true })
-                      } else {
-                        setError(r.message ?? 'Akun demo belum tersedia. Hubungi administrator.')
-                      }
-                    } catch (err) {
-                      setError('Akun demo belum tersedia')
-                    }
-                    setLoading(false)
-                  }}
-                  disabled={loading}
-                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 hover:from-amber-500/20 hover:to-orange-500/20 transition-all group"
-                >
-                  <span className="text-lg">🔒</span>
-                  <div className="text-left">
-                    <p className="text-sm font-semibold text-amber-400 group-hover:text-amber-300 transition-colors">Coba Demo Mode</p>
-                    <p className="text-[10px] text-slate-500">Jelajahi semua fitur — read only</p>
-                  </div>
-                </button>
-              </div>
+              </>
+              )}
 
               {/* System Status & Version */}
               <div className="mt-4 flex items-center justify-between text-xs">
@@ -465,6 +658,38 @@ export default function Login() {
           )}
         </div>
       </div>
+
+      {/* Force Password Change Dialog */}
+      <Modal
+        open={!!forcePasswordUser}
+        onClose={() => {}}
+        title="Ganti Password"
+        size="sm"
+        footer={
+          <Button loading={changingPassword} onClick={handleForcedPasswordChange} size="lg">
+            Simpan Password Baru
+          </Button>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-5">
+          Password akun ini harus diganti sebelum aplikasi dapat digunakan.
+        </p>
+        <div className="space-y-4">
+          <Input
+            label="Password Baru"
+            type="password"
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            helperText="Minimal 8 karakter dengan huruf besar, huruf kecil, angka, dan simbol"
+          />
+          <Input
+            label="Konfirmasi Password Baru"
+            type="password"
+            value={confirmNewPassword}
+            onChange={e => setConfirmNewPassword(e.target.value)}
+          />
+        </div>
+      </Modal>
 
       {/* Identitas Toko Dialog */}
       <Modal

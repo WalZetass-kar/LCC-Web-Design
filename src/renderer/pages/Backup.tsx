@@ -18,6 +18,7 @@ import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useDemoGuard } from "../hooks/useDemoGuard";
 import type { Backup } from "../../shared/types";
+import { estimateStorageUsage } from "../utils/sqlitePersistence";
 
 const fmt = (bytes: number | null) => {
   if (!bytes) return "0 B";
@@ -47,6 +48,7 @@ export default function BackupPage() {
   );
   const [actionLoading, setActionLoading] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [storageUsage, setStorageUsage] = useState({ usage: 0, quota: 0, percent: 0 });
 
   const load = async () => {
     setLoading(true);
@@ -57,6 +59,7 @@ export default function BackupPage() {
 
   useEffect(() => {
     load();
+    estimateStorageUsage().then(setStorageUsage).catch(() => {});
   }, []);
 
   const handleCreate = async () => {
@@ -135,6 +138,20 @@ export default function BackupPage() {
   return (
     <div className="space-y-4">
       {/* Summary Cards */}
+      {storageUsage.percent >= 80 && (
+        <Card className="border-amber-200 bg-amber-50 dark:bg-amber-900/20">
+          <div className="flex items-start gap-3">
+            <HardDrive className="mt-0.5 text-amber-500" size={20} />
+            <div>
+              <p className="font-semibold text-amber-800 dark:text-amber-200">Storage hampir penuh</p>
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                Penggunaan penyimpanan sekitar {storageUsage.percent}%. Buat backup, hapus data lama, atau kosongkan file yang tidak diperlukan.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)

@@ -22,6 +22,7 @@ import { useDemo } from '../contexts/DemoContext'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../utils/api'
 import { openWhatsAppUpgrade, SUBSCRIPTION_UPGRADE_WA_NUMBER } from '../utils/whatsapp'
+import { secureStorage } from '../utils/secureStorage'
 import type { Identitas, SubscriptionPlan } from '../../shared/types'
 
 // ─── Dynamic plan helpers ────────────────────────────────────────────────────
@@ -162,16 +163,16 @@ export default function PricingPopup() {
   const selectedPlanData = plans.find(p => p.id === selectedPlan) ?? plans.find(p => p.is_recommended) ?? plans[0]
 
   const handleUpgrade = () => {
-    // Track intent analytics (localStorage for now)
+    // Track intent analytics in encrypted local storage.
     try {
-      const analytics = JSON.parse(localStorage.getItem('pos_analytics') || '[]')
+      const analytics = secureStorage.getJSON<any[]>('pos_analytics', [])
       analytics.push({
         event: 'plan_clicked',
         plan: selectedPlan,
         trigger: triggerReason,
         at: new Date().toISOString(),
       })
-      localStorage.setItem('pos_analytics', JSON.stringify(analytics.slice(-50)))
+      secureStorage.setJSON('pos_analytics', analytics.slice(-50))
     } catch {}
 
     // Open WhatsApp with pre-filled upgrade message. Still open chat if plans

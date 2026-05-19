@@ -9,6 +9,7 @@ import {
   useEffect, useMemo, type ReactNode,
 } from 'react'
 import { useAuth } from './AuthContext'
+import { secureStorage } from '../utils/secureStorage'
 
 export type SubscriptionType = 'daily' | 'monthly' | 'yearly' | null
 export type PopupTriggerReason =
@@ -54,30 +55,30 @@ const DemoContext = createContext<DemoContextValue | null>(null)
 
 function restoreDemoState(): Partial<DemoState> {
   try {
-    const s = localStorage.getItem(LS_DEMO_STATE)
+    const s = secureStorage.getItem(LS_DEMO_STATE)
     return s ? JSON.parse(s) : {}
   } catch { return {} }
 }
 
 function saveDemoState(state: DemoState): void {
-  try { localStorage.setItem(LS_DEMO_STATE, JSON.stringify(state)) } catch {}
+  try { secureStorage.setJSON(LS_DEMO_STATE, state) } catch {}
 }
 
 function isCooldownElapsed(): boolean {
   try {
-    const d = localStorage.getItem(LS_POPUP_DISMISSED)
+    const d = secureStorage.getItem(LS_POPUP_DISMISSED)
     if (!d) return true
     return Date.now() - parseInt(d, 10) >= POPUP_COOLDOWN_MS
   } catch { return true }
 }
 
 function markDismissed(): void {
-  try { localStorage.setItem(LS_POPUP_DISMISSED, String(Date.now())) } catch {}
+  try { secureStorage.setItem(LS_POPUP_DISMISSED, String(Date.now())) } catch {}
 }
 
 function hasFirstLoginShown(username: string): boolean {
   try {
-    const s = localStorage.getItem(LS_FIRST_LOGIN_SHOWN)
+    const s = secureStorage.getItem(LS_FIRST_LOGIN_SHOWN)
     if (!s) return false
     const d = JSON.parse(s)
     return d.username === username && d.shown === true
@@ -86,9 +87,9 @@ function hasFirstLoginShown(username: string): boolean {
 
 function markFirstLoginShown(username: string): void {
   try {
-    localStorage.setItem(LS_FIRST_LOGIN_SHOWN, JSON.stringify({
+    secureStorage.setJSON(LS_FIRST_LOGIN_SHOWN, {
       username, shown: true, at: Date.now(),
-    }))
+    })
   } catch {}
 }
 

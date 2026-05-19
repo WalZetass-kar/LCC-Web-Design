@@ -19,3 +19,7 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Capacitor plugins are accessed reflectively by the bridge.
+-keep class com.getcapacitor.** { *; }
+-keep class com.getcapacitor.community.database.sqlite.** { *; }

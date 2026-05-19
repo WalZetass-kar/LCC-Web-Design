@@ -39,7 +39,27 @@ import WhatsApp from './pages/WhatsApp'
 import PrintQueue from './pages/PrintQueue'
 import EcommerceApi from './pages/EcommerceApi'
 import ErrorBoundary from './components/ErrorBoundary'
+import { validateProductionConfig } from './utils/productionConfig'
 import './styles/globals.css'
+
+function ProductionConfigGate({ children }: { children: React.ReactNode }) {
+  const validation = validateProductionConfig()
+  if (!validation.valid) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
+        <div className="max-w-lg rounded-lg border border-red-500/30 bg-red-500/10 p-6">
+          <h1 className="text-xl font-bold">Konfigurasi production belum valid</h1>
+          <p className="mt-3 text-sm text-red-100">{validation.message}</p>
+          <p className="mt-4 text-xs text-slate-300">
+            Isi `.env.production` dengan endpoint HTTPS produksi dan certificate pin sebelum build production digunakan.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return <>{children}</>
+}
 
 /** Redirects to /login if not authenticated */
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -125,15 +145,17 @@ function App() {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <ThemeProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <DemoProvider>
-              <App />
-            </DemoProvider>
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
+      <ProductionConfigGate>
+        <ThemeProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <DemoProvider>
+                <App />
+              </DemoProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </ProductionConfigGate>
     </ErrorBoundary>
   </React.StrictMode>
 )

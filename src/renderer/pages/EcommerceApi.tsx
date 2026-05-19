@@ -7,6 +7,8 @@ import Modal from '../components/Modal'
 import Badge from '../components/Badge'
 import { useToast } from '../contexts/ToastContext'
 import { api } from '../utils/api'
+import { normalizeHttpsUrl } from '../../shared/endpointSecurity'
+import { appConfig, validateProductionConfig } from '../utils/productionConfig'
 
 interface ApiConfig {
   apiKey: string
@@ -46,6 +48,8 @@ export default function EcommerceApi() {
   const [showSecret, setShowSecret] = useState(false)
   const [generatedKey, setGeneratedKey] = useState('')
   const [keyModal, setKeyModal] = useState(false)
+  const [endpointError, setEndpointError] = useState('')
+  const apiBaseUrl = appConfig.apiBaseUrl?.trim() || ''
 
   useEffect(() => {
     api<any>('ecommerce:get').then(r => {
@@ -56,8 +60,28 @@ export default function EcommerceApi() {
   }, [])
 
   const handleSave = async () => {
+    setEndpointError('')
+    let payload = config
+    if (config.webhookUrl.trim()) {
+      const webhook = normalizeHttpsUrl(config.webhookUrl)
+      if (!webhook.valid || !webhook.url) {
+        setEndpointError(webhook.message ?? 'Webhook URL tidak valid')
+        toast(webhook.message as string, 'error')
+        return
+      }
+      payload = { ...config, webhookUrl: webhook.url }
+      setConfig(payload)
+    }
+
+    const productionConfig = validateProductionConfig()
+    if (!productionConfig.valid) {
+      setEndpointError(productionConfig.message ?? 'Konfigurasi production belum valid')
+      toast(productionConfig.message as string, 'error')
+      return
+    }
+
     setLoading(true)
-    const r = await api('ecommerce:save', config)
+    const r = await api('ecommerce:save', payload)
     setLoading(false)
     if (r.success) toast('Konfigurasi API berhasil disimpan')
     else toast(r.message as string ?? 'Gagal menyimpan', 'error')
@@ -111,6 +135,13 @@ export default function EcommerceApi() {
         </div>
       </Card>
 
+      {endpointError && (
+        <Card className="border-red-200 bg-red-50 dark:bg-red-900/20">
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">Endpoint belum siap</p>
+          <p className="mt-1 text-sm text-red-600 dark:text-red-300">{endpointError}</p>
+        </Card>
+      )}
+
       {/* API Keys */}
       <Card title="API Credentials">
         <div className="space-y-4">
@@ -140,7 +171,7 @@ export default function EcommerceApi() {
             <Input 
               value={config.webhookUrl} 
               onChange={e => setConfig({ ...config, webhookUrl: e.target.value })}
-              placeholder="https://your-site.com/api/webhook"
+              placeholder="https://domain-anda.com/api/webhook"
             />
             <p className="text-xs text-slate-400 mt-1">URL untuk menerima notifikasi real-time</p>
           </div>
@@ -181,14 +212,14 @@ export default function EcommerceApi() {
         <div className="space-y-4">
           <div className="p-4 rounded-lg bg-slate-900 text-slate-100 font-mono text-sm overflow-x-auto">
             <p className="text-green-400"># Get Products</p>
-            <p>curl -X GET "https://api.yourpos.com/api/v1/products"</p>
+            <p>curl -X GET "{apiBaseUrl || 'https://api-domain-anda.com'}/api/v1/products"</p>
             <p className="text-green-400 mt-2"># Headers</p>
             <p>Authorization: Bearer YOUR_API_KEY</p>
             <p>Content-Type: application/json</p>
           </div>
           <div className="p-4 rounded-lg bg-slate-900 text-slate-100 font-mono text-sm overflow-x-auto">
             <p className="text-green-400"># Create Order</p>
-            <p>curl -X POST "https://api.yourpos.com/api/v1/orders"</p>
+            <p>curl -X POST "{apiBaseUrl || 'https://api-domain-anda.com'}/api/v1/orders"</p>
             <p className="text-green-400 mt-2"># Body</p>
             <p className="text-amber-300">{'{'}</p>
             <p className="text-amber-300">  "customer_id": "C001",</p>

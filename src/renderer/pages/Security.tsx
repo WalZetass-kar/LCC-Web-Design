@@ -103,7 +103,7 @@ export default function Security() {
           <div className="flex items-center justify-between p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
             <div>
               <p className="font-medium text-slate-700 dark:text-slate-200">Password Kuat Wajib</p>
-              <p className="text-sm text-slate-500">Maksa pengguna menggunakan password dengan huruf besar, kecil, dan angka</p>
+              <p className="text-sm text-slate-500">Wajibkan huruf besar, huruf kecil, angka, dan simbol</p>
             </div>
             <button
               onClick={() => setSettings({ ...settings, requireStrongPassword: !settings.requireStrongPassword })}

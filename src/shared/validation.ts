@@ -37,7 +37,7 @@ export const supplierSchema = z.object({
 // User validation
 export const userSchema = z.object({
   nama_pengguna: z.string().min(3, 'Username minimal 3 karakter').max(50).regex(/^[a-zA-Z0-9_]+$/, 'Username hanya boleh huruf, angka, dan underscore'),
-  kata_sandi: z.string().min(8, 'Password minimal 8 karakter').regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'Password harus mengandung huruf besar, kecil, dan angka'),
+  kata_sandi: z.string().min(8, 'Password minimal 8 karakter').regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])/, 'Password harus mengandung huruf besar, kecil, angka, dan simbol'),
   nama_lengkap: z.string().min(1, 'Nama lengkap wajib diisi').max(200),
   email: z.string().email('Format email tidak valid').optional().or(z.literal('')),
   no_telp: z.string().regex(/^[0-9+\-\s()]*$/, 'Format nomor telepon tidak valid').max(20).optional(),

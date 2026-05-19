@@ -189,7 +189,7 @@ API untuk integrasi dengan website atau sistem lain.
 ### Contoh Penggunaan:
 
 \`\`\`
-curl -X GET "https://api.yourpos.com/api/v1/products" \\
+curl -X GET "<BASE_URL_API_PRODUKSI>/api/v1/products" \\
   -H "Authorization: Bearer YOUR_API_KEY"
 \`\`\`
 

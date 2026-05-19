@@ -25,7 +25,11 @@ const ALLOWED_CHANNELS = new Set([
   'app:openExternal',
 
   // Auth
+  'auth:hasUsers',
+  'auth:createInitialAdmin',
   'auth:login',
+  'auth:loginPin',
+  'auth:changePassword',
   'auth:checkIdentitas',
   'auth:restoreSession',
   'auth:logout',
@@ -375,6 +379,22 @@ contextBridge.exposeInMainWorld('api', {
     // Only log IPC calls in development — prevents channel name leak in production
     if (isDev) console.log('📡 IPC invoke:', channel)
     return ipcRenderer.invoke(channel, ...args)
+  },
+})
+
+contextBridge.exposeInMainWorld('secureStorage', {
+  getItem: (key) => {
+    const result = ipcRenderer.sendSync('secureStorage:getItem', key)
+    if (!result?.success) return null
+    return result.data ?? null
+  },
+  setItem: (key, value) => {
+    const result = ipcRenderer.sendSync('secureStorage:setItem', key, value)
+    return !!result?.success
+  },
+  removeItem: (key) => {
+    const result = ipcRenderer.sendSync('secureStorage:removeItem', key)
+    return !!result?.success
   },
 })
 

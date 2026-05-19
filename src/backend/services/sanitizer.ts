@@ -151,11 +151,11 @@ export function validatePasswordStrength(password: string): {
   const hasNumber = /[0-9]/.test(password)
   const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password)
   
-  // Minimum requirements: uppercase, lowercase, number
-  if (!hasUppercase || !hasLowercase || !hasNumber) {
+  // Minimum requirements: uppercase, lowercase, number, symbol
+  if (!hasUppercase || !hasLowercase || !hasNumber || !hasSpecial) {
     return {
       valid: false,
-      message: 'Password harus mengandung huruf besar, huruf kecil, dan angka',
+      message: 'Password harus mengandung huruf besar, huruf kecil, angka, dan simbol',
       strength: 'weak',
     }
   }
@@ -163,9 +163,9 @@ export function validatePasswordStrength(password: string): {
   // Determine strength
   let strength: 'weak' | 'medium' | 'strong' = 'medium'
   
-  if (password.length >= 12 && hasSpecial) {
+  if (password.length >= 12) {
     strength = 'strong'
-  } else if (password.length >= 10 || hasSpecial) {
+  } else if (password.length >= 10) {
     strength = 'medium'
   }
   

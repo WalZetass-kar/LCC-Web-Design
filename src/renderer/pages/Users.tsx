@@ -21,6 +21,9 @@ interface FormState {
   nama_lengkap: string
   password: string
   confirmPassword: string
+  pin: string
+  confirmPin: string
+  pin_enabled: boolean
   hak_akses: 'developer' | 'superadmin' | 'admin' | 'operator' | 'kasir'
   email: string
   no_telp: string
@@ -28,7 +31,17 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
-  nama_pengguna: '', nama_lengkap: '', password: '', confirmPassword: '', hak_akses: 'kasir', email: '', no_telp: '', access_expires_at: '',
+  nama_pengguna: '',
+  nama_lengkap: '',
+  password: '',
+  confirmPassword: '',
+  pin: '',
+  confirmPin: '',
+  pin_enabled: false,
+  hak_akses: 'kasir',
+  email: '',
+  no_telp: '',
+  access_expires_at: '',
 }
 
 function isDeveloperAccount(user?: Pick<Pengguna, 'hak_akses'> | null) {
@@ -45,6 +58,12 @@ const validatePassword = (password: string): string | null => {
   if (!/[A-Z]/.test(password)) return 'Password harus mengandung huruf besar'
   if (!/[a-z]/.test(password)) return 'Password harus mengandung huruf kecil'
   if (!/[0-9]/.test(password)) return 'Password harus mengandung angka'
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) return 'Password harus mengandung simbol'
+  return null
+}
+
+const validatePin = (pin: string): string | null => {
+  if (!/^\d{4,8}$/.test(pin)) return 'PIN kasir harus 4-8 digit angka'
   return null
 }
 
@@ -120,6 +139,9 @@ export default function Users() {
       nama_lengkap: row.nama_lengkap ?? '',
       password: '',
       confirmPassword: '',
+      pin: '',
+      confirmPin: '',
+      pin_enabled: !!row.pin_enabled,
       hak_akses: (row.hak_akses as FormState['hak_akses']) ?? 'kasir',
       email: row.email ?? '',
       no_telp: row.no_telp ?? '',
@@ -154,10 +176,24 @@ export default function Users() {
         return toast('Password dan konfirmasi password tidak cocok', 'error')
       }
     }
+    if (form.pin_enabled && form.hak_akses !== 'kasir') {
+      return toast('PIN login hanya boleh diaktifkan untuk role kasir', 'error')
+    }
+    if (form.pin || form.confirmPin || (modal === 'add' && form.pin_enabled)) {
+      const pinError = validatePin(form.pin)
+      if (pinError) return toast(pinError, 'error')
+      if (form.pin !== form.confirmPin) {
+        return toast('PIN dan konfirmasi PIN tidak cocok', 'error')
+      }
+    }
+    if (modal === 'edit' && form.pin_enabled && !form.pin && !selected?.pin_enabled) {
+      return toast('Isi PIN kasir sebelum mengaktifkan login PIN', 'error')
+    }
     setLoading(true)
     const payload = {
       ...form,
       access_expires_at: form.access_expires_at || null,
+      pin: form.pin || undefined,
       permissions,
       _caller: currentUser?.nama_pengguna,
     }
@@ -270,6 +306,12 @@ export default function Users() {
           hak === 'operator' ? 'amber' : 'green'
         return <Badge label={hak?.toUpperCase() ?? 'KASIR'} variant={variant} />
       },
+    },
+    {
+      accessorKey: 'pin_enabled',
+      header: 'PIN',
+      size: 80,
+      cell: ({ getValue }) => <Badge label={getValue() ? 'AKTIF' : 'OFF'} variant={getValue() ? 'green' : 'gray'} />,
     },
     {
       id: 'actions', header: 'Aksi',
@@ -421,7 +463,11 @@ export default function Users() {
             <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Hak Akses *</label>
             <select
               value={form.hak_akses}
-              onChange={e => f('hak_akses', e.target.value)}
+              onChange={e => setForm(prev => ({
+                ...prev,
+                hak_akses: e.target.value as FormState['hak_akses'],
+                pin_enabled: e.target.value === 'kasir' ? prev.pin_enabled : false,
+              }))}
               disabled={
                 modal === 'edit' && (
                   isDeveloperAccount(selected) ||
@@ -439,6 +485,34 @@ export default function Users() {
           </div>
           <Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} />
           <Input label="No. Telepon" value={form.no_telp} onChange={e => f('no_telp', e.target.value)} />
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+            <span>
+              <span className="block text-xs font-medium text-slate-600 dark:text-slate-400">Login PIN Kasir</span>
+              <span className="block text-[11px] text-slate-400">Hanya untuk role kasir</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={form.pin_enabled}
+              onChange={e => setForm(prev => ({ ...prev, pin_enabled: e.target.checked }))}
+              disabled={form.hak_akses !== 'kasir'}
+              className="w-4 h-4 rounded accent-primary-500"
+            />
+          </label>
+          <Input
+            label={modal === 'add' ? 'PIN Kasir' : 'PIN Kasir Baru'}
+            type="password"
+            value={form.pin}
+            onChange={e => f('pin', e.target.value.replace(/\D/g, '').slice(0, 8))}
+            placeholder={modal === 'add' ? '4-8 digit' : 'Kosongkan jika tidak diubah'}
+            helperText="PIN disimpan sebagai bcrypt hash"
+          />
+          <Input
+            label="Konfirmasi PIN"
+            type="password"
+            value={form.confirmPin}
+            onChange={e => f('confirmPin', e.target.value.replace(/\D/g, '').slice(0, 8))}
+            placeholder="Ulangi PIN"
+          />
           <Input
             label="Masa Akses"
             type="date"

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronLeft, X } from 'lucide-react'
 import Button from './Button'
 import Modal from './Modal'
+import { secureStorage } from '../utils/secureStorage'
 
 const TOUR_STEPS = [
   {
@@ -35,7 +36,7 @@ export default function Onboarding() {
   const [step, setStep] = useState(0)
 
   useEffect(() => {
-    const hasSeenTour = localStorage.getItem('hasSeenTour')
+    const hasSeenTour = secureStorage.getItem('hasSeenTour')
     if (!hasSeenTour) {
       const timer = setTimeout(() => setIsOpen(true), 1000)
       return () => clearTimeout(timer)
@@ -43,7 +44,7 @@ export default function Onboarding() {
   }, [])
 
   const handleClose = () => {
-    localStorage.setItem('hasSeenTour', 'true')
+    secureStorage.setItem('hasSeenTour', 'true')
     setIsOpen(false)
     setStep(0) // Reset step for next time
   }

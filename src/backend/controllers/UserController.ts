@@ -1,12 +1,16 @@
 import { PenggunaModel } from '../models/PenggunaModel.js'
 import { ActivityLogModel } from '../models/ActivityLogModel.js'
+import { AuthSessionModel } from '../models/AuthSessionModel.js'
 import { sqlite } from '../../database/connection.js'
 import { demoSession } from '../services/demoSessionManager.js'
+import { validatePasswordStrength } from '../../shared/passwordPolicy.js'
+import { hashPassword } from '../services/crypto.js'
 
 // Role hierarchy: developer > superadmin > admin > operator > kasir
 const ROLE_HIERARCHY = ['developer', 'superadmin', 'admin', 'operator', 'kasir']
 const CAN_MANAGE_PERMISSIONS = ['developer', 'superadmin'] // Can set permissions for others
 const UNLIMITED_ACCESS_ROLES = ['developer', 'superadmin']
+const PIN_PATTERN = /^\d{4,8}$/
 
 type UserRoleRecord = { hak_akses?: string | null } | null | undefined
 
@@ -37,6 +41,11 @@ function addDays(base: Date, days: number): Date {
   return next
 }
 
+function validatePin(pin?: string | null): string | null {
+  if (!pin) return null
+  return PIN_PATTERN.test(pin) ? null : 'PIN kasir harus 4-8 digit angka'
+}
+
 export class UserController {
   static getAll() {
     try {
@@ -45,6 +54,8 @@ export class UserController {
       const sanitized = users.map(u => ({
         ...u,
         kata_sandi: undefined,
+        pin_hash: undefined,
+        pin_hash_type: undefined,
       }))
       return { success: true, data: sanitized }
     } catch (error) {
@@ -62,6 +73,8 @@ export class UserController {
     hak_akses?: string
     access_expires_at?: string | null
     permissions?: Record<string, boolean>
+    pin?: string
+    pin_enabled?: boolean | number
     _caller?: string
   }) {
     try {
@@ -77,6 +90,17 @@ export class UserController {
         return { success: false, message: 'Password wajib diisi' }
       }
 
+      const passwordValidation = validatePasswordStrength(plainPassword)
+      if (!passwordValidation.valid) {
+        return { success: false, message: passwordValidation.message }
+      }
+
+      const pinError = validatePin(data.pin)
+      if (pinError) return { success: false, message: pinError }
+      if (data.pin_enabled && data.hak_akses !== 'kasir') {
+        return { success: false, message: 'PIN login hanya boleh diaktifkan untuk role kasir' }
+      }
+
       await PenggunaModel.create({
         nama_pengguna: data.nama_pengguna,
         kata_sandi: plainPassword,
@@ -87,6 +111,9 @@ export class UserController {
         access_expires_at: UNLIMITED_ACCESS_ROLES.includes(data.hak_akses || 'kasir')
           ? null
           : normalizeAccessExpiresAt(data.access_expires_at),
+        must_change_password: 1,
+        pin_hash: data.pin ? await hashPassword(data.pin) : null,
+        pin_enabled: data.pin && data.pin_enabled ? 1 : 0,
       })
 
       if (data.permissions) {
@@ -109,7 +136,7 @@ export class UserController {
     }
   }
 
-  static update(username: string, data: {
+  static async update(username: string, data: {
     nama_lengkap?: string
     email?: string
     no_telp?: string
@@ -117,10 +144,19 @@ export class UserController {
     status_user?: string
     access_expires_at?: string | null
     permissions?: Record<string, boolean>
+    pin?: string
+    pin_enabled?: boolean | number
     _caller?: string
   }) {
     try {
-      const { _caller, permissions, ...payload } = data
+      const {
+        _caller,
+        permissions,
+        pin: _pin,
+        pin_enabled: requestedPinEnabled,
+        confirmPin: _confirmPin,
+        ...payload
+      } = data as typeof data & { confirmPin?: string }
       const callerIsPrivileged = CAN_MANAGE_PERMISSIONS.includes(demoSession.getRole() ?? '')
       const existing = PenggunaModel.findByUsername(username)
       if (!existing) {
@@ -131,7 +167,16 @@ export class UserController {
         return { success: false, message: developerLockedMessage('diubah') }
       }
 
+      const pinError = validatePin(data.pin)
+      if (pinError) return { success: false, message: pinError }
+
       const targetRole = payload.hak_akses ?? existing?.hak_akses ?? 'kasir'
+      if (requestedPinEnabled && targetRole !== 'kasir') {
+        return { success: false, message: 'PIN login hanya boleh diaktifkan untuk role kasir' }
+      }
+      if (requestedPinEnabled && !data.pin && !existing.pin_hash) {
+        return { success: false, message: 'Isi PIN kasir sebelum mengaktifkan login PIN' }
+      }
       const normalizedPayload = {
         ...payload,
         access_expires_at: UNLIMITED_ACCESS_ROLES.includes(targetRole)
@@ -149,6 +194,11 @@ export class UserController {
 
       if (permissions && callerIsPrivileged) {
         this.savePermissions(username, permissions)
+      }
+
+      if (callerIsPrivileged && (data.pin || requestedPinEnabled !== undefined)) {
+        const nextPinHash = data.pin ? await hashPassword(data.pin) : existing.pin_hash ?? null
+        PenggunaModel.updatePin(username, nextPinHash, Boolean(requestedPinEnabled))
       }
 
       // Activity log
@@ -187,16 +237,25 @@ export class UserController {
         // Old SHA1 password
         const oldEncrypted = encryptPassword(oldPassword)
         isValid = user.kata_sandi === oldEncrypted
-      } else {
+      } else if ((user.kata_sandi || '').startsWith('$2')) {
         // Bcrypt password
         isValid = await verifyPassword(oldPassword, user.kata_sandi || '')
+      } else {
+        // Legacy plaintext password from older local databases.
+        isValid = oldPassword === user.kata_sandi
       }
 
       if (!isValid) {
         return { success: false, message: 'Password lama salah' }
       }
 
+      const passwordValidation = validatePasswordStrength(newPassword)
+      if (!passwordValidation.valid) {
+        return { success: false, message: passwordValidation.message }
+      }
+
       await PenggunaModel.updatePassword(username, newPassword)
+      AuthSessionModel.revokeAllForUser(username)
 
       return { success: true, message: 'Password berhasil diubah' }
     } catch (error) {
@@ -215,7 +274,13 @@ export class UserController {
         return { success: false, message: developerLockedMessage('direset passwordnya') }
       }
 
-      await PenggunaModel.updatePassword(username, newPassword)
+      const passwordValidation = validatePasswordStrength(newPassword)
+      if (!passwordValidation.valid) {
+        return { success: false, message: passwordValidation.message }
+      }
+
+      await PenggunaModel.updatePassword(username, newPassword, true)
+      AuthSessionModel.revokeAllForUser(username)
 
       // Activity log
       if (caller) {
@@ -226,7 +291,7 @@ export class UserController {
         )
       }
 
-      return { success: true, message: 'Password berhasil direset' }
+      return { success: true, message: 'Password berhasil direset. User wajib mengganti password saat login berikutnya' }
     } catch (error) {
       return { success: false, message: String(error) }
     }

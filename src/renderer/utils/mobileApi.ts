@@ -15,11 +15,31 @@ import type {
   Supplier,
   UserSession,
 } from '../../shared/types'
+import bcrypt from 'bcryptjs'
 import { buildAssistantPrompt, buildLocalAssistantResponse } from '../../shared/dashboardAssistant'
 import { dashboardSummaryToSheetsPayload, testGoogleSheetsPayload } from '../../shared/googleSheetsExport'
 import { DEFAULT_INDUSTRY_SETTINGS, defaultModelForProvider, normalizeIndustrySettings, type IndustrySettings } from '../../shared/industrySettings'
+import { validatePasswordStrength } from '../../shared/passwordPolicy'
+import { normalizeHttpsUrl } from '../../shared/endpointSecurity'
+import { secureStorage } from './secureStorage'
+import { getPersistentItem, setPersistentItem } from './sqlitePersistence'
 
 type AnyRecord = Record<string, any>
+type MobileUser = Pengguna & {
+  password?: string
+  password_hash?: string
+  password_hash_type?: 'bcrypt'
+  pin_hash?: string | null
+  pin_enabled?: number | boolean | null
+  must_change_password?: number | boolean | null
+  permissions?: Record<string, boolean>
+}
+
+interface MobileAuthDeviceInfo {
+  deviceId?: string | null
+  deviceName?: string | null
+  userAgent?: string | null
+}
 
 interface MobileStore {
   version: number
@@ -35,7 +55,7 @@ interface MobileStore {
   industrySettings: IndustrySettings
   identitas: Identitas
   strukSettings: StrukSettings
-  users: Array<Pengguna & { password?: string; permissions?: Record<string, boolean> }>
+  users: MobileUser[]
   kategori: Kategori[]
   satuan: Satuan[]
   barang: Barang[]
@@ -79,6 +99,17 @@ const STORE_VERSION = 3
 
 let memoryStore: MobileStore | null = null
 
+interface MobileLoginAttempt {
+  count: number
+  firstAttempt: number
+  lockedUntil?: number
+}
+
+const mobileLoginAttempts = new Map<string, MobileLoginAttempt>()
+const MAX_LOGIN_ATTEMPTS = 5
+const LOGIN_LOCK_DURATION_MS = 15 * 60 * 1000
+const LOGIN_WINDOW_MS = 5 * 60 * 1000
+
 function now() {
   return new Date().toISOString()
 }
@@ -104,12 +135,69 @@ function fail<T>(message: string): IpcResponse<T> {
   return { success: false, message }
 }
 
-function getStorage() {
-  try {
-    return typeof window !== 'undefined' ? window.localStorage : null
-  } catch {
-    return null
+function authDevice(value: unknown): MobileAuthDeviceInfo {
+  const raw = (value ?? {}) as AnyRecord
+  return {
+    deviceId: typeof raw.deviceId === 'string' ? raw.deviceId : null,
+    deviceName: typeof raw.deviceName === 'string' ? raw.deviceName : null,
+    userAgent: typeof raw.userAgent === 'string' ? raw.userAgent : null,
   }
+}
+
+function deviceDetail(device: MobileAuthDeviceInfo): string {
+  return [
+    device.deviceName ? `device=${device.deviceName}` : null,
+    device.deviceId ? `device_id=${device.deviceId}` : null,
+    device.userAgent ? `ua=${device.userAgent.slice(0, 160)}` : null,
+  ].filter(Boolean).join('; ') || 'device=android'
+}
+
+function loginLockStatus(key: string): { locked: boolean; remainingSeconds?: number } {
+  const attempt = mobileLoginAttempts.get(key)
+  if (!attempt?.lockedUntil) return { locked: false }
+  const nowTime = Date.now()
+  if (attempt.lockedUntil > nowTime) {
+    return { locked: true, remainingSeconds: Math.ceil((attempt.lockedUntil - nowTime) / 1000) }
+  }
+  mobileLoginAttempts.delete(key)
+  return { locked: false }
+}
+
+function recordFailedLoginAttempt(key: string) {
+  const nowTime = Date.now()
+  const attempt = mobileLoginAttempts.get(key)
+  if (!attempt || nowTime - attempt.firstAttempt > LOGIN_WINDOW_MS) {
+    mobileLoginAttempts.set(key, { count: 1, firstAttempt: nowTime })
+    return { locked: false, remainingAttempts: MAX_LOGIN_ATTEMPTS - 1 }
+  }
+
+  attempt.count += 1
+  if (attempt.count >= MAX_LOGIN_ATTEMPTS) {
+    attempt.lockedUntil = nowTime + LOGIN_LOCK_DURATION_MS
+    mobileLoginAttempts.set(key, attempt)
+    return { locked: true, remainingAttempts: 0 }
+  }
+
+  mobileLoginAttempts.set(key, attempt)
+  return { locked: false, remainingAttempts: MAX_LOGIN_ATTEMPTS - attempt.count }
+}
+
+function clearLoginAttempts(key: string) {
+  mobileLoginAttempts.delete(key)
+}
+
+function auditAuth(store: MobileStore, username: string, aktivitas: string, detail: string, device: MobileAuthDeviceInfo) {
+  store.activityLogs.unshift({
+    kd_log: nextCounter(store, 'activity'),
+    username,
+    aktivitas,
+    modul: 'AUTH',
+    tgl_aktivitas: now(),
+    ip_address: null,
+    device_id: device.deviceId ?? null,
+    user_agent: device.userAgent ?? null,
+    detail: `${detail}. ${deviceDetail(device)}`,
+  })
 }
 
 function defaultIdentitas(): Identitas {
@@ -170,47 +258,7 @@ function createDefaultStore(): MobileStore {
     industrySettings: DEFAULT_INDUSTRY_SETTINGS,
     identitas,
     strukSettings: defaultStrukSettings(),
-    users: [
-      {
-        nama_pengguna: 'admin',
-        nama_lengkap: 'Admin Android',
-        email: null,
-        no_telp: null,
-        hak_akses: 'superadmin',
-        status_user: 'Aktif',
-        terakhir_login: null,
-        tgl_wkt_simpan: now(),
-        access_expires_at: null,
-        password: 'admin',
-        permissions: {},
-      },
-      {
-        nama_pengguna: 'demo',
-        nama_lengkap: 'Demo Android',
-        email: null,
-        no_telp: null,
-        hak_akses: 'demo',
-        status_user: 'Aktif',
-        terakhir_login: null,
-        tgl_wkt_simpan: now(),
-        access_expires_at: null,
-        password: 'demo',
-        permissions: {},
-      },
-      {
-        nama_pengguna: 'kasir',
-        nama_lengkap: 'Kasir Android',
-        email: null,
-        no_telp: null,
-        hak_akses: 'kasir',
-        status_user: 'Aktif',
-        terakhir_login: null,
-        tgl_wkt_simpan: now(),
-        access_expires_at: null,
-        password: 'Kasir123',
-        permissions: {},
-      },
-    ],
+    users: [],
     kategori: [
       { kd_kategori_barang: 1, kategori_barang: 'Minuman', jumlah_produk: 0 },
       { kd_kategori_barang: 2, kategori_barang: 'Makanan', jumlah_produk: 0 },
@@ -399,14 +447,8 @@ function normalizeStore(value: Partial<MobileStore> | null): MobileStore {
 function readStore(): MobileStore {
   if (memoryStore) return memoryStore
 
-  const storage = getStorage()
-  if (!storage) {
-    memoryStore = createDefaultStore()
-    return memoryStore
-  }
-
   try {
-    const raw = storage.getItem(STORAGE_KEY)
+    const raw = secureStorage.getItem(STORAGE_KEY)
     memoryStore = normalizeStore(raw ? JSON.parse(raw) : null)
   } catch {
     memoryStore = createDefaultStore()
@@ -416,15 +458,90 @@ function readStore(): MobileStore {
   return memoryStore
 }
 
+async function readStoreAsync(): Promise<MobileStore> {
+  if (memoryStore) return memoryStore
+
+  try {
+    const raw = await getPersistentItem(STORAGE_KEY)
+    memoryStore = normalizeStore(raw ? JSON.parse(raw) : null)
+  } catch {
+    memoryStore = readStore()
+  }
+
+  saveStore(memoryStore)
+  return memoryStore
+}
+
 function saveStore(store: MobileStore) {
   memoryStore = store
-  const storage = getStorage()
-  if (!storage) return
   try {
-    storage.setItem(STORAGE_KEY, JSON.stringify(store))
+    secureStorage.setJSON(STORAGE_KEY, store)
+    void setPersistentItem(STORAGE_KEY, JSON.stringify(store))
   } catch {
     // Keep the in-memory store if WebView storage is full.
   }
+}
+
+async function hashMobilePassword(password: string) {
+  return bcrypt.hash(password, 12)
+}
+
+async function verifyMobilePassword(password: string, user: MobileUser) {
+  if (!user.password_hash) return false
+  return bcrypt.compare(password, user.password_hash)
+}
+
+function createMobileSession(user: MobileUser, device: MobileAuthDeviceInfo): UserSession {
+  const tokenBytes = new Uint8Array(32)
+  crypto.getRandomValues(tokenBytes)
+  const token = Array.from(tokenBytes, byte => byte.toString(16).padStart(2, '0')).join('')
+  const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+
+  return {
+    ...toSession(user),
+    session_token: token,
+    session_expires_at: expiresAt,
+    device_id: device.deviceId ?? null,
+  }
+}
+
+async function migrateMobileUserPasswords(store: MobileStore) {
+  let changed = false
+
+  for (const user of store.users) {
+    if (user.password && !user.password_hash) {
+      user.password_hash = await hashMobilePassword(user.password)
+      user.password_hash_type = 'bcrypt'
+      user.password = undefined
+      user.must_change_password = user.must_change_password ?? 1
+      changed = true
+    }
+  }
+
+  if (changed) saveStore(store)
+}
+
+async function writeAndroidBackupFile(fileName: string, store: MobileStore) {
+  const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
+  const data = JSON.stringify({ exportedAt: now(), version: STORE_VERSION, store })
+  await Filesystem.writeFile({
+    path: `mediasoft-pos/${fileName}`,
+    data,
+    directory: Directory.Documents,
+    encoding: Encoding.UTF8,
+    recursive: true,
+  })
+  return { path: `Documents/mediasoft-pos/${fileName}`, size: data.length }
+}
+
+async function readAndroidBackupFile(fileName: string) {
+  const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
+  const result = await Filesystem.readFile({
+    path: `mediasoft-pos/${fileName}`,
+    directory: Directory.Documents,
+    encoding: Encoding.UTF8,
+  })
+  return JSON.parse(String(result.data)) as { store?: MobileStore }
 }
 
 function nextCounter(store: MobileStore, key: string) {
@@ -438,7 +555,14 @@ function pad(value: number, length = 3) {
 }
 
 function publicUser(user: MobileStore['users'][number]): Pengguna {
-  const { password: _password, permissions: _permissions, ...safeUser } = user
+  const {
+    password: _password,
+    password_hash: _passwordHash,
+    password_hash_type: _passwordHashType,
+    pin_hash: _pinHash,
+    permissions: _permissions,
+    ...safeUser
+  } = user
   return safeUser
 }
 
@@ -449,6 +573,7 @@ function toSession(user: MobileStore['users'][number]): UserSession {
     hak_akses: user.hak_akses,
     access_expires_at: user.access_expires_at,
     access_days_remaining: null,
+    must_change_password: !!user.must_change_password,
   }
 }
 
@@ -735,9 +860,8 @@ function validatePromo(store: MobileStore, code: string, subtotal: number) {
 }
 
 function normalizeBaseUrl(value: string) {
-  const trimmed = value.trim().replace(/\/+$/, '')
-  if (!trimmed) return ''
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
+  const result = normalizeHttpsUrl(value)
+  return result.valid ? result.url ?? '' : ''
 }
 
 function shouldUseRemote(store: MobileStore, channel: string) {
@@ -754,7 +878,10 @@ async function remoteInvoke<T>(store: MobileStore, channel: string, args: unknow
   const timeout = window.setTimeout(() => controller.abort(), 10000)
 
   try {
-    const response = await fetch(`${normalizeBaseUrl(store.syncClient.baseUrl)}/api/invoke`, {
+    const baseUrl = normalizeBaseUrl(store.syncClient.baseUrl)
+    if (!baseUrl) return fail('Alamat server sinkronisasi harus HTTPS dan bukan placeholder')
+
+    const response = await fetch(`${baseUrl}/api/invoke`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -796,7 +923,7 @@ async function remoteInvoke<T>(store: MobileStore, channel: string, args: unknow
 async function testRemoteConnection(store: MobileStore, config?: Partial<MobileStore['syncClient']>) {
   const baseUrl = normalizeBaseUrl(config?.baseUrl ?? store.syncClient.baseUrl)
   const token = config?.token ?? store.syncClient.token
-  if (!baseUrl || !token) return fail('Alamat server dan token wajib diisi')
+  if (!baseUrl || !token) return fail('Alamat server HTTPS dan token wajib diisi')
 
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), 10000)
@@ -916,7 +1043,8 @@ async function askMobileAi(store: MobileStore, input: { question?: string; summa
 }
 
 export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise<IpcResponse<T>> {
-  const store = readStore()
+  const store = await readStoreAsync()
+  await migrateMobileUserPasswords(store)
 
   if (shouldUseRemote(store, channel)) {
     return remoteInvoke<T>(store, channel, args)
@@ -931,10 +1059,14 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
     case 'sync:saveConfig': {
       const data = args[0] as Partial<MobileStore['syncClient']>
+      const baseUrl = data.baseUrl !== undefined ? normalizeBaseUrl(String(data.baseUrl)) : store.syncClient.baseUrl
+      if (data.enabled && !baseUrl) {
+        return fail('URL sinkronisasi wajib HTTPS dan tidak boleh placeholder')
+      }
       store.syncClient = {
         ...store.syncClient,
         ...data,
-        baseUrl: data.baseUrl !== undefined ? normalizeBaseUrl(String(data.baseUrl)) : store.syncClient.baseUrl,
+        baseUrl,
         token: data.token !== undefined ? String(data.token).trim() : store.syncClient.token,
         enabled: Boolean(data.enabled),
       }
@@ -987,24 +1119,154 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     case 'assistant:ask':
       return askMobileAi(store, args[0] as { question?: string; summary?: DashboardSummary }) as Promise<IpcResponse<T>>
 
+    case 'auth:hasUsers':
+      return ok({ hasUsers: store.users.length > 0 } as T)
+
+    case 'auth:createInitialAdmin': {
+      if (store.users.length > 0) return fail('Setup awal sudah selesai')
+      const data = args[0] as AnyRecord
+      const username = String(data?.username ?? '').trim()
+      const namaLengkap = String(data?.nama_lengkap ?? '').trim()
+      const password = String(data?.password ?? '')
+
+      if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) {
+        return fail('Username minimal 3 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau strip')
+      }
+      if (!namaLengkap) return fail('Nama lengkap wajib diisi')
+
+      const validation = validatePasswordStrength(password)
+      if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
+
+      const row: MobileUser = {
+        nama_pengguna: username,
+        nama_lengkap: namaLengkap,
+        email: null,
+        no_telp: null,
+        hak_akses: 'superadmin',
+        status_user: 'Aktif',
+        terakhir_login: null,
+        tgl_wkt_simpan: now(),
+        access_expires_at: null,
+        password_hash: await hashMobilePassword(password),
+        password_hash_type: 'bcrypt',
+        must_change_password: 0,
+        permissions: {},
+      }
+      store.users.push(row)
+      saveStore(store)
+      return ok(publicUser(row) as T, 'Akun admin pertama berhasil dibuat')
+    }
+
     case 'auth:login': {
       const username = String(args[0] ?? '').trim()
-      const password = String(args[1] ?? '').trim()
-      const user = store.users.find(item => item.nama_pengguna === username && item.password === password)
-      if (!user || user.status_user !== 'Aktif') return fail('Username atau password salah')
+      const password = String(args[1] ?? '')
+      const device = authDevice(args[2])
+      const limiterKey = `password:${username}`
+      const lock = loginLockStatus(limiterKey)
+      if (lock.locked) {
+        const minutes = Math.ceil((lock.remainingSeconds ?? 0) / 60)
+        auditAuth(store, username, 'LOGIN_BLOCKED', `Login diblokir. Tersisa ${minutes} menit`, device)
+        saveStore(store)
+        return fail(`Akun diblokir karena terlalu banyak percobaan login gagal. Coba lagi dalam ${minutes} menit.`)
+      }
+
+      const user = store.users.find(item => item.nama_pengguna === username)
+      if (!user || user.status_user !== 'Aktif') {
+        const attempt = recordFailedLoginAttempt(limiterKey)
+        auditAuth(store, username, 'LOGIN_FAILED', `Username tidak ditemukan atau akun tidak aktif. Sisa percobaan: ${attempt.remainingAttempts}`, device)
+        saveStore(store)
+        return fail(attempt.locked ? 'Terlalu banyak percobaan login gagal. Akun diblokir selama 15 menit.' : `Username atau Password Salah! Sisa percobaan: ${attempt.remainingAttempts}`)
+      }
+      const passwordValid = await verifyMobilePassword(password, user)
+      if (!passwordValid) {
+        const attempt = recordFailedLoginAttempt(limiterKey)
+        auditAuth(store, username, 'LOGIN_FAILED', `Password salah. Sisa percobaan: ${attempt.remainingAttempts}`, device)
+        saveStore(store)
+        return fail(attempt.locked ? 'Terlalu banyak percobaan login gagal. Akun diblokir selama 15 menit.' : `Username atau Password Salah! Sisa percobaan: ${attempt.remainingAttempts}`)
+      }
+      clearLoginAttempts(limiterKey)
       user.terakhir_login = now()
+      auditAuth(store, username, 'LOGIN', 'Login berhasil dengan bcrypt', device)
       saveStore(store)
-      return ok(toSession(user) as T, 'Login berhasil')
+      return ok((user.must_change_password ? toSession(user) : createMobileSession(user, device)) as T, user.must_change_password ? 'Password wajib diganti sebelum menggunakan aplikasi' : 'Login berhasil')
+    }
+
+    case 'auth:loginPin': {
+      const username = String(args[0] ?? '').trim()
+      const pin = String(args[1] ?? '')
+      const device = authDevice(args[2])
+      if (!/^\d{4,8}$/.test(pin)) return fail('PIN kasir harus 4-8 digit angka')
+
+      const limiterKey = `pin:${username}`
+      const lock = loginLockStatus(limiterKey)
+      if (lock.locked) {
+        const minutes = Math.ceil((lock.remainingSeconds ?? 0) / 60)
+        auditAuth(store, username, 'PIN_LOGIN_BLOCKED', `Login PIN diblokir. Tersisa ${minutes} menit`, device)
+        saveStore(store)
+        return fail(`Login PIN diblokir karena terlalu banyak percobaan gagal. Coba lagi dalam ${minutes} menit.`)
+      }
+
+      const user = store.users.find(item => item.nama_pengguna === username)
+      if (!user || user.status_user !== 'Aktif' || user.hak_akses !== 'kasir' || !user.pin_enabled || !user.pin_hash) {
+        const attempt = recordFailedLoginAttempt(limiterKey)
+        auditAuth(store, username, 'PIN_LOGIN_FAILED', `PIN tidak aktif untuk user atau user bukan kasir. Sisa percobaan: ${attempt.remainingAttempts}`, device)
+        saveStore(store)
+        return fail(attempt.locked ? 'Terlalu banyak percobaan PIN gagal. Akun diblokir selama 15 menit.' : `Username atau PIN salah. Sisa percobaan: ${attempt.remainingAttempts}`)
+      }
+
+      const validPin = await bcrypt.compare(pin, user.pin_hash)
+      if (!validPin) {
+        const attempt = recordFailedLoginAttempt(limiterKey)
+        auditAuth(store, username, 'PIN_LOGIN_FAILED', `PIN salah. Sisa percobaan: ${attempt.remainingAttempts}`, device)
+        saveStore(store)
+        return fail(attempt.locked ? 'Terlalu banyak percobaan PIN gagal. Akun diblokir selama 15 menit.' : `Username atau PIN salah. Sisa percobaan: ${attempt.remainingAttempts}`)
+      }
+
+      clearLoginAttempts(limiterKey)
+      user.terakhir_login = now()
+      auditAuth(store, username, 'PIN_LOGIN', 'Login PIN kasir berhasil', device)
+      saveStore(store)
+      return ok(createMobileSession(user, device) as T, 'Login PIN berhasil')
+    }
+
+    case 'auth:changePassword': {
+      const username = String(args[0] ?? '').trim()
+      const oldPassword = String(args[1] ?? '')
+      const newPassword = String(args[2] ?? '')
+      const user = store.users.find(item => item.nama_pengguna === username)
+      if (!user) return fail('User tidak ditemukan')
+      if (!(await verifyMobilePassword(oldPassword, user))) return fail('Password lama salah')
+
+      const validation = validatePasswordStrength(newPassword)
+      if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
+
+      user.password_hash = await hashMobilePassword(newPassword)
+      user.password_hash_type = 'bcrypt'
+      user.password = undefined
+      user.must_change_password = 0
+      auditAuth(store, username, 'CHANGE_PASSWORD', 'Password berhasil diubah', authDevice(args[3]))
+      saveStore(store)
+      return ok({ strength: validation.strength } as T, 'Password berhasil diubah')
     }
 
     case 'auth:restoreSession': {
-      const username = String(args[0] ?? '').trim()
+      const input = args[0] as string | AnyRecord
+      const username = String(typeof input === 'string' ? input : input?.username ?? '').trim()
+      const sessionToken = typeof input === 'string' ? '' : String(input?.sessionToken ?? '')
       const user = store.users.find(item => item.nama_pengguna === username)
-      return user ? ok(toSession(user) as T) : fail('Session tidak ditemukan')
+      if (!sessionToken) return fail('Session tidak valid atau sudah kedaluwarsa')
+      if (!user) return fail('Session tidak ditemukan')
+      if (user.must_change_password) return fail('Password wajib diganti sebelum session dipulihkan')
+      return ok(toSession(user) as T)
     }
 
-    case 'auth:logout':
+    case 'auth:logout': {
+      const input = args[0] as string | AnyRecord
+      const username = String(typeof input === 'string' ? input : input?.username ?? 'unknown')
+      auditAuth(store, username, 'LOGOUT', 'Logout berhasil', authDevice(typeof input === 'string' ? null : input?.deviceInfo))
+      saveStore(store)
       return ok(undefined as T, 'Logout berhasil')
+    }
 
     case 'auth:checkIdentitas':
       return ok({ hasIdentitas: true } as T)
@@ -1432,6 +1694,14 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     case 'user:create': {
       const data = args[0] as AnyRecord
       if (store.users.some(item => item.nama_pengguna === data.nama_pengguna)) return fail('Username sudah digunakan')
+      const password = String(data.password ?? data.kata_sandi ?? '')
+      const validation = validatePasswordStrength(password)
+      if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
+      const pin = String(data.pin ?? '')
+      const pinEnabled = Boolean(data.pin_enabled)
+      if (pinEnabled && data.hak_akses !== 'kasir') return fail('PIN login hanya boleh diaktifkan untuk role kasir')
+      if ((pin || pinEnabled) && !/^\d{4,8}$/.test(pin)) return fail('PIN kasir harus 4-8 digit angka')
+
       const row: MobileStore['users'][number] = {
         nama_pengguna: String(data.nama_pengguna),
         nama_lengkap: String(data.nama_lengkap ?? data.nama_pengguna),
@@ -1442,7 +1712,11 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         terakhir_login: null,
         tgl_wkt_simpan: now(),
         access_expires_at: data.access_expires_at ?? null,
-        password: data.password ?? 'Password123',
+        password_hash: await hashMobilePassword(password),
+        password_hash_type: 'bcrypt',
+        pin_hash: pin ? await hashMobilePassword(pin) : null,
+        pin_enabled: pin && pinEnabled ? 1 : 0,
+        must_change_password: 1,
         permissions: data.permissions ?? {},
       }
       store.users.unshift(row)
@@ -1454,25 +1728,62 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const row = store.users.find(item => item.nama_pengguna === String(args[0] ?? ''))
       if (!row) return fail('User tidak ditemukan')
       const data = args[1] as AnyRecord
+      const pin = String(data.pin ?? '')
+      const pinEnabled = Boolean(data.pin_enabled)
+      const nextRole = data.hak_akses ?? row.hak_akses
+      if (pinEnabled && nextRole !== 'kasir') return fail('PIN login hanya boleh diaktifkan untuk role kasir')
+      if ((pin || pinEnabled) && !pin && !row.pin_hash) return fail('Isi PIN kasir sebelum mengaktifkan login PIN')
+      if (pin && !/^\d{4,8}$/.test(pin)) return fail('PIN kasir harus 4-8 digit angka')
       Object.assign(row, {
         nama_lengkap: data.nama_lengkap ?? row.nama_lengkap,
         email: data.email ?? row.email,
         no_telp: data.no_telp ?? row.no_telp,
         hak_akses: data.hak_akses ?? row.hak_akses,
         access_expires_at: data.access_expires_at ?? row.access_expires_at,
+        pin_enabled: pinEnabled && nextRole === 'kasir' ? 1 : 0,
         permissions: data.permissions ?? row.permissions,
       })
-      if (data.password) row.password = data.password
+      if (pin) row.pin_hash = await hashMobilePassword(pin)
+      if (data.password) {
+        const validation = validatePasswordStrength(String(data.password))
+        if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
+        row.password_hash = await hashMobilePassword(String(data.password))
+        row.password_hash_type = 'bcrypt'
+        row.password = undefined
+        row.must_change_password = 1
+      }
       saveStore(store)
       return ok(publicUser(row) as T, 'User berhasil diperbarui')
+    }
+
+    case 'user:changePassword': {
+      const row = store.users.find(item => item.nama_pengguna === String(args[0] ?? ''))
+      if (!row) return fail('User tidak ditemukan')
+      const oldPassword = String(args[1] ?? '')
+      const newPassword = String(args[2] ?? '')
+      if (!(await verifyMobilePassword(oldPassword, row))) return fail('Password lama salah')
+      const validation = validatePasswordStrength(newPassword)
+      if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
+      row.password_hash = await hashMobilePassword(newPassword)
+      row.password_hash_type = 'bcrypt'
+      row.password = undefined
+      row.must_change_password = 0
+      saveStore(store)
+      return ok(undefined as T, 'Password berhasil diubah')
     }
 
     case 'user:resetPassword': {
       const row = store.users.find(item => item.nama_pengguna === String(args[0] ?? ''))
       if (!row) return fail('User tidak ditemukan')
-      row.password = String(args[1] ?? '')
+      const password = String(args[1] ?? '')
+      const validation = validatePasswordStrength(password)
+      if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
+      row.password_hash = await hashMobilePassword(password)
+      row.password_hash_type = 'bcrypt'
+      row.password = undefined
+      row.must_change_password = 1
       saveStore(store)
-      return ok(undefined as T, 'Password berhasil diganti')
+      return ok(undefined as T, 'Password berhasil direset. User wajib mengganti password saat login berikutnya')
     }
 
     case 'user:delete':
@@ -1528,16 +1839,62 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     case 'backup:getAll':
       return ok(store.backups as T)
 
-    case 'backup:create':
-      return createSimpleRow(store, store.backups, 'backup', { nama_file: `backup-android-${dateKey()}.json`, ukuran: JSON.stringify(store).length, tgl_backup: now(), username: args[0] ?? 'admin', keterangan: args[1] ?? null }, 'kd_backup') as IpcResponse<T>
+    case 'backup:create': {
+      const fileName = `backup-android-${compactDateKey()}-${Date.now()}.json`
+      const file = await writeAndroidBackupFile(fileName, store)
+      return createSimpleRow(
+        store,
+        store.backups,
+        'backup',
+        {
+          nama_file: fileName,
+          ukuran: file.size,
+          tgl_backup: now(),
+          username: args[0] ?? 'system',
+          keterangan: args[1] ?? file.path,
+        },
+        'kd_backup'
+      ) as IpcResponse<T>
+    }
 
     case 'backup:delete':
       return deleteSimpleRow(store, store.backups, args[0], 'kd_backup') as IpcResponse<T>
 
-    case 'backup:restore':
-    case 'backup:download':
-    case 'backup:import':
-      return ok(undefined as T, 'Backup Android diproses')
+    case 'backup:restore': {
+      const row = store.backups.find(item => String(item.kd_backup) === String(args[0]))
+      if (!row?.nama_file) return fail('Backup tidak ditemukan')
+      const backup = await readAndroidBackupFile(String(row.nama_file))
+      memoryStore = normalizeStore(backup.store ?? null)
+      saveStore(memoryStore)
+      return ok(undefined as T, 'Backup Android berhasil direstore')
+    }
+
+    case 'backup:download': {
+      const row = store.backups.find(item => String(item.kd_backup) === String(args[0]))
+      return row ? ok({ path: `Documents/mediasoft-pos/${row.nama_file}` } as T, 'File backup tersedia di folder Documents') : fail('Backup tidak ditemukan')
+    }
+
+    case 'backup:import': {
+      const base64 = String(args[0] ?? '')
+      const fileName = String(args[1] ?? `import-${Date.now()}.json`)
+      const json = atob(base64)
+      const imported = JSON.parse(json) as { store?: MobileStore }
+      if (!imported.store) return fail('File backup tidak valid')
+      const importedStore = normalizeStore(imported.store)
+      const file = await writeAndroidBackupFile(fileName, importedStore)
+      store.backups.unshift({
+        kd_backup: nextCounter(store, 'backup'),
+        nama_file: fileName,
+        ukuran: file.size,
+        tgl_backup: now(),
+        username: 'import',
+        keterangan: file.path,
+      })
+      memoryStore = importedStore
+      memoryStore.backups = store.backups
+      saveStore(memoryStore)
+      return ok(undefined as T, 'Backup Android berhasil diimport')
+    }
 
     case 'activityLog:getAll':
       return ok(store.activityLogs as T)

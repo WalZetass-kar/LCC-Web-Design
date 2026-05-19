@@ -9,6 +9,8 @@ def releaseStorePassword = envOrProp('MEDIASOFT_RELEASE_STORE_PASSWORD')
 def releaseKeyAlias = envOrProp('MEDIASOFT_RELEASE_KEY_ALIAS') ?: 'mediasoft-pos-zetass'
 def releaseKeyPassword = envOrProp('MEDIASOFT_RELEASE_KEY_PASSWORD') ?: releaseStorePassword
 def hasReleaseSigning = releaseStoreFilePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+def pinnedDomain = envOrProp('MEDIASOFT_PINNED_DOMAIN')
+def certPinSha256 = envOrProp('MEDIASOFT_CERT_PIN_SHA256')
 
 android {
     namespace = "com.mediasoft.pos.zetass"
@@ -41,11 +43,46 @@ android {
             if (hasReleaseSigning) {
                 signingConfig signingConfigs.release
             }
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
+
+tasks.register('validateReleaseSecurityConfig') {
+    doLast {
+        def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+        if (releaseRequested && (!pinnedDomain || !certPinSha256)) {
+            throw new GradleException('Release build wajib mengisi MEDIASOFT_PINNED_DOMAIN dan MEDIASOFT_CERT_PIN_SHA256 untuk certificate pinning endpoint kritis.')
+        }
+    }
+}
+
+tasks.register('generateNetworkSecurityConfig') {
+    doLast {
+        def xmlFile = file('src/main/res/xml/network_security_config.xml')
+        def pinningBlock = (pinnedDomain && certPinSha256) ? """
+    <domain-config cleartextTrafficPermitted=\"false\">
+        <domain includeSubdomains=\"true\">${pinnedDomain}</domain>
+        <pin-set expiration=\"2028-12-31\">
+            <pin digest=\"SHA-256\">${certPinSha256}</pin>
+        </pin-set>
+    </domain-config>""" : ''
+        xmlFile.text = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted=\"false\">
+        <trust-anchors>
+            <certificates src=\"system\" />
+        </trust-anchors>
+    </base-config>${pinningBlock}
+</network-security-config>
+"""
+    }
+}
+
+generateNetworkSecurityConfig.mustRunAfter validateReleaseSecurityConfig
+preBuild.dependsOn validateReleaseSecurityConfig, generateNetworkSecurityConfig
 
 repositories {
     flatDir{

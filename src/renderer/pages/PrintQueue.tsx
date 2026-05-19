@@ -8,6 +8,7 @@ import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { SkeletonPage } from '../components/Skeleton'
 import { formatDateTime } from '../utils/format'
+import { secureStorage } from '../utils/secureStorage'
 
 interface PrintJob {
   id: number
@@ -35,9 +36,9 @@ export default function PrintQueue() {
   })
   const [printers, setPrinters] = useState<string[]>([])
 
-  // Load print queue from localStorage
+  // Load print queue from encrypted local storage
   useEffect(() => {
-    const stored = localStorage.getItem('printQueue')
+    const stored = secureStorage.getItem('printQueue')
     if (stored) {
       setJobs(JSON.parse(stored))
     }
@@ -52,7 +53,7 @@ export default function PrintQueue() {
 
   const saveJobs = (newJobs: PrintJob[]) => {
     setJobs(newJobs)
-    localStorage.setItem('printQueue', JSON.stringify(newJobs))
+    secureStorage.setJSON('printQueue', newJobs)
   }
 
   const addJob = (type: PrintJob['type'], title: string, data: any) => {

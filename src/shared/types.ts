@@ -208,6 +208,8 @@ export interface Pengguna {
   terakhir_login: string | null
   tgl_wkt_simpan: string | null
   access_expires_at: string | null
+  must_change_password?: number | boolean | null
+  pin_enabled?: number | boolean | null
 }
 
 export interface ActivityLog {
@@ -243,6 +245,10 @@ export interface UserSession {
   hak_akses: string | null
   access_expires_at?: string | null
   access_days_remaining?: number | null
+  must_change_password?: boolean
+  session_token?: string
+  session_expires_at?: string
+  device_id?: string | null
 }
 
 export interface SubscriptionPlan {

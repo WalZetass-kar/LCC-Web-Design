@@ -43,6 +43,39 @@ function getConfigPath() {
   return path.join(app.getPath('userData'), 'sync-server.json')
 }
 
+function configKey() {
+  return crypto.scryptSync(`${app.getPath('userData')}:${app.getName()}`, 'mediasoft-pos-sync-config', 32)
+}
+
+function encryptConfig(config: SyncServerConfig) {
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', configKey(), iv)
+  const ciphertext = Buffer.concat([
+    cipher.update(JSON.stringify(config), 'utf8'),
+    cipher.final(),
+  ])
+  return JSON.stringify({
+    v: 1,
+    alg: 'aes-256-gcm',
+    iv: iv.toString('base64'),
+    tag: cipher.getAuthTag().toString('base64'),
+    data: ciphertext.toString('base64'),
+  })
+}
+
+function decryptConfig(raw: string): Partial<SyncServerConfig> {
+  const parsed = JSON.parse(raw)
+  if (parsed?.alg !== 'aes-256-gcm') return parsed
+
+  const decipher = crypto.createDecipheriv('aes-256-gcm', configKey(), Buffer.from(parsed.iv, 'base64'))
+  decipher.setAuthTag(Buffer.from(parsed.tag, 'base64'))
+  const plain = Buffer.concat([
+    decipher.update(Buffer.from(parsed.data, 'base64')),
+    decipher.final(),
+  ]).toString('utf8')
+  return JSON.parse(plain)
+}
+
 function defaultConfig(): SyncServerConfig {
   return {
     enabled: true,
@@ -211,7 +244,9 @@ class SyncServer {
         this.persistConfig(config)
         return config
       }
-      return normalizeConfig(JSON.parse(fs.readFileSync(file, 'utf8')))
+      const config = normalizeConfig(decryptConfig(fs.readFileSync(file, 'utf8')))
+      this.persistConfig(config)
+      return config
     } catch {
       const config = defaultConfig()
       this.persistConfig(config)
@@ -222,7 +257,7 @@ class SyncServer {
   private persistConfig(config: SyncServerConfig) {
     const file = getConfigPath()
     fs.mkdirSync(path.dirname(file), { recursive: true })
-    fs.writeFileSync(file, JSON.stringify(config, null, 2))
+    fs.writeFileSync(file, encryptConfig(config), { mode: 0o600 })
   }
 
   private async handleRequest(req: IncomingMessage, res: ServerResponse) {

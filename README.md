@@ -199,21 +199,14 @@ npm run build
 
 ---
 
-## 🔐 Default Login
+## 🔐 Login Awal
 
-**Admin Account:**
-- **Username:** `admin`  
-- **Password:** `admin`
+Saat database belum memiliki pengguna, aplikasi menampilkan setup awal untuk membuat akun superadmin pertama. Tidak ada kredensial default yang disimpan di source code.
 
-**Demo Account (Read-Only):**
-- **Username:** `demo`  
-- **Password:** `demo`
-
-> ⚠️ **PENTING:** 
-> - Segera ubah password default setelah login pertama kali!
-> - Akun **demo** dapat melihat semua fitur dan menu, tetapi **tidak dapat melakukan perubahan data** (read-only mode)
-> - Semua tombol tambah/edit/hapus/simpan akan diblokir dengan pesan error
-> - Cocok untuk presentasi, demo produk, atau testing UI tanpa khawatir merusak data
+> ⚠️ **PENTING:**
+> - Gunakan password kuat: minimal 8 karakter dengan huruf besar, huruf kecil, angka, dan simbol.
+> - Password akun baru atau password hasil reset wajib diganti saat login pertama.
+> - Jangan menyimpan password user di dokumentasi, source code, atau file konfigurasi.
 
 ---
 
@@ -338,7 +331,7 @@ npx electron-rebuild
 - ✅ **Input sanitization** - XSS & SQL injection prevention
 - ✅ **Safe tutorial rendering** - Markdown-like content rendered without raw HTML injection
 - ✅ **Password strength validation** - Min 8 chars, uppercase, lowercase, number
-- ✅ **No password persistence in localStorage** - Remember-me stores only username
+- ✅ **Encrypted local storage** - session, remember-me username, queues, and Android offline data are AES-256 encrypted
 - ✅ **Centralized error handling** - Structured logging with severity levels
 - ✅ **React Error Boundary** - Graceful error recovery
 - ✅ **AES-256 encryption** - For sensitive data
@@ -349,7 +342,7 @@ npx electron-rebuild
 
 ### Security Notes
 
-- Jangan menyimpan password user di `localStorage`, file konfigurasi, atau dokumentasi.
+- Jangan menyimpan password user di storage browser, file konfigurasi, atau dokumentasi.
 - Channel IPC baru harus didaftarkan di `src/main/ipcHandlers.ts` dan `src/main/preload.cjs`; `tests/ipcChannels.test.ts` akan gagal jika keduanya tidak sinkron.
 - Endpoint administrasi seperti user management, backup, security, ecommerce API, activity log, dan subscription plan dibatasi ke role `developer`/`superadmin` di main process.
 

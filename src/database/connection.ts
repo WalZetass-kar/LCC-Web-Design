@@ -20,6 +20,41 @@ sqlite.pragma('foreign_keys = ON')
 // Run migrations on startup
 function runMigrations() {
   try {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS mediasoft_pengguna (
+        nama_pengguna TEXT PRIMARY KEY,
+        kata_sandi TEXT,
+        nama_lengkap TEXT,
+        tgl_wkt_simpan TEXT,
+        tgl_wkt_edit TEXT,
+        status_user TEXT NOT NULL DEFAULT 'Aktif',
+        terakhir_login TEXT,
+        hak_akses TEXT NOT NULL DEFAULT 'kasir',
+        email TEXT,
+        no_telp TEXT,
+        access_expires_at TEXT,
+        password_hash_type TEXT DEFAULT 'sha1',
+        must_change_password INTEGER DEFAULT 0,
+        pin_hash TEXT,
+        pin_hash_type TEXT DEFAULT 'bcrypt',
+        pin_enabled INTEGER DEFAULT 0
+      )
+    `)
+
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS mediasoft_activity_log (
+        kd_log INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        aktivitas TEXT NOT NULL,
+        modul TEXT NOT NULL,
+        tgl_aktivitas TEXT NOT NULL,
+        ip_address TEXT,
+        device_id TEXT,
+        user_agent TEXT,
+        detail TEXT
+      )
+    `)
+
     // Check if password_hash_type column exists
     const columns = sqlite.prepare("PRAGMA table_info(mediasoft_pengguna)").all() as Array<{ name: string }>
     const hasPasswordHashType = columns.some(col => col.name === 'password_hash_type')
@@ -44,6 +79,79 @@ function runMigrations() {
     } else {
       console.log('✓ password_hash_type column exists')
     }
+
+    const hasMustChangePassword = columns.some(col => col.name === 'must_change_password')
+    if (!hasMustChangePassword) {
+      console.log('Adding must_change_password column...')
+      try {
+        sqlite.exec(`ALTER TABLE mediasoft_pengguna ADD COLUMN must_change_password INTEGER DEFAULT 0;`)
+        sqlite.exec(`
+          UPDATE mediasoft_pengguna
+          SET must_change_password = 1
+          WHERE COALESCE(status_user, 'Aktif') = 'Aktif'
+        `)
+        console.log('✓ must_change_password column added successfully')
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (!message.includes('duplicate column')) {
+          console.error('Failed to add must_change_password column:', message)
+        }
+      }
+    }
+
+    const ensurePenggunaColumn = (name: string, definition: string) => {
+      if (!columns.some(col => col.name === name)) {
+        console.log(`Adding ${name} column to mediasoft_pengguna...`)
+        try {
+          sqlite.exec(`ALTER TABLE mediasoft_pengguna ADD COLUMN ${name} ${definition};`)
+          console.log(`✓ ${name} column added successfully`)
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err)
+          if (!message.includes('duplicate column')) {
+            console.error(`Failed to add ${name} column:`, message)
+          }
+        }
+      }
+    }
+
+    ensurePenggunaColumn('pin_hash', 'TEXT')
+    ensurePenggunaColumn('pin_hash_type', "TEXT DEFAULT 'bcrypt'")
+    ensurePenggunaColumn('pin_enabled', 'INTEGER DEFAULT 0')
+
+    const activityColumns = sqlite.prepare("PRAGMA table_info(mediasoft_activity_log)").all() as Array<{ name: string }>
+    const ensureActivityColumn = (name: string, definition: string) => {
+      if (!activityColumns.some(col => col.name === name)) {
+        console.log(`Adding ${name} column to mediasoft_activity_log...`)
+        try {
+          sqlite.exec(`ALTER TABLE mediasoft_activity_log ADD COLUMN ${name} ${definition};`)
+          console.log(`✓ ${name} column added successfully`)
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err)
+          if (!message.includes('duplicate column')) {
+            console.error(`Failed to add ${name} column:`, message)
+          }
+        }
+      }
+    }
+
+    ensureActivityColumn('device_id', 'TEXT')
+    ensureActivityColumn('user_agent', 'TEXT')
+
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS mediasoft_auth_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        issued_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT,
+        last_seen_at TEXT,
+        ip_address TEXT,
+        device_id TEXT,
+        device_name TEXT,
+        user_agent TEXT
+      )
+    `)
     
     const hasEmail = columns.some(col => col.name === 'email')
     if (!hasEmail) {

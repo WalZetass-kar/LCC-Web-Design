@@ -12,6 +12,7 @@ import { useToast } from '../contexts/ToastContext'
 import { playDangerSound, playWarningSound } from '../utils/sound'
 import { DEFAULT_INDUSTRY_SETTINGS, defaultModelForProvider, normalizeIndustrySettings, type AiProvider, type IndustrySettings } from '../../shared/industrySettings'
 import type { Identitas } from '../../shared/types'
+import { normalizeHttpsUrl } from '../../shared/endpointSecurity'
 
 const COLORS: { key: ThemeColor; label: string; hex: string }[] = [
   { key: 'indigo', label: 'Indigo', hex: '#6366f1' },
@@ -161,10 +162,12 @@ export default function Settings() {
       if (data?.type !== 'mediasoft-pos-zetass-sync' || !data.baseUrl || !data.token) {
         throw new Error('Format pairing tidak valid')
       }
+      const url = normalizeHttpsUrl(String(data.baseUrl))
+      if (!url.valid || !url.url) throw new Error(url.message ?? 'URL pairing tidak valid')
       setSyncForm(prev => ({
         ...prev,
         enabled: true,
-        baseUrl: String(data.baseUrl),
+        baseUrl: url.url!,
         token: String(data.token),
       }))
       toast('Data pairing diterapkan. Tekan Simpan lalu Tes.', 'success')
@@ -175,6 +178,14 @@ export default function Settings() {
   }
 
   const saveSync = async () => {
+    if (isAndroidSyncClient && syncForm.enabled) {
+      const url = normalizeHttpsUrl(syncForm.baseUrl)
+      if (!url.valid || !url.url) {
+        toast(url.message as string || 'URL sinkronisasi tidak valid', 'error')
+        return
+      }
+      setSyncForm(prev => ({ ...prev, baseUrl: url.url! }))
+    }
     setSyncLoading(true)
     const payload = isAndroidSyncClient
       ? { enabled: syncForm.enabled, baseUrl: syncForm.baseUrl, token: syncForm.token }
@@ -190,6 +201,13 @@ export default function Settings() {
   }
 
   const testSync = async () => {
+    if (isAndroidSyncClient) {
+      const url = normalizeHttpsUrl(syncForm.baseUrl)
+      if (!url.valid || !url.url) {
+        toast(url.message as string || 'URL sinkronisasi tidak valid', 'error')
+        return
+      }
+    }
     setSyncLoading(true)
     const r = await api<any>('sync:testConnection', isAndroidSyncClient ? { baseUrl: syncForm.baseUrl, token: syncForm.token } : undefined)
     setSyncLoading(false)
@@ -472,8 +490,9 @@ export default function Settings() {
                   label="URL Desktop"
                   value={syncForm.baseUrl}
                   onChange={e => setSyncForm(prev => ({ ...prev, baseUrl: e.target.value }))}
-                  placeholder="http://192.168.1.10:38573"
+                  placeholder="https://alamat-server:38573"
                   icon={<Wifi size={16} />}
+                  helperText="Wajib HTTPS. Gunakan reverse proxy/TLS untuk koneksi LAN produksi."
                 />
                 <Input
                   label="Token"

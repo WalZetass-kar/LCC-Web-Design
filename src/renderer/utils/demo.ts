@@ -10,15 +10,15 @@
 
 /**
  * Check if the current user is in demo mode.
- * Reads from the session stored in localStorage (set by AuthContext).
+ * Reads from the encrypted session stored by AuthContext.
  * 
  * WARNING: This is a UX check only. The renderer is untrusted.
- * An attacker could modify localStorage — that's OK because
+ * A renderer attacker could still tamper with client state — that's OK because
  * the main process has its own independent check via demoSessionManager.
  */
 export function isDemoMode(): boolean {
   try {
-    const saved = localStorage.getItem('pos_session')
+    const saved = secureStorage.getItem('pos_session')
     if (!saved) return false
     const userData = JSON.parse(saved)
     return userData.hak_akses === 'demo'
@@ -55,3 +55,4 @@ export const MUTATION_KEYWORDS = [
   'add', 'remove', 'set', 'toggle', 'import', 'restore', 'clear',
   'open', 'close', 'generate',
 ] as const
+import { secureStorage } from './secureStorage'

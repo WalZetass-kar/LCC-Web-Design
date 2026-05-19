@@ -20,6 +20,7 @@ import { SchedulerService } from '../backend/services/scheduler.js'
 import { demoSession } from '../backend/services/demoSessionManager.js'
 import { initDatabase } from '../backend/utils/dbInit.js'
 import { SyncServerService } from './syncServer.js'
+import { registerSecureStorageHandlers } from './secureStorage.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -122,6 +123,7 @@ app.whenReady().then(() => {
   // Initialize database tables first
   initDatabase()
   
+  registerSecureStorageHandlers(ipcMain)
   registerIpcHandlers(ipcMain)
   SyncServerService.init()
   
