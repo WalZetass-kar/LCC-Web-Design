@@ -53,6 +53,7 @@ import { EcommerceApiController } from '../backend/controllers/EcommerceApiContr
 import { IndustrySettingsController } from '../backend/controllers/IndustrySettingsController.js'
 import { AssistantController } from '../backend/controllers/AssistantController.js'
 import { SyncServerService, setSyncChannelInvoker } from './syncServer.js'
+import { SyncClientService } from './syncClient.js'
 
 type ChannelHandler = (...args: any[]) => any
 
@@ -83,13 +84,40 @@ export async function invokeRegisteredChannel(channel: string, args: unknown[] =
   }
 }
 
+function syncRendererSession(channel: string, result: any) {
+  if (channel === 'auth:logout') {
+    demoSession.clearSession()
+    return
+  }
+
+  if (!['auth:login', 'auth:loginPin', 'auth:restoreSession'].includes(channel)) return
+  if (!result?.success || !result.data || result.data.must_change_password) return
+
+  const userData = result.data as { nama_pengguna?: string; hak_akses?: string }
+  if (userData.nama_pengguna) {
+    demoSession.setSession(userData.nama_pengguna, userData.hak_akses || 'kasir')
+  }
+}
+
+async function invokeRendererChannel(channel: string, args: unknown[], localHandler: ChannelHandler) {
+  if (SyncClientService.shouldForward(channel)) {
+    const result = await SyncClientService.invoke(channel, args)
+    syncRendererSession(channel, result)
+    return result
+  }
+
+  const result = await localHandler(...args)
+  syncRendererSession(channel, result)
+  return result
+}
+
 /**
  * Helper to register an IPC handler with automatic demo guard.
  * Every channel goes through withDemoGuard which checks the server-side session.
  */
 function handle(ipcMain: IpcMain, channel: string, handler: (...args: any[]) => any) {
   registerChannel(channel, handler)
-  const guarded = withDemoGuard(channel, (_e: any, ...args: any[]) => handler(...args))
+  const guarded = withDemoGuard(channel, (_e: any, ...args: any[]) => invokeRendererChannel(channel, args, handler))
   ipcMain.handle(channel, guarded)
 }
 
@@ -108,12 +136,14 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
 
   // ─── AUTH (always allowed — no demo guard needed) ───────────────────
   const authHasUsers = registerChannel('auth:hasUsers', () => AuthController.hasUsers())
-  ipcMain.handle('auth:hasUsers', () => authHasUsers())
+  ipcMain.handle('auth:hasUsers', () => invokeRendererChannel('auth:hasUsers', [], authHasUsers))
 
   const authCreateInitialAdmin = registerChannel('auth:createInitialAdmin', (data: { username?: string; nama_lengkap?: string; password?: string }) => (
     AuthController.createInitialAdmin(data)
   ))
-  ipcMain.handle('auth:createInitialAdmin', (_e, data: { username?: string; nama_lengkap?: string; password?: string }) => authCreateInitialAdmin(data))
+  ipcMain.handle('auth:createInitialAdmin', (_e, data: { username?: string; nama_lengkap?: string; password?: string }) => (
+    invokeRendererChannel('auth:createInitialAdmin', [data], authCreateInitialAdmin)
+  ))
 
   const authLogin = registerChannel('auth:login', async (username: string, password: string, deviceInfo?: any) => {
     const result = await AuthController.login(username, password, deviceInfo)
@@ -126,7 +156,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     
     return result
   })
-  ipcMain.handle('auth:login', (_e, username: string, password: string, deviceInfo?: any) => authLogin(username, password, deviceInfo))
+  ipcMain.handle('auth:login', (_e, username: string, password: string, deviceInfo?: any) => (
+    invokeRendererChannel('auth:login', [username, password, deviceInfo], authLogin)
+  ))
 
   const authLoginPin = registerChannel('auth:loginPin', async (username: string, pin: string, deviceInfo?: any) => {
     const result = await AuthController.loginWithPin(username, pin, deviceInfo)
@@ -136,15 +168,19 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     }
     return result
   })
-  ipcMain.handle('auth:loginPin', (_e, username: string, pin: string, deviceInfo?: any) => authLoginPin(username, pin, deviceInfo))
+  ipcMain.handle('auth:loginPin', (_e, username: string, pin: string, deviceInfo?: any) => (
+    invokeRendererChannel('auth:loginPin', [username, pin, deviceInfo], authLoginPin)
+  ))
 
   const authChangePassword = registerChannel('auth:changePassword', (username: string, oldPass: string, newPass: string, deviceInfo?: any) => (
     AuthController.changePassword(username, oldPass, newPass, deviceInfo)
   ))
-  ipcMain.handle('auth:changePassword', (_e, username: string, oldPass: string, newPass: string, deviceInfo?: any) => authChangePassword(username, oldPass, newPass, deviceInfo))
+  ipcMain.handle('auth:changePassword', (_e, username: string, oldPass: string, newPass: string, deviceInfo?: any) => (
+    invokeRendererChannel('auth:changePassword', [username, oldPass, newPass, deviceInfo], authChangePassword)
+  ))
   
   const authCheckIdentitas = registerChannel('auth:checkIdentitas', () => AuthController.checkIdentitas())
-  ipcMain.handle('auth:checkIdentitas', () => authCheckIdentitas())
+  ipcMain.handle('auth:checkIdentitas', () => invokeRendererChannel('auth:checkIdentitas', [], authCheckIdentitas))
 
   const authRestoreSession = registerChannel('auth:restoreSession', (input: any) => {
     const result = AuthController.restoreSession(input)
@@ -154,7 +190,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     }
     return result
   })
-  ipcMain.handle('auth:restoreSession', (_e, input: any) => authRestoreSession(input))
+  ipcMain.handle('auth:restoreSession', (_e, input: any) => invokeRendererChannel('auth:restoreSession', [input], authRestoreSession))
   
   // Auth logout — clear the session
   const authLogout = registerChannel('auth:logout', (payload: { username?: string; sessionToken?: string; deviceInfo?: any } | string) => {
@@ -166,7 +202,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     demoSession.clearSession()
     return { success: true, message: 'Logged out' }
   })
-  ipcMain.handle('auth:logout', (_e, payload: { username?: string; sessionToken?: string; deviceInfo?: any } | string) => authLogout(payload))
+  ipcMain.handle('auth:logout', (_e, payload: { username?: string; sessionToken?: string; deviceInfo?: any } | string) => (
+    invokeRendererChannel('auth:logout', [payload], authLogout)
+  ))
 
   // ─── DEMO STATUS (always allowed) ──────────────────────────────────
   const demoGetStatus = registerChannel('demo:getStatus', () => {
@@ -193,13 +231,40 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── SYNC SERVER (always allowed) ──────────────────────────────────
   ipcMain.handle('sync:getStatus', () => ({
     success: true,
-    data: SyncServerService.getStatus(),
+    data: {
+      mode: 'desktop',
+      ...SyncServerService.getStatus(),
+      client: SyncClientService.getStatus(),
+    },
   }))
-  ipcMain.handle('sync:saveConfig', (_e, config: { enabled?: boolean; port?: number; token?: string }) => ({
-    success: true,
-    data: SyncServerService.saveConfig(config),
-    message: 'Pengaturan sinkronisasi disimpan',
-  }))
+  ipcMain.handle('sync:saveConfig', (_e, config: { enabled?: boolean; port?: number; token?: string }) => {
+    if (config.enabled) {
+      SyncClientService.saveConfig({ enabled: false })
+    }
+    return {
+      success: true,
+      data: {
+        mode: 'desktop',
+        ...SyncServerService.saveConfig(config),
+        client: SyncClientService.getStatus(),
+      },
+      message: 'Pengaturan sinkronisasi disimpan',
+    }
+  })
+  ipcMain.handle('sync:saveClientConfig', (_e, config: { enabled?: boolean; baseUrl?: string; token?: string; deviceName?: string }) => {
+    const result = SyncClientService.saveConfig(config)
+    if (result.success && result.data.enabled) {
+      SyncServerService.saveConfig({ enabled: false })
+    }
+    return {
+      ...result,
+      data: {
+        mode: 'desktop',
+        ...SyncServerService.getStatus(),
+        client: SyncClientService.getStatus(),
+      },
+    }
+  })
   ipcMain.handle('sync:testConnection', () => {
     const status = SyncServerService.getStatus()
     return {
@@ -210,9 +275,16 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
         : 'Server sinkronisasi desktop belum aktif',
     }
   })
+  ipcMain.handle('sync:testClientConnection', (_e, config?: { baseUrl?: string; token?: string; deviceName?: string }) => (
+    SyncClientService.testConnection(config)
+  ))
   ipcMain.handle('sync:rotateToken', () => ({
     success: true,
-    data: SyncServerService.rotateToken(),
+    data: {
+      mode: 'desktop',
+      ...SyncServerService.rotateToken(),
+      client: SyncClientService.getStatus(),
+    },
     message: 'Token sinkronisasi diganti',
   }))
 

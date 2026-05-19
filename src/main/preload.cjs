@@ -41,7 +41,9 @@ const ALLOWED_CHANNELS = new Set([
   // Sync
   'sync:getStatus',
   'sync:saveConfig',
+  'sync:saveClientConfig',
   'sync:testConnection',
+  'sync:testClientConnection',
   'sync:rotateToken',
 
   // Barang

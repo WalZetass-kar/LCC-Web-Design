@@ -3,6 +3,7 @@ const path = require('path')
 
 const domain = (process.env.MEDIASOFT_PINNED_DOMAIN || '').trim()
 const pin = (process.env.MEDIASOFT_CERT_PIN_SHA256 || '').trim()
+const allowLanHttp = /^(1|true|yes)$/i.test((process.env.MEDIASOFT_ALLOW_LAN_HTTP || '').trim())
 const out = path.join(process.cwd(), 'android/app/src/main/res/xml/network_security_config.xml')
 
 function escapeXml(value) {
@@ -26,7 +27,7 @@ const pinningBlock = domain && pin
 
 const xml = `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false">
+    <base-config cleartextTrafficPermitted="${allowLanHttp ? 'true' : 'false'}">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
@@ -37,4 +38,4 @@ const xml = `<?xml version="1.0" encoding="utf-8"?>
 fs.writeFileSync(out, xml)
 console.log(domain && pin
   ? `Generated network_security_config.xml with certificate pinning for ${domain}`
-  : 'Generated network_security_config.xml without domain pinning; release build will require MEDIASOFT_PINNED_DOMAIN and MEDIASOFT_CERT_PIN_SHA256')
+  : `Generated network_security_config.xml without domain pinning; LAN HTTP ${allowLanHttp ? 'enabled' : 'disabled'}`)

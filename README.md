@@ -155,6 +155,11 @@
 - Color themes (Indigo, Emerald, Rose, Amber, Sky)
 - **Pengaturan pajak** ⭐ NEW
 - **Barcode settings** ⭐ NEW
+- **Sinkronisasi multi-device** ⭐ NEW
+  - 1 aplikasi desktop developer sebagai server pusat
+  - Android dan desktop Windows/macOS/Linux bisa menjadi client
+  - Pairing via URL + token/QR
+  - Daftar device terhubung, request terakhir, dan channel terakhir
 
 ---
 
@@ -196,6 +201,47 @@ npm run dev
 ```bash
 npm run build
 ```
+
+### Build File Installer
+
+Output build disimpan di folder `release/`.
+
+```bash
+# Windows app .exe + zip
+npm run desktop:win
+
+# Windows installer NSIS (.exe setup)
+# Di Linux butuh wine32/i386; paling aman dijalankan di Windows.
+npm run desktop:win:installer
+
+# Linux AppImage
+npm run desktop:linux
+
+# macOS package (jalankan di macOS untuk hasil final terbaik)
+npm run desktop:mac
+
+# Android APK debug
+npm run android:debug
+
+# Android APK release
+npm run android:release
+```
+
+File Windows hasil build utama:
+
+```text
+release/win-unpacked/MediaSoft POS Zetass v2.0.exe
+release/MediaSoft POS Zetass v2.0-2.0.0-win.zip
+```
+
+### Mode Multi-Device
+
+Gunakan 1 desktop sebagai **Server Developer** di halaman Settings > Sinkronisasi Multi-Device. Device lain memilih **Client Device**, lalu isi/paste data pairing dari server.
+
+- Server developer menyimpan database utama dan membuka endpoint sync LAN.
+- Client Android dan desktop mengirim operasi aplikasi ke server developer.
+- URL sync mendukung `http://192.168.x.x:38573` untuk LAN privat atau HTTPS untuk domain produksi.
+- Token sync harus disimpan seperti password.
 
 ---
 

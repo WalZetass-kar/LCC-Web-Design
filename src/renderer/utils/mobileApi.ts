@@ -20,7 +20,8 @@ import { buildAssistantPrompt, buildLocalAssistantResponse } from '../../shared/
 import { dashboardSummaryToSheetsPayload, testGoogleSheetsPayload } from '../../shared/googleSheetsExport'
 import { DEFAULT_INDUSTRY_SETTINGS, defaultModelForProvider, normalizeIndustrySettings, type IndustrySettings } from '../../shared/industrySettings'
 import { validatePasswordStrength } from '../../shared/passwordPolicy'
-import { normalizeHttpsUrl } from '../../shared/endpointSecurity'
+import { normalizeSyncServerUrl } from '../../shared/endpointSecurity'
+import { collectAuthDeviceInfo } from './authDevice'
 import { secureStorage } from './secureStorage'
 import { getPersistentItem, setPersistentItem } from './sqlitePersistence'
 
@@ -860,7 +861,7 @@ function validatePromo(store: MobileStore, code: string, subtotal: number) {
 }
 
 function normalizeBaseUrl(value: string) {
-  const result = normalizeHttpsUrl(value)
+  const result = normalizeSyncServerUrl(value)
   return result.valid ? result.url ?? '' : ''
 }
 
@@ -879,7 +880,7 @@ async function remoteInvoke<T>(store: MobileStore, channel: string, args: unknow
 
   try {
     const baseUrl = normalizeBaseUrl(store.syncClient.baseUrl)
-    if (!baseUrl) return fail('Alamat server sinkronisasi harus HTTPS dan bukan placeholder')
+    if (!baseUrl) return fail('Alamat server sinkronisasi harus HTTPS atau HTTP LAN')
 
     const response = await fetch(`${baseUrl}/api/invoke`, {
       method: 'POST',
@@ -888,6 +889,7 @@ async function remoteInvoke<T>(store: MobileStore, channel: string, args: unknow
         token: store.syncClient.token,
         channel,
         args,
+        device: collectAuthDeviceInfo(),
       }),
       signal: controller.signal,
     })
@@ -923,7 +925,7 @@ async function remoteInvoke<T>(store: MobileStore, channel: string, args: unknow
 async function testRemoteConnection(store: MobileStore, config?: Partial<MobileStore['syncClient']>) {
   const baseUrl = normalizeBaseUrl(config?.baseUrl ?? store.syncClient.baseUrl)
   const token = config?.token ?? store.syncClient.token
-  if (!baseUrl || !token) return fail('Alamat server HTTPS dan token wajib diisi')
+  if (!baseUrl || !token) return fail('Alamat server sync dan token wajib diisi')
 
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), 10000)
@@ -935,7 +937,7 @@ async function testRemoteConnection(store: MobileStore, config?: Partial<MobileS
     const response = await fetch(`${baseUrl}/api/invoke`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, channel: 'system:checkDb', args: [] }),
+      body: JSON.stringify({ token, channel: 'system:checkDb', args: [], device: collectAuthDeviceInfo() }),
       signal: controller.signal,
     })
     const result = await response.json().catch(() => null) as IpcResponse | null
@@ -1061,7 +1063,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const data = args[0] as Partial<MobileStore['syncClient']>
       const baseUrl = data.baseUrl !== undefined ? normalizeBaseUrl(String(data.baseUrl)) : store.syncClient.baseUrl
       if (data.enabled && !baseUrl) {
-        return fail('URL sinkronisasi wajib HTTPS dan tidak boleh placeholder')
+        return fail('URL sinkronisasi harus HTTPS atau HTTP LAN dan tidak boleh placeholder')
       }
       store.syncClient = {
         ...store.syncClient,

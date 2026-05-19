@@ -12,7 +12,7 @@ import { useToast } from '../contexts/ToastContext'
 import { playDangerSound, playWarningSound } from '../utils/sound'
 import { DEFAULT_INDUSTRY_SETTINGS, defaultModelForProvider, normalizeIndustrySettings, type AiProvider, type IndustrySettings } from '../../shared/industrySettings'
 import type { Identitas } from '../../shared/types'
-import { normalizeHttpsUrl } from '../../shared/endpointSecurity'
+import { normalizeSyncServerUrl } from '../../shared/endpointSecurity'
 
 const COLORS: { key: ThemeColor; label: string; hex: string }[] = [
   { key: 'indigo', label: 'Indigo', hex: '#6366f1' },
@@ -23,12 +23,14 @@ const COLORS: { key: ThemeColor; label: string; hex: string }[] = [
   { key: 'pink', label: 'Pink Soft', hex: '#ec4899' },
 ]
 
+type SyncMode = 'server' | 'client'
+
 export default function Settings() {
   const { color, mode, setColor, setMode } = useTheme()
   const toast = useToast()
   const [identitas, setIdentitas] = useState<Partial<Identitas>>({})
   const [syncStatus, setSyncStatus] = useState<any>(null)
-  const [syncForm, setSyncForm] = useState({ enabled: false, port: '38573', baseUrl: '', token: '' })
+  const [syncForm, setSyncForm] = useState({ enabled: false, mode: 'server' as SyncMode, port: '38573', baseUrl: '', token: '', deviceName: '' })
   const [syncQr, setSyncQr] = useState('')
   const [pairingText, setPairingText] = useState('')
   const [industrySettings, setIndustrySettings] = useState<IndustrySettings>(DEFAULT_INDUSTRY_SETTINGS)
@@ -56,16 +58,29 @@ export default function Settings() {
     if (r.data.mode === 'android-client') {
       setSyncForm({
         enabled: Boolean(r.data.client?.enabled),
+        mode: 'client',
         port: '38573',
         baseUrl: r.data.client?.baseUrl ?? '',
         token: r.data.client?.token ?? '',
+        deviceName: '',
+      })
+    } else if (r.data.client?.enabled) {
+      setSyncForm({
+        enabled: Boolean(r.data.client?.enabled),
+        mode: 'client',
+        port: String(r.data.port ?? 38573),
+        baseUrl: r.data.client?.baseUrl ?? '',
+        token: r.data.client?.token ?? '',
+        deviceName: r.data.client?.deviceName ?? '',
       })
     } else {
       setSyncForm({
         enabled: Boolean(r.data.enabled),
+        mode: 'server',
         port: String(r.data.port ?? 38573),
         baseUrl: r.data.urls?.[1] ?? r.data.urls?.[0] ?? '',
         token: r.data.token ?? '',
+        deviceName: r.data.client?.deviceName ?? '',
       })
     }
   }
@@ -79,6 +94,7 @@ export default function Settings() {
   }
 
   const isAndroidSyncClient = syncStatus?.mode === 'android-client'
+  const isSyncClient = isAndroidSyncClient || syncForm.mode === 'client'
 
   const getSyncPairingPayload = () => {
     const baseUrl = syncForm.baseUrl || (syncStatus?.urls ?? []).find((url: string) => !url.includes('127.0.0.1')) || syncStatus?.urls?.[0] || ''
@@ -92,7 +108,7 @@ export default function Settings() {
   }
 
   useEffect(() => {
-    if (isAndroidSyncClient || !syncForm.token || !(syncStatus?.urls ?? []).length) {
+    if (isSyncClient || !syncForm.token || !(syncStatus?.urls ?? []).length) {
       setSyncQr('')
       return
     }
@@ -109,7 +125,7 @@ export default function Settings() {
     return () => {
       cancelled = true
     }
-  }, [isAndroidSyncClient, syncForm.token, syncForm.baseUrl, syncStatus?.urls])
+  }, [isSyncClient, syncForm.token, syncForm.baseUrl, syncStatus?.urls])
 
   const loadIndustrySettings = async () => {
     const r = await api<IndustrySettings>('integrations:get')
@@ -162,7 +178,7 @@ export default function Settings() {
       if (data?.type !== 'mediasoft-pos-zetass-sync' || !data.baseUrl || !data.token) {
         throw new Error('Format pairing tidak valid')
       }
-      const url = normalizeHttpsUrl(String(data.baseUrl))
+      const url = normalizeSyncServerUrl(String(data.baseUrl))
       if (!url.valid || !url.url) throw new Error(url.message ?? 'URL pairing tidak valid')
       setSyncForm(prev => ({
         ...prev,
@@ -178,8 +194,8 @@ export default function Settings() {
   }
 
   const saveSync = async () => {
-    if (isAndroidSyncClient && syncForm.enabled) {
-      const url = normalizeHttpsUrl(syncForm.baseUrl)
+    if (isSyncClient && syncForm.enabled) {
+      const url = normalizeSyncServerUrl(syncForm.baseUrl)
       if (!url.valid || !url.url) {
         toast(url.message as string || 'URL sinkronisasi tidak valid', 'error')
         return
@@ -187,10 +203,11 @@ export default function Settings() {
       setSyncForm(prev => ({ ...prev, baseUrl: url.url! }))
     }
     setSyncLoading(true)
-    const payload = isAndroidSyncClient
-      ? { enabled: syncForm.enabled, baseUrl: syncForm.baseUrl, token: syncForm.token }
+    const payload = isSyncClient
+      ? { enabled: syncForm.enabled, baseUrl: syncForm.baseUrl, token: syncForm.token, deviceName: syncForm.deviceName }
       : { enabled: syncForm.enabled, port: parseInt(syncForm.port, 10), token: syncForm.token }
-    const r = await api<any>('sync:saveConfig', payload)
+    const channel = isAndroidSyncClient || !isSyncClient ? 'sync:saveConfig' : 'sync:saveClientConfig'
+    const r = await api<any>(channel, payload)
     setSyncLoading(false)
     if (r.success) {
       toast(r.message as string || 'Sinkronisasi disimpan', 'success')
@@ -201,15 +218,21 @@ export default function Settings() {
   }
 
   const testSync = async () => {
-    if (isAndroidSyncClient) {
-      const url = normalizeHttpsUrl(syncForm.baseUrl)
+    if (isSyncClient) {
+      const url = normalizeSyncServerUrl(syncForm.baseUrl)
       if (!url.valid || !url.url) {
         toast(url.message as string || 'URL sinkronisasi tidak valid', 'error')
         return
       }
     }
     setSyncLoading(true)
-    const r = await api<any>('sync:testConnection', isAndroidSyncClient ? { baseUrl: syncForm.baseUrl, token: syncForm.token } : undefined)
+    const channel = isAndroidSyncClient
+      ? 'sync:testConnection'
+      : isSyncClient
+        ? 'sync:testClientConnection'
+        : 'sync:testConnection'
+    const payload = isSyncClient ? { baseUrl: syncForm.baseUrl, token: syncForm.token, deviceName: syncForm.deviceName } : undefined
+    const r = await api<any>(channel, payload)
     setSyncLoading(false)
     if (r.success) {
       toast(r.message as string || 'Sinkronisasi tersambung', 'success')
@@ -460,15 +483,55 @@ export default function Settings() {
       </div>
 
       <div className="space-y-6">
-        <Card title="Sinkronisasi Android/Desktop" action={<Server size={16} className={syncStatus?.running || syncForm.enabled ? 'text-emerald-500' : 'text-slate-400'} />}>
+        <Card title="Sinkronisasi Multi-Device" action={<Server size={16} className={syncStatus?.running || syncForm.enabled ? 'text-emerald-500' : 'text-slate-400'} />}>
           <div className="space-y-4 mt-1">
+            {!isAndroidSyncClient && (
+              <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setSyncForm(prev => ({
+                    ...prev,
+                    mode: 'server',
+                    enabled: Boolean(syncStatus?.enabled),
+                    baseUrl: syncStatus?.urls?.[1] ?? syncStatus?.urls?.[0] ?? prev.baseUrl,
+                    token: syncStatus?.token ?? prev.token,
+                  }))}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                    syncForm.mode === 'server'
+                      ? 'bg-white text-primary-700 shadow-sm dark:bg-slate-700 dark:text-primary-300'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Server Developer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSyncForm(prev => ({
+                    ...prev,
+                    mode: 'client',
+                    enabled: Boolean(syncStatus?.client?.enabled),
+                    baseUrl: syncStatus?.client?.baseUrl ?? '',
+                    token: syncStatus?.client?.token ?? '',
+                    deviceName: syncStatus?.client?.deviceName ?? prev.deviceName,
+                  }))}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                    syncForm.mode === 'client'
+                      ? 'bg-white text-primary-700 shadow-sm dark:bg-slate-700 dark:text-primary-300'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Client Device
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
               <div>
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                  {isAndroidSyncClient ? 'Mode Sinkron ke Desktop' : 'Server Sinkron Desktop'}
+                  {isSyncClient ? 'Mode Client ke Server Developer' : 'Server Developer Pusat'}
                 </p>
                 <p className={`text-xs mt-0.5 ${syncStatus?.running || syncForm.enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
-                  {isAndroidSyncClient
+                  {isSyncClient
                     ? (syncForm.enabled ? 'Aktif' : 'Offline lokal')
                     : (syncStatus?.running ? 'Aktif' : 'Nonaktif')}
                 </p>
@@ -484,21 +547,29 @@ export default function Settings() {
               </label>
             </div>
 
-            {isAndroidSyncClient ? (
+            {isSyncClient ? (
               <>
+                {!isAndroidSyncClient && (
+                  <Input
+                    label="Nama Device"
+                    value={syncForm.deviceName}
+                    onChange={e => setSyncForm(prev => ({ ...prev, deviceName: e.target.value }))}
+                    placeholder="Kasir Windows 1"
+                  />
+                )}
                 <Input
-                  label="URL Desktop"
+                  label="URL Server Developer"
                   value={syncForm.baseUrl}
                   onChange={e => setSyncForm(prev => ({ ...prev, baseUrl: e.target.value }))}
-                  placeholder="https://alamat-server:38573"
+                  placeholder="http://192.168.1.10:38573"
                   icon={<Wifi size={16} />}
-                  helperText="Wajib HTTPS. Gunakan reverse proxy/TLS untuk koneksi LAN produksi."
+                  helperText="Bisa HTTP untuk IP LAN privat, atau HTTPS untuk domain produksi."
                 />
                 <Input
                   label="Token"
                   value={syncForm.token}
                   onChange={e => setSyncForm(prev => ({ ...prev, token: e.target.value }))}
-                  placeholder="Token dari desktop"
+                  placeholder="Token dari server developer"
                 />
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Data Pairing QR</label>
@@ -515,6 +586,11 @@ export default function Settings() {
                 {syncStatus?.client?.lastConnectedAt && (
                   <p className="text-xs text-slate-400">Terakhir tersambung: {new Date(syncStatus.client.lastConnectedAt).toLocaleString('id-ID')}</p>
                 )}
+                {syncStatus?.client?.lastError && (
+                  <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-400">
+                    {syncStatus.client.lastError}
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -530,7 +606,7 @@ export default function Settings() {
                   onChange={e => setSyncForm(prev => ({ ...prev, token: e.target.value }))}
                 />
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">URL Desktop</p>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">URL Server Developer</p>
                   {(syncStatus?.urls ?? []).map((url: string) => (
                     <div key={url} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                       {url}
@@ -542,7 +618,7 @@ export default function Settings() {
                     <img src={syncQr} alt="QR pairing sinkronisasi" className="w-[180px] h-[180px] rounded-lg bg-white p-2" />
                     <div className="flex flex-col justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">QR Pairing Android</p>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">QR Pairing Device</p>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                           QR berisi URL desktop dan token sinkronisasi. Simpan token ini seperti password.
                         </p>
@@ -558,6 +634,27 @@ export default function Settings() {
                     Request terakhir: {syncStatus.lastChannel || '-'} pada {new Date(syncStatus.lastRequestAt).toLocaleString('id-ID')} ({syncStatus.requestCount || 0} request)
                   </div>
                 )}
+                {(syncStatus?.devices ?? []).length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Device Terhubung</p>
+                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                      {(syncStatus.devices ?? []).map((device: any) => (
+                        <div key={device.deviceId} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-slate-700 dark:text-slate-200">{device.deviceName || 'Device POS'}</p>
+                              <p className="mt-0.5 truncate text-slate-400">{device.address || '-'} - {device.lastChannel || '-'}</p>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                              {device.requestCount || 0} req
+                            </span>
+                          </div>
+                          <p className="mt-1 text-slate-400">Terakhir: {device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString('id-ID') : '-'}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {syncStatus?.error && (
                   <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-400">
                     {syncStatus.error}
@@ -569,7 +666,7 @@ export default function Settings() {
             <div className="flex flex-col sm:flex-row gap-2">
               <Button loading={syncLoading} onClick={saveSync} className="w-full sm:w-auto">Simpan Sinkronisasi</Button>
               <Button variant="secondary" loading={syncLoading} onClick={testSync} icon={<RefreshCw size={14} />} className="w-full sm:w-auto">Tes</Button>
-              {!isAndroidSyncClient && (
+              {!isAndroidSyncClient && !isSyncClient && (
                 <Button variant="secondary" loading={syncLoading} onClick={rotateSyncToken} className="w-full sm:w-auto">Ganti Token</Button>
               )}
             </div>

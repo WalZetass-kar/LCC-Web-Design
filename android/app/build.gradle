@@ -11,6 +11,13 @@ def releaseKeyPassword = envOrProp('MEDIASOFT_RELEASE_KEY_PASSWORD') ?: releaseS
 def hasReleaseSigning = releaseStoreFilePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
 def pinnedDomain = envOrProp('MEDIASOFT_PINNED_DOMAIN')
 def certPinSha256 = envOrProp('MEDIASOFT_CERT_PIN_SHA256')
+def isReleaseRequested = {
+    gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+}
+def allowLanHttp = {
+    def raw = envOrProp('MEDIASOFT_ALLOW_LAN_HTTP')
+    return raw == null ? !isReleaseRequested() : raw.toString().toBoolean()
+}
 
 android {
     namespace = "com.mediasoft.pos.zetass"
@@ -52,8 +59,8 @@ android {
 
 tasks.register('validateReleaseSecurityConfig') {
     doLast {
-        def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
-        if (releaseRequested && (!pinnedDomain || !certPinSha256)) {
+        def releaseRequested = isReleaseRequested()
+        if (releaseRequested && !allowLanHttp() && (!pinnedDomain || !certPinSha256)) {
             throw new GradleException('Release build wajib mengisi MEDIASOFT_PINNED_DOMAIN dan MEDIASOFT_CERT_PIN_SHA256 untuk certificate pinning endpoint kritis.')
         }
     }
@@ -62,6 +69,7 @@ tasks.register('validateReleaseSecurityConfig') {
 tasks.register('generateNetworkSecurityConfig') {
     doLast {
         def xmlFile = file('src/main/res/xml/network_security_config.xml')
+        def cleartextPermitted = allowLanHttp() ? 'true' : 'false'
         def pinningBlock = (pinnedDomain && certPinSha256) ? """
     <domain-config cleartextTrafficPermitted=\"false\">
         <domain includeSubdomains=\"true\">${pinnedDomain}</domain>
@@ -71,7 +79,7 @@ tasks.register('generateNetworkSecurityConfig') {
     </domain-config>""" : ''
         xmlFile.text = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted=\"false\">
+    <base-config cleartextTrafficPermitted=\"${cleartextPermitted}\">
         <trust-anchors>
             <certificates src=\"system\" />
         </trust-anchors>

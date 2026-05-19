@@ -20,12 +20,15 @@
     "prepare:android-network-security": "node scripts/prepare-android-network-security.cjs",
     "prepare:android-signing": "node scripts/prepare-android-signing.cjs",
     "android:release": "npm run build:vite && npm run prepare:android-network-security && npx cap sync android && npm run prepare:android-signing && node scripts/build-android.cjs assembleRelease",
-    "desktop:win": "npm run build:electron && npm run build:vite && electron-builder --win --publish never",
+    "desktop:win": "npm run build:electron && npm run build:vite && electron-builder --win zip --publish never",
+    "desktop:win:installer": "npm run build:electron && npm run build:vite && electron-builder --win --publish never",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm run test",
     "rebuild:electron": "./node_modules/.bin/electron-rebuild -f -w better-sqlite3",
     "rebuild:node": "npm rebuild better-sqlite3",
+    "desktop:linux": "npm run build:electron && npm run build:vite && electron-builder --linux --publish never",
+    "desktop:mac": "npm run build:electron && npm run build:vite && electron-builder --mac --publish never",
     "postinstall": "npm run rebuild:electron"
   },
   "dependencies": {

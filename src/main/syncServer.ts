@@ -17,10 +17,22 @@ interface SyncServerStatus {
   port: number
   token: string
   urls: string[]
+  devices: SyncConnectedDevice[]
   error: string | null
   requestCount: number
   lastRequestAt: string | null
   lastChannel: string | null
+}
+
+interface SyncConnectedDevice {
+  deviceId: string
+  deviceName: string
+  userAgent: string
+  address: string
+  firstSeenAt: string
+  lastSeenAt: string
+  lastChannel: string
+  requestCount: number
 }
 
 const DEFAULT_PORT = 38573
@@ -147,6 +159,7 @@ class SyncServer {
   private requestCount = 0
   private lastRequestAt: string | null = null
   private lastChannel: string | null = null
+  private devices = new Map<string, SyncConnectedDevice>()
 
   init() {
     this.config = this.loadConfig()
@@ -163,6 +176,7 @@ class SyncServer {
       port: config.port,
       token: config.token,
       urls: localUrls(config.port),
+      devices: [...this.devices.values()].sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt)),
       error: this.lastError,
       requestCount: this.requestCount,
       lastRequestAt: this.lastRequestAt,
@@ -260,6 +274,41 @@ class SyncServer {
     fs.writeFileSync(file, encryptConfig(config), { mode: 0o600 })
   }
 
+  private trackDevice(req: IncomingMessage, rawDevice: unknown, channel: string) {
+    const input = rawDevice && typeof rawDevice === 'object'
+      ? rawDevice as Record<string, unknown>
+      : {}
+    const address = (req.socket.remoteAddress ?? 'unknown').replace(/^::ffff:/, '')
+    const headerAgent = Array.isArray(req.headers['user-agent'])
+      ? req.headers['user-agent'].join(' ')
+      : req.headers['user-agent']
+    const userAgent = typeof input.userAgent === 'string' && input.userAgent.trim()
+      ? input.userAgent.trim().slice(0, 220)
+      : String(headerAgent || 'unknown').slice(0, 220)
+    const deviceName = typeof input.deviceName === 'string' && input.deviceName.trim()
+      ? input.deviceName.trim().slice(0, 120)
+      : 'Device POS'
+    const rawDeviceId = typeof input.deviceId === 'string' ? input.deviceId.trim() : ''
+    const deviceId = rawDeviceId || crypto
+      .createHash('sha256')
+      .update(`${address}:${userAgent}`)
+      .digest('hex')
+      .slice(0, 24)
+    const existing = this.devices.get(deviceId)
+    const timestamp = new Date().toISOString()
+
+    this.devices.set(deviceId, {
+      deviceId,
+      deviceName,
+      userAgent,
+      address,
+      firstSeenAt: existing?.firstSeenAt ?? timestamp,
+      lastSeenAt: timestamp,
+      lastChannel: channel,
+      requestCount: (existing?.requestCount ?? 0) + 1,
+    })
+  }
+
   private async handleRequest(req: IncomingMessage, res: ServerResponse) {
     if (req.method === 'OPTIONS') {
       sendJson(res, 204, {})
@@ -300,6 +349,7 @@ class SyncServer {
       this.requestCount += 1
       this.lastRequestAt = new Date().toISOString()
       this.lastChannel = channel
+      this.trackDevice(req, body.device, channel)
       const result = await invokeChannel(channel, args)
       sendJson(res, 200, result)
     } catch (error) {
