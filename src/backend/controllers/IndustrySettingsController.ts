@@ -70,8 +70,11 @@ async function postToGoogleSheets(url: string, payload: unknown) {
       signal: controller.signal,
     })
     const data = await response.json().catch(() => null) as { success?: boolean; message?: string } | null
-    if (!response.ok || data?.success === false) {
+    if (!response.ok) {
       throw new Error(data?.message || `Google Sheets HTTP ${response.status}`)
+    }
+    if (!data || data.success !== true) {
+      throw new Error(data?.message || 'Apps Script tidak mengembalikan JSON sukses. Pastikan template Apps Script sudah dipasang dan di-deploy sebagai Web App.')
     }
     return data
   } finally {

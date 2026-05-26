@@ -35,6 +35,16 @@ function normalizeAccessExpiresAt(value?: string | null): string | null | undefi
   return date.toISOString()
 }
 
+function getDefaultSubscriptionExpiry(planId?: number | null): string | null {
+  if (!planId) return null
+  const plan = sqlite
+    .prepare('SELECT duration_days FROM mediasoft_subscription_plans WHERE id = ?')
+    .get(planId) as { duration_days?: number | null } | undefined
+  const days = plan?.duration_days ?? 0
+  if (!days || days <= 0) return null
+  return addDays(new Date(), days).toISOString()
+}
+
 function addDays(base: Date, days: number): Date {
   const next = new Date(base)
   next.setDate(next.getDate() + days)
@@ -49,14 +59,33 @@ function validatePin(pin?: string | null): string | null {
 export class UserController {
   static getAll() {
     try {
-      const users = PenggunaModel.getAll()
-      // Don't send password to frontend
-      const sanitized = users.map(u => ({
-        ...u,
-        kata_sandi: undefined,
-        pin_hash: undefined,
-        pin_hash_type: undefined,
-      }))
+      const sanitized = sqlite.prepare(`
+        SELECT
+          u.nama_pengguna,
+          u.nama_lengkap,
+          u.email,
+          u.no_telp,
+          u.hak_akses,
+          u.status_user,
+          u.terakhir_login,
+          u.tgl_wkt_simpan,
+          u.access_expires_at,
+          u.must_change_password,
+          u.pin_enabled,
+          u.subscription_plan_id,
+          u.subscription_expires_at,
+          u.is_buyer,
+          p.name AS plan_name,
+          COALESCE(p.max_devices, 1) AS max_devices,
+          (
+            SELECT COUNT(*)
+            FROM mediasoft_user_devices d
+            WHERE d.username = u.nama_pengguna AND d.status = 'active'
+          ) AS current_devices
+        FROM mediasoft_pengguna u
+        LEFT JOIN mediasoft_subscription_plans p ON p.id = u.subscription_plan_id
+        ORDER BY u.tgl_wkt_simpan DESC, u.nama_pengguna ASC
+      `).all()
       return { success: true, data: sanitized }
     } catch (error) {
       return { success: false, message: String(error) }
@@ -75,6 +104,9 @@ export class UserController {
     permissions?: Record<string, boolean>
     pin?: string
     pin_enabled?: boolean | number
+    subscription_plan_id?: number | null
+    subscription_expires_at?: string | null
+    is_buyer?: boolean | number
     _caller?: string
   }) {
     try {
@@ -114,6 +146,10 @@ export class UserController {
         must_change_password: 1,
         pin_hash: data.pin ? await hashPassword(data.pin) : null,
         pin_enabled: data.pin && data.pin_enabled ? 1 : 0,
+        subscription_plan_id: data.subscription_plan_id ?? null,
+        subscription_expires_at: normalizeAccessExpiresAt(data.subscription_expires_at)
+          ?? getDefaultSubscriptionExpiry(data.subscription_plan_id),
+        is_buyer: data.is_buyer ? 1 : 0,
       })
 
       if (data.permissions) {
@@ -126,7 +162,8 @@ export class UserController {
           data._caller,
           `Menambah user baru: ${data.nama_pengguna}`,
           'USER_MANAGEMENT',
-          `Hak akses: ${data.hak_akses || 'kasir'}`
+          `Hak akses: ${data.hak_akses || 'kasir'}; paket=${data.subscription_plan_id ?? '-'}; buyer=${data.is_buyer ? 1 : 0}`,
+          data.subscription_plan_id ? 'subscription' : 'general'
         )
       }
 
@@ -146,6 +183,9 @@ export class UserController {
     permissions?: Record<string, boolean>
     pin?: string
     pin_enabled?: boolean | number
+    subscription_plan_id?: number | null
+    subscription_expires_at?: string | null
+    is_buyer?: boolean | number
     _caller?: string
   }) {
     try {
@@ -177,11 +217,22 @@ export class UserController {
       if (requestedPinEnabled && !data.pin && !existing.pin_hash) {
         return { success: false, message: 'Isi PIN kasir sebelum mengaktifkan login PIN' }
       }
-      const normalizedPayload = {
+      const normalizedPayload: Record<string, unknown> = {
         ...payload,
         access_expires_at: UNLIMITED_ACCESS_ROLES.includes(targetRole)
           ? null
           : normalizeAccessExpiresAt(payload.access_expires_at),
+      }
+      if (payload.subscription_plan_id !== undefined) {
+        normalizedPayload.subscription_plan_id = payload.subscription_plan_id ?? null
+      }
+      if (payload.subscription_expires_at !== undefined) {
+        normalizedPayload.subscription_expires_at = normalizeAccessExpiresAt(payload.subscription_expires_at)
+      } else if (payload.subscription_plan_id !== undefined) {
+        normalizedPayload.subscription_expires_at = getDefaultSubscriptionExpiry(payload.subscription_plan_id)
+      }
+      if (payload.is_buyer !== undefined) {
+        normalizedPayload.is_buyer = payload.is_buyer ? 1 : 0
       }
 
       if (!callerIsPrivileged) {
@@ -204,11 +255,16 @@ export class UserController {
       // Activity log
       if (_caller) {
         const changes = Object.keys(payload).filter(k => k !== '_caller').join(', ')
+        const eventType = ['subscription_plan_id', 'subscription_expires_at', 'access_expires_at', 'is_buyer']
+          .some(key => Object.prototype.hasOwnProperty.call(payload, key))
+          ? 'subscription'
+          : 'general'
         ActivityLogModel.log(
           _caller,
           `Mengubah data user: ${username}`,
           'USER_MANAGEMENT',
-          `Field yang diubah: ${changes}`
+          `Field yang diubah: ${changes}`,
+          eventType
         )
       }
 
@@ -385,7 +441,10 @@ export class UserController {
       const base = currentExpiry && currentExpiry > now ? currentExpiry : now
       const nextExpiry = addDays(base, Math.floor(days)).toISOString()
 
-      PenggunaModel.update(username, { access_expires_at: nextExpiry })
+      PenggunaModel.update(username, {
+        access_expires_at: nextExpiry,
+        subscription_expires_at: user.subscription_plan_id ? nextExpiry : user.subscription_expires_at,
+      })
 
       if (caller) {
         ActivityLogModel.log(
@@ -415,6 +474,9 @@ export class UserController {
 
       const status_user = blocked ? 'Nonaktif' : 'Aktif'
       PenggunaModel.update(username, { status_user })
+      if (blocked) {
+        AuthSessionModel.revokeAllForUser(username)
+      }
 
       if (caller) {
         ActivityLogModel.log(

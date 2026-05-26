@@ -3,13 +3,28 @@ import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, Package, Tag, ShoppingCart, History, Settings, Store, LogOut, Truck, X,
   Users, UserCircle, Wallet, FileText, BarChart2, Database, ShoppingBag, Activity,
-  RotateCcw, Clock, DollarSign, ClipboardCheck, Rocket, BookOpen, Calculator, Ruler, Gift, Building2, Shield, Award, MessageCircle, Printer, Globe, ChevronLeft, ChevronRight
+  RotateCcw, Clock, DollarSign, ClipboardCheck, Rocket, BookOpen, Calculator, Ruler, Gift, Building2, Shield, Award, MessageCircle, Printer, Globe, ChevronLeft, ChevronRight, ShieldCheck
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
 import { api } from '../utils/api'
 
-export const MENU_GROUPS = [
+export interface MenuItem {
+  to: string
+  icon: LucideIcon
+  label: string
+  code: string
+  adminOnly?: boolean
+  feature?: string
+}
+
+interface MenuGroup {
+  label: string
+  items: MenuItem[]
+}
+
+export const MENU_GROUPS: MenuGroup[] = [
   {
     label: 'Utama',
     items: [
@@ -25,8 +40,8 @@ export const MENU_GROUPS = [
       { to: '/kategori', icon: Tag, label: 'Kategori', code: 'nav_barang' },
       { to: '/satuan', icon: Ruler, label: 'Satuan', code: 'nav_barang' },
       { to: '/pembelian', icon: ShoppingBag, label: 'Pembelian', code: 'nav_pembelian' },
-      { to: '/stock-opname', icon: ClipboardCheck, label: 'Stok Opname', code: 'nav_barang' },
-      { to: '/branch', icon: Building2, label: 'Cabang/Gudang', code: 'nav_branch', adminOnly: true },
+      { to: '/stock-opname', icon: ClipboardCheck, label: 'Stok Opname', code: 'nav_barang', feature: 'stock_opname' },
+      { to: '/branch', icon: Building2, label: 'Cabang/Gudang', code: 'nav_branch', adminOnly: true, feature: 'multi_branch' },
     ],
   },
   {
@@ -41,11 +56,11 @@ export const MENU_GROUPS = [
     label: 'Keuangan',
     items: [
       { to: '/kas', icon: Wallet, label: 'Kas', code: 'nav_pembelian' },
-      { to: '/shifts', icon: Clock, label: 'Shift', code: 'nav_pembelian' },
-      { to: '/debts', icon: DollarSign, label: 'Hutang/Piutang', code: 'nav_pembelian' },
-      { to: '/returns', icon: RotateCcw, label: 'Return', code: 'nav_penjualan' },
+      { to: '/shifts', icon: Clock, label: 'Shift', code: 'nav_pembelian', feature: 'shift_management' },
+      { to: '/debts', icon: DollarSign, label: 'Hutang/Piutang', code: 'nav_pembelian', feature: 'debt_management' },
+      { to: '/returns', icon: RotateCcw, label: 'Return', code: 'nav_penjualan', feature: 'return_refund' },
       { to: '/promo', icon: Gift, label: 'Promo', code: 'nav_promo' },
-      { to: '/laporan', icon: BarChart2, label: 'Laporan', code: 'nav_pembelian' },
+      { to: '/laporan', icon: BarChart2, label: 'Laporan', code: 'nav_pembelian', feature: 'reports' },
     ],
   },
   {
@@ -61,17 +76,16 @@ export const MENU_GROUPS = [
     label: 'Administrasi',
     items: [
       { to: '/users', icon: Users, label: 'Pengguna', code: 'nav_pengguna', adminOnly: true },
+      { to: '/license-admin', icon: ShieldCheck, label: 'License Center', code: 'nav_license_admin', adminOnly: true },
       { to: '/subscription-plans', icon: DollarSign, label: 'Paket Langganan', code: 'nav_plans', adminOnly: true },
       { to: '/activity-log', icon: Activity, label: 'Activity Log', code: 'nav_activity_log', adminOnly: true },
-      { to: '/backup', icon: Database, label: 'Backup', code: 'nav_export_db', adminOnly: true },
+      { to: '/backup', icon: Database, label: 'Backup', code: 'nav_export_db', adminOnly: true, feature: 'backup' },
       { to: '/security', icon: Shield, label: 'Keamanan', code: 'nav_security', adminOnly: true },
-      { to: '/ecommerce-api', icon: Globe, label: 'E-commerce API', code: 'nav_ecommerce_api', adminOnly: true },
+      { to: '/ecommerce-api', icon: Globe, label: 'E-commerce API', code: 'nav_ecommerce_api', adminOnly: true, feature: 'api_access' },
       { to: '/settings', icon: Settings, label: 'Pengaturan', code: 'nav_identitas' },
     ],
   },
 ]
-
-type MenuItem = typeof MENU_GROUPS[number]['items'][number]
 
 const QUICK_MENU_PATHS = ['/', '/transaksi', '/produk', '/laporan', '/settings']
 
@@ -87,6 +101,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
   const navigate = useNavigate()
   const { isDemo: isDemoGuard, showPricing, remainingUsage } = useDemoGuard()
   const [permissions, setPermissions] = useState<Record<string, boolean> | null>(null)
+  const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (user?.nama_pengguna) {
@@ -94,6 +109,9 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
         if (r.success && r.data && Object.keys(r.data).length > 0) {
           setPermissions(r.data)
         }
+      })
+      api<{ feature_flags?: Record<string, boolean>; is_expired?: boolean }>('subscription:getStatus', user.nama_pengguna).then(r => {
+        if (r.success && r.data?.feature_flags) setFeatureFlags(r.data.feature_flags)
       })
     }
   }, [user?.nama_pengguna])
@@ -119,6 +137,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
   const canShowItem = (item: MenuItem) => {
     if (item.adminOnly && !isAdmin) return false
     if (permissions && !isAdmin && item.code && permissions[item.code] === false) return false
+    if ('feature' in item && item.feature && featureFlags[item.feature] === false) return false
     return true
   }
   const quickItems = MENU_GROUPS

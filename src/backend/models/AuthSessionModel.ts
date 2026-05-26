@@ -8,6 +8,9 @@ export interface AuthDeviceInfo {
   deviceId?: string | null
   deviceName?: string | null
   userAgent?: string | null
+  platform?: string | null
+  osName?: string | null
+  appVersion?: string | null
 }
 
 export interface CreatedAuthSession {
@@ -41,6 +44,10 @@ export class AuthSessionModel {
       device_id: device.deviceId ?? null,
       device_name: device.deviceName ?? null,
       user_agent: device.userAgent ?? null,
+      platform: device.platform ?? null,
+      os_name: device.osName ?? null,
+      app_version: device.appVersion ?? null,
+      is_revoked: 0,
     }).run()
 
     return {
@@ -55,6 +62,7 @@ export class AuthSessionModel {
     const conditions = [
       eq(authSessions.token_hash, hashToken(token)),
       isNull(authSessions.revoked_at),
+      eq(authSessions.is_revoked, 0),
       gt(authSessions.expires_at, new Date().toISOString()),
     ]
 
@@ -81,14 +89,14 @@ export class AuthSessionModel {
   static revoke(token: string): void {
     if (!token) return
     db.update(authSessions)
-      .set({ revoked_at: new Date().toISOString() })
+      .set({ revoked_at: new Date().toISOString(), is_revoked: 1 })
       .where(eq(authSessions.token_hash, hashToken(token)))
       .run()
   }
 
   static revokeAllForUser(username: string): void {
     db.update(authSessions)
-      .set({ revoked_at: new Date().toISOString() })
+      .set({ revoked_at: new Date().toISOString(), is_revoked: 1 })
       .where(and(eq(authSessions.username, username), isNull(authSessions.revoked_at)))
       .run()
   }

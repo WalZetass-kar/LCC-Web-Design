@@ -66,6 +66,9 @@ export class PenggunaModel {
     must_change_password?: number
     pin_hash?: string | null
     pin_enabled?: number
+    subscription_plan_id?: number | null
+    subscription_expires_at?: string | null
+    is_buyer?: number
   }) {
     // Hash password with bcrypt
     const hashedPassword = await hashPassword(data.kata_sandi)

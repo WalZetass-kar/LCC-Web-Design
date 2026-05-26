@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react'
 import {
   Plus, Pencil, Power, Crown, Zap, Star, Check,
-  Package, TrendingUp, Clock, DollarSign, Sparkles,
+  Package, TrendingUp, Clock, DollarSign, Sparkles, Trash2,
 } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -32,6 +32,11 @@ interface PlanForm {
   features: string
   is_active: boolean
   is_recommended: boolean
+  max_devices: string
+  max_transactions_per_day: string
+  max_products: string
+  max_users: string
+  feature_flags: Record<string, boolean>
 }
 
 const EMPTY_FORM: PlanForm = {
@@ -41,7 +46,25 @@ const EMPTY_FORM: PlanForm = {
   features: '',
   is_active: true,
   is_recommended: false,
+  max_devices: '1',
+  max_transactions_per_day: '-1',
+  max_products: '-1',
+  max_users: '1',
+  feature_flags: {},
 }
+
+const FEATURE_OPTIONS = [
+  { code: 'reports', label: 'Laporan' },
+  { code: 'export_excel', label: 'Export Excel' },
+  { code: 'export_pdf', label: 'Export PDF' },
+  { code: 'multi_user', label: 'Multi User' },
+  { code: 'backup', label: 'Backup' },
+  { code: 'restore', label: 'Restore' },
+  { code: 'stock_opname', label: 'Stock Opname' },
+  { code: 'debt_management', label: 'Hutang/Piutang' },
+  { code: 'shift_management', label: 'Shift' },
+  { code: 'api_access', label: 'API Access' },
+]
 
 // ─── Plan Icon Picker ─────────────────────────────────────────────────
 
@@ -71,6 +94,7 @@ export default function SubscriptionPlans() {
   const [form, setForm] = useState<PlanForm>({ ...EMPTY_FORM })
   const [selected, setSelected] = useState<SubscriptionPlan | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -98,6 +122,11 @@ export default function SubscriptionPlans() {
       features: plan.features.join('\n'),
       is_active: plan.is_active,
       is_recommended: plan.is_recommended,
+      max_devices: String(plan.max_devices ?? 1),
+      max_transactions_per_day: String(plan.max_transactions_per_day ?? -1),
+      max_products: String(plan.max_products ?? -1),
+      max_users: String(plan.max_users ?? 1),
+      feature_flags: plan.feature_flags ?? {},
     })
     setModal('edit')
   }
@@ -112,6 +141,10 @@ export default function SubscriptionPlans() {
     const price = parseInt(form.price)
     const duration_days = parseInt(form.duration_days)
     const features = form.features.split('\n').map(f => f.trim()).filter(Boolean)
+    const max_devices = parseInt(form.max_devices)
+    const max_transactions_per_day = parseInt(form.max_transactions_per_day)
+    const max_products = parseInt(form.max_products)
+    const max_users = parseInt(form.max_users)
 
     if (!name) return toast('Nama paket wajib diisi', 'error')
     if (!price || price <= 0) return toast('Harga harus lebih dari 0', 'error')
@@ -126,6 +159,11 @@ export default function SubscriptionPlans() {
       features,
       is_active: form.is_active,
       is_recommended: form.is_recommended,
+      max_devices: Number.isFinite(max_devices) ? max_devices : 1,
+      max_transactions_per_day: Number.isFinite(max_transactions_per_day) ? max_transactions_per_day : -1,
+      max_products: Number.isFinite(max_products) ? max_products : -1,
+      max_users: Number.isFinite(max_users) ? max_users : 1,
+      feature_flags: form.feature_flags,
     }
 
     const r = modal === 'add'
@@ -156,8 +194,36 @@ export default function SubscriptionPlans() {
     }
   }
 
+  const handleDelete = async (plan: SubscriptionPlan) => {
+    const confirmed = window.confirm(
+      `Yakin ingin menghapus paket "${plan.name}"? Paket yang sudah dihapus tidak bisa dikembalikan.`
+    )
+    if (!confirmed) return
+
+    setDeletingId(plan.id)
+    const r = await api('plan:delete', plan.id)
+    setDeletingId(null)
+
+    if (r.success) {
+      toast(r.message as string)
+      load()
+    } else {
+      toast(r.message as string, 'error')
+    }
+  }
+
   const setField = (key: keyof PlanForm, value: any) =>
     setForm(prev => ({ ...prev, [key]: value }))
+
+  const toggleFeature = (code: string) => {
+    setForm(prev => ({
+      ...prev,
+      feature_flags: {
+        ...prev.feature_flags,
+        [code]: prev.feature_flags[code] === false,
+      },
+    }))
+  }
 
   // ─── Stats ────────────────────────────────────────────────────────
 
@@ -272,6 +338,25 @@ export default function SubscriptionPlans() {
                 </div>
 
                 {/* Features */}
+                <div className="grid grid-cols-2 gap-2 mb-4 text-xs">
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-800 px-2 py-1.5">
+                    <span className="text-slate-400">Device</span>
+                    <p className="font-semibold text-slate-700 dark:text-slate-200">{plan.max_devices === -1 ? 'Unlimited' : plan.max_devices}</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-800 px-2 py-1.5">
+                    <span className="text-slate-400">Transaksi/hari</span>
+                    <p className="font-semibold text-slate-700 dark:text-slate-200">{plan.max_transactions_per_day === -1 ? 'Unlimited' : plan.max_transactions_per_day}</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-800 px-2 py-1.5">
+                    <span className="text-slate-400">Produk</span>
+                    <p className="font-semibold text-slate-700 dark:text-slate-200">{plan.max_products === -1 ? 'Unlimited' : plan.max_products}</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-800 px-2 py-1.5">
+                    <span className="text-slate-400">User</span>
+                    <p className="font-semibold text-slate-700 dark:text-slate-200">{plan.max_users === -1 ? 'Unlimited' : plan.max_users}</p>
+                  </div>
+                </div>
+
                 <ul className="space-y-1.5 mb-4">
                   {plan.features.map((f, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm">
@@ -307,6 +392,17 @@ export default function SubscriptionPlans() {
                   >
                     <Power size={13} />
                     {plan.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(plan)}
+                    disabled={deletingId === plan.id}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl
+                      text-xs font-medium text-red-600 dark:text-red-400
+                      bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30
+                      disabled:opacity-60 transition-colors"
+                  >
+                    <Trash2 size={13} />
+                    {deletingId === plan.id ? 'Hapus...' : 'Hapus'}
                   </button>
                 </div>
               </div>
@@ -371,6 +467,37 @@ export default function SubscriptionPlans() {
                 focus:outline-none focus:ring-2 focus:ring-primary-400
                 placeholder:text-slate-400 resize-none"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+              Limit Paket (-1 = unlimited)
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Limit Device" type="number" value={form.max_devices} onChange={e => setField('max_devices', e.target.value)} />
+              <Input label="Transaksi / Hari" type="number" value={form.max_transactions_per_day} onChange={e => setField('max_transactions_per_day', e.target.value)} />
+              <Input label="Limit Produk" type="number" value={form.max_products} onChange={e => setField('max_products', e.target.value)} />
+              <Input label="Limit User" type="number" value={form.max_users} onChange={e => setField('max_users', e.target.value)} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+              Kontrol Fitur Premium
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {FEATURE_OPTIONS.map(feature => (
+                <label key={feature.code} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 cursor-pointer">
+                  <span className="text-sm text-slate-700 dark:text-slate-200">{feature.label}</span>
+                  <input
+                    type="checkbox"
+                    checked={form.feature_flags[feature.code] !== false}
+                    onChange={() => toggleFeature(feature.code)}
+                    className="w-4 h-4 rounded accent-primary-500"
+                  />
+                </label>
+              ))}
+            </div>
           </div>
 
           <div className="flex gap-6">

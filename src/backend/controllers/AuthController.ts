@@ -5,6 +5,9 @@ import { AuthSessionModel, type AuthDeviceInfo } from '../models/AuthSessionMode
 import { encryptPassword, verifyPassword, isSHA1Hash } from '../services/crypto.js'
 import { rateLimiter } from '../services/rateLimiter.js'
 import { validatePasswordStrength } from '../../shared/passwordPolicy.js'
+import { DeviceController, detectPlatformOS } from './DeviceController.js'
+import { sqlite } from '../../database/connection.js'
+import { LicenseController } from './LicenseController.js'
 
 function isAccessExpired(expiresAt?: string | null): boolean {
   if (!expiresAt) return false
@@ -25,6 +28,11 @@ function getAccessDaysRemaining(expiresAt?: string | null): number | null {
 
 type AuthUserRecord = NonNullable<ReturnType<typeof PenggunaModel.findActiveByUsername>>
 
+function getEffectiveAccessExpiresAt(user: AuthUserRecord): string | null {
+  if (hasUnlimitedAccessRole(user.hak_akses)) return null
+  return user.subscription_expires_at ?? user.access_expires_at ?? null
+}
+
 interface RestoreSessionInput {
   username?: string
   sessionToken?: string
@@ -32,6 +40,23 @@ interface RestoreSessionInput {
 }
 
 const PIN_PATTERN = /^\d{4,8}$/
+const TRIAL_PLAN_NAME = 'Trial 3 Hari'
+const TRIAL_DAYS = 3
+const TRIAL_FEATURE_FLAGS = {
+  reports: false,
+  export_excel: false,
+  export_pdf: false,
+  multi_user: false,
+  backup: false,
+  restore: false,
+  stock_opname: false,
+  debt_management: false,
+  shift_management: false,
+  api_access: false,
+  multi_branch: false,
+  return_refund: false,
+}
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function normalizeDeviceInfo(input?: AuthDeviceInfo | string | null): AuthDeviceInfo {
   if (!input) return {}
@@ -41,6 +66,18 @@ function normalizeDeviceInfo(input?: AuthDeviceInfo | string | null): AuthDevice
     deviceId: input.deviceId ?? null,
     deviceName: input.deviceName ?? null,
     userAgent: input.userAgent ?? null,
+    platform: input.platform ?? null,
+    osName: input.osName ?? null,
+    appVersion: input.appVersion ?? null,
+  }
+}
+
+function withDetectedDeviceInfo(input: AuthDeviceInfo): AuthDeviceInfo {
+  const detected = detectPlatformOS(input.userAgent ?? '')
+  return {
+    ...input,
+    platform: input.platform ?? detected.platform,
+    osName: input.osName ?? detected.os_name,
   }
 }
 
@@ -62,16 +99,259 @@ function validatePin(pin: string): string | null {
 }
 
 function toSession(user: AuthUserRecord, auth?: { token: string; expires_at: string; device_id?: string | null }) {
+  const expiresAt = getEffectiveAccessExpiresAt(user)
   return {
     nama_pengguna: user.nama_pengguna,
     nama_lengkap: user.nama_lengkap,
     hak_akses: user.hak_akses || 'kasir',
-    access_expires_at: hasUnlimitedAccessRole(user.hak_akses) ? null : user.access_expires_at ?? null,
-    access_days_remaining: hasUnlimitedAccessRole(user.hak_akses) ? null : getAccessDaysRemaining(user.access_expires_at),
+    access_expires_at: expiresAt,
+    access_days_remaining: getAccessDaysRemaining(expiresAt),
+    subscription_plan_id: user.subscription_plan_id ?? null,
+    subscription_expires_at: user.subscription_expires_at ?? null,
     must_change_password: !!user.must_change_password,
     session_token: auth?.token,
     session_expires_at: auth?.expires_at,
     device_id: auth?.device_id ?? null,
+  }
+}
+
+function ensureTrialPlan(): number {
+  const existing = sqlite
+    .prepare(`SELECT id FROM mediasoft_subscription_plans WHERE name = ? LIMIT 1`)
+    .get(TRIAL_PLAN_NAME) as { id: number } | undefined
+
+  if (existing?.id) return existing.id
+
+  const result = sqlite.prepare(`
+    INSERT INTO mediasoft_subscription_plans
+      (name, price, duration_days, features, is_active, is_recommended, created_at,
+       max_devices, max_transactions_per_day, max_products, max_users, feature_flags)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    TRIAL_PLAN_NAME,
+    0,
+    TRIAL_DAYS,
+    JSON.stringify([
+      'Trial terbatas 3 hari',
+      '1 device',
+      '20 transaksi per hari',
+      '30 produk',
+      'Fitur premium terkunci',
+    ]),
+    0,
+    0,
+    new Date().toISOString(),
+    1,
+    20,
+    30,
+    1,
+    JSON.stringify(TRIAL_FEATURE_FLAGS),
+  )
+
+  return Number(result.lastInsertRowid)
+}
+
+function ensurePlanFromRemote(plan: any): number {
+  const name = String(plan?.name ?? plan?.code ?? TRIAL_PLAN_NAME)
+  const existing = sqlite
+    .prepare(`SELECT id FROM mediasoft_subscription_plans WHERE name = ? LIMIT 1`)
+    .get(name) as { id: number } | undefined
+
+  const now = new Date().toISOString()
+  const features = plan?.description ? [String(plan.description)] : []
+  const price = Math.round(Number(plan?.price ?? 0))
+  const duration = Math.max(1, Math.trunc(Number(plan?.duration_days ?? TRIAL_DAYS)))
+  const isTrial = String(plan?.code ?? '').toUpperCase() === 'TRIAL_3_DAYS' || name === TRIAL_PLAN_NAME
+  const featureFlags = JSON.stringify(plan?.feature_flags ?? (isTrial ? TRIAL_FEATURE_FLAGS : {}))
+
+  if (existing?.id) {
+    sqlite.prepare(`
+      UPDATE mediasoft_subscription_plans
+      SET price = ?,
+          duration_days = ?,
+          features = ?,
+          is_active = ?,
+          is_recommended = ?,
+          updated_at = ?,
+          max_devices = ?,
+          max_transactions_per_day = ?,
+          max_products = ?,
+          max_users = ?,
+          feature_flags = ?
+      WHERE id = ?
+    `).run(
+      price,
+      duration,
+      JSON.stringify(features),
+      isTrial ? 0 : 1,
+      plan?.is_recommended ? 1 : 0,
+      now,
+      Number.isFinite(Number(plan?.max_devices)) ? Math.trunc(Number(plan.max_devices)) : 1,
+      Number.isFinite(Number(plan?.max_transactions_per_day)) ? Math.trunc(Number(plan.max_transactions_per_day)) : -1,
+      Number.isFinite(Number(plan?.max_products)) ? Math.trunc(Number(plan.max_products)) : -1,
+      Number.isFinite(Number(plan?.max_users)) ? Math.trunc(Number(plan.max_users)) : 1,
+      featureFlags,
+      existing.id,
+    )
+    return existing.id
+  }
+
+  const result = sqlite.prepare(`
+    INSERT INTO mediasoft_subscription_plans
+      (name, price, duration_days, features, is_active, is_recommended, created_at,
+       max_devices, max_transactions_per_day, max_products, max_users, feature_flags)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    name,
+    price,
+    duration,
+    JSON.stringify(features),
+    isTrial ? 0 : 1,
+    plan?.is_recommended ? 1 : 0,
+    now,
+    Number.isFinite(Number(plan?.max_devices)) ? Math.trunc(Number(plan.max_devices)) : 1,
+    Number.isFinite(Number(plan?.max_transactions_per_day)) ? Math.trunc(Number(plan.max_transactions_per_day)) : -1,
+    Number.isFinite(Number(plan?.max_products)) ? Math.trunc(Number(plan.max_products)) : -1,
+    Number.isFinite(Number(plan?.max_users)) ? Math.trunc(Number(plan.max_users)) : 1,
+    featureFlags,
+  )
+  return Number(result.lastInsertRowid)
+}
+
+function findLocalUserByEmail(email: string) {
+  return sqlite
+    .prepare(`SELECT nama_pengguna FROM mediasoft_pengguna WHERE lower(email) = lower(?) LIMIT 1`)
+    .get(email) as { nama_pengguna?: string } | undefined
+}
+
+async function upsertRemoteBuyerCache(input: {
+  loginName: string
+  password: string
+  remote: any
+  existingUser?: AuthUserRecord | null
+}) {
+  const customer = input.remote?.customer ?? {}
+  const plan = input.remote?.plan ?? {}
+  const subscription = input.remote?.subscription ?? {}
+  const email = String(customer.email ?? input.loginName).trim().toLowerCase()
+  const localByEmail = email ? findLocalUserByEmail(email) : undefined
+  const username = input.existingUser?.nama_pengguna
+    ?? localByEmail?.nama_pengguna
+    ?? (EMAIL_PATTERN.test(input.loginName) ? input.loginName.trim().toLowerCase() : email)
+
+  if (!username) {
+    throw new Error('Email pembeli dari license server tidak valid')
+  }
+
+  const planId = ensurePlanFromRemote(plan)
+  const expiresAt = typeof subscription.expires_at === 'string' ? subscription.expires_at : null
+  const name = String(customer.name ?? customer.email ?? username)
+  const phone = typeof customer.phone === 'string' ? customer.phone : undefined
+  const existing = PenggunaModel.findByUsername(username)
+
+  if (existing) {
+    PenggunaModel.update(username, {
+      nama_lengkap: name,
+      email,
+      no_telp: phone,
+      status_user: 'Aktif',
+      hak_akses: 'admin',
+      access_expires_at: expiresAt,
+      subscription_plan_id: planId,
+      subscription_expires_at: expiresAt,
+      is_buyer: 1,
+      must_change_password: 0,
+    } as any)
+    await PenggunaModel.updatePassword(username, input.password, false)
+  } else {
+    await PenggunaModel.create({
+      nama_pengguna: username,
+      nama_lengkap: name,
+      email,
+      no_telp: phone,
+      kata_sandi: input.password,
+      hak_akses: 'admin',
+      access_expires_at: expiresAt,
+      subscription_plan_id: planId,
+      subscription_expires_at: expiresAt,
+      is_buyer: 1,
+      must_change_password: 0,
+    })
+  }
+
+  return PenggunaModel.findActiveByUsername(username)
+}
+
+async function loginRemoteBuyer(input: {
+  loginName: string
+  password: string
+  device: AuthDeviceInfo
+  existingUser?: AuthUserRecord | null
+}) {
+  const email = EMAIL_PATTERN.test(input.loginName)
+    ? input.loginName.trim().toLowerCase()
+    : (input.existingUser?.email ?? '').trim().toLowerCase()
+  if (!EMAIL_PATTERN.test(email)) return null
+
+  const remote = await LicenseController.loginBuyer({ email, password: input.password }, input.device)
+  if (!remote) return null
+  if (!remote.success) {
+    return {
+      success: false,
+      message: remote.message || 'Login pembeli ke license server pusat gagal',
+      data: remote.data,
+    }
+  }
+
+  const user = await upsertRemoteBuyerCache({
+    loginName: input.loginName,
+    password: input.password,
+    remote: remote.data,
+    existingUser: input.existingUser,
+  })
+  if (!user) return { success: false, message: 'Akun pembeli gagal disimpan di device ini' }
+
+  return { success: true, user }
+}
+
+function completeRemoteBuyerLogin(user: AuthUserRecord, device: AuthDeviceInfo) {
+  rateLimiter.resetAttempts(user.nama_pengguna)
+  PenggunaModel.updateLastLogin(user.nama_pengguna)
+
+  if (device.deviceId) {
+    DeviceController.upsert({
+      username: user.nama_pengguna,
+      device_id: device.deviceId,
+      device_name: device.deviceName ?? undefined,
+      platform: device.platform ?? undefined,
+      os_name: device.osName ?? undefined,
+      app_version: device.appVersion ?? undefined,
+      ip_address: device.ipAddress ?? undefined,
+    })
+  }
+
+  const authSession = AuthSessionModel.create(user.nama_pengguna, device)
+
+  ActivityLogModel.create({
+    username: user.nama_pengguna,
+    aktivitas: 'REMOTE_BUYER_LOGIN',
+    modul: 'AUTH',
+    tgl_aktivitas: new Date().toISOString(),
+    ip_address: device.ipAddress ?? null,
+    device_id: device.deviceId ?? null,
+    user_agent: device.userAgent ?? null,
+    event_type: 'login',
+    detail: `Login pembeli divalidasi melalui license server pusat. ${deviceDetail(device)}`,
+  })
+
+  return {
+    success: true,
+    message: 'Login berhasil',
+    data: toSession(user, {
+      token: authSession.token,
+      expires_at: authSession.expires_at,
+      device_id: device.deviceId ?? null,
+    }),
   }
 }
 
@@ -129,6 +409,128 @@ export class AuthController {
     return { success: true, message: 'Akun admin pertama berhasil dibuat' }
   }
 
+  static async registerTrial(data: {
+    username?: string
+    nama_lengkap?: string
+    email?: string
+    no_telp?: string
+    password?: string
+  }, deviceInfo?: AuthDeviceInfo | string | null) {
+    const device = withDetectedDeviceInfo(normalizeDeviceInfo(deviceInfo))
+    const username = (data.username ?? '').trim()
+    const namaLengkap = (data.nama_lengkap ?? '').trim()
+    const email = (data.email ?? '').trim()
+    const noTelp = (data.no_telp ?? '').trim()
+    const password = data.password ?? ''
+
+    if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) {
+      return {
+        success: false,
+        message: 'Username minimal 3 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau strip',
+      }
+    }
+
+    if (!EMAIL_PATTERN.test(email)) {
+      return { success: false, message: 'Email valid wajib diisi untuk daftar akun trial' }
+    }
+
+    const existingBuyer = sqlite
+      .prepare(`SELECT nama_pengguna FROM mediasoft_pengguna WHERE is_buyer = 1 LIMIT 1`)
+      .get() as { nama_pengguna?: string } | undefined
+    if (existingBuyer?.nama_pengguna) {
+      return { success: false, message: 'Akun pembeli trial sudah terdaftar. Silakan login atau upgrade akun yang sudah ada.' }
+    }
+
+    if (PenggunaModel.findByUsername(username)) {
+      return { success: false, message: 'Username sudah digunakan. Pilih username lain.' }
+    }
+
+    if (!namaLengkap) {
+      return { success: false, message: 'Nama lengkap wajib diisi' }
+    }
+
+    const validation = validatePasswordStrength(password)
+    if (!validation.valid) {
+      return { success: false, message: validation.message }
+    }
+
+    const planId = ensureTrialPlan()
+    const remoteRegistration = await LicenseController.registerTrialCustomer({
+      email,
+      password,
+      nama_lengkap: namaLengkap,
+      no_telp: noTelp || undefined,
+    }, device)
+    if (remoteRegistration && !remoteRegistration.success) {
+      return {
+        success: false,
+        message: remoteRegistration.message || 'Gagal daftar akun trial ke license server pusat',
+      }
+    }
+
+    const remoteExpiresAt = (remoteRegistration?.data as any)?.subscription?.expires_at
+    const expiresAt = typeof remoteExpiresAt === 'string'
+      ? remoteExpiresAt
+      : new Date(Date.now() + TRIAL_DAYS * 86400000).toISOString()
+
+    await PenggunaModel.create({
+      nama_pengguna: username,
+      nama_lengkap: namaLengkap,
+      email: email || undefined,
+      no_telp: noTelp || undefined,
+      kata_sandi: password,
+      hak_akses: 'admin',
+      access_expires_at: expiresAt,
+      subscription_plan_id: planId,
+      subscription_expires_at: expiresAt,
+      is_buyer: 1,
+      must_change_password: 0,
+    })
+
+    const user = PenggunaModel.findActiveByUsername(username)
+    if (!user) {
+      return { success: false, message: 'Akun trial gagal dibuat' }
+    }
+
+    PenggunaModel.updateLastLogin(username)
+
+    if (device.deviceId) {
+      DeviceController.upsert({
+        username,
+        device_id: device.deviceId,
+        device_name: device.deviceName ?? undefined,
+        platform: device.platform ?? undefined,
+        os_name: device.osName ?? undefined,
+        app_version: device.appVersion ?? undefined,
+        ip_address: device.ipAddress ?? undefined,
+      })
+    }
+
+    const authSession = AuthSessionModel.create(username, device)
+
+    ActivityLogModel.create({
+      username,
+      aktivitas: 'TRIAL_REGISTERED',
+      modul: 'AUTH',
+      tgl_aktivitas: new Date().toISOString(),
+      ip_address: device.ipAddress ?? null,
+      device_id: device.deviceId ?? null,
+      user_agent: device.userAgent ?? null,
+      event_type: 'subscription',
+      detail: `Akun pembeli trial 3 hari dibuat; expires_at=${expiresAt}; plan=${TRIAL_PLAN_NAME}; remote=${remoteRegistration ? 1 : 0}. ${deviceDetail(device)}`,
+    })
+
+    return {
+      success: true,
+      message: 'Trial 3 hari aktif. Beberapa fitur premium dikunci sampai upgrade.',
+      data: toSession(user, {
+        token: authSession.token,
+        expires_at: authSession.expires_at,
+        device_id: device.deviceId ?? null,
+      }),
+    }
+  }
+
   /**
    * Login with enhanced security
    * - Rate limiting to prevent brute force
@@ -137,7 +539,7 @@ export class AuthController {
    * - Activity logging
    */
   static async login(username: string, password: string, deviceInfo?: AuthDeviceInfo | string | null) {
-    const device = normalizeDeviceInfo(deviceInfo)
+    const device = withDetectedDeviceInfo(normalizeDeviceInfo(deviceInfo))
     // Note: Do NOT sanitize username with sanitizeString() here — it encodes
     // special chars (&, <, /) which breaks DB lookup. Drizzle uses parameterized
     // queries so SQL injection is already prevented at the ORM level.
@@ -172,6 +574,11 @@ export class AuthController {
     const user = PenggunaModel.findActiveByUsername(username)
 
     if (!user) {
+      const remoteLogin = await loginRemoteBuyer({ loginName: username, password, device })
+      if (remoteLogin?.success && remoteLogin.user) {
+        return completeRemoteBuyerLogin(remoteLogin.user, device)
+      }
+
       // Record failed attempt
       const attemptResult = rateLimiter.recordFailedAttempt(username)
       
@@ -236,6 +643,11 @@ export class AuthController {
     }
 
     if (!passwordValid) {
+      const remoteLogin = await loginRemoteBuyer({ loginName: username, password, device, existingUser: user })
+      if (remoteLogin?.success && remoteLogin.user) {
+        return completeRemoteBuyerLogin(remoteLogin.user, device)
+      }
+
       // Record failed attempt
       const attemptResult = rateLimiter.recordFailedAttempt(username)
       
@@ -263,7 +675,27 @@ export class AuthController {
       }
     }
 
-    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(user.access_expires_at)) {
+    if (user.is_buyer) {
+      const remoteLogin = await loginRemoteBuyer({ loginName: username, password, device, existingUser: user })
+      if (remoteLogin?.success && remoteLogin.user) {
+        return completeRemoteBuyerLogin(remoteLogin.user, device)
+      }
+      if (remoteLogin && !remoteLogin.success) {
+        return {
+          success: false,
+          message: remoteLogin.message || 'Akun pembeli belum aktif di license server pusat',
+          data: remoteLogin.data,
+        }
+      }
+    }
+
+    const expiresAt = getEffectiveAccessExpiresAt(user)
+    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(expiresAt)) {
+      const remoteLogin = await loginRemoteBuyer({ loginName: username, password, device, existingUser: user })
+      if (remoteLogin?.success && remoteLogin.user) {
+        return completeRemoteBuyerLogin(remoteLogin.user, device)
+      }
+
       ActivityLogModel.create({
         username,
         aktivitas: 'LOGIN_EXPIRED',
@@ -272,18 +704,59 @@ export class AuthController {
         ip_address: device.ipAddress ?? null,
         device_id: device.deviceId ?? null,
         user_agent: device.userAgent ?? null,
-        detail: `Masa akses akun berakhir pada ${user.access_expires_at}. ${deviceDetail(device)}`,
+        event_type: 'subscription',
+        detail: `Masa akses akun berakhir pada ${expiresAt}. ${deviceDetail(device)}`,
       })
 
       return {
         success: false,
         message: 'Masa akses akun sudah berakhir. Silakan hubungi admin untuk perpanjangan atau upgrade paket.',
+        error_code: 'EXPIRED',
+      }
+    }
+
+    if (device.deviceId) {
+      const deviceCheck = DeviceController.validateLogin(username, device.deviceId)
+      if (!deviceCheck.allowed) {
+        ActivityLogModel.create({
+          username,
+          aktivitas: deviceCheck.reason === 'device_limit' ? 'LOGIN_DEVICE_LIMIT' : 'LOGIN_DEVICE_REVOKED',
+          modul: 'AUTH',
+          tgl_aktivitas: new Date().toISOString(),
+          ip_address: device.ipAddress ?? null,
+          device_id: device.deviceId ?? null,
+          user_agent: device.userAgent ?? null,
+          event_type: 'device',
+          detail: `${deviceCheck.reason}; current=${deviceCheck.current}; max=${deviceCheck.max}. ${deviceDetail(device)}`,
+        })
+        return {
+          success: false,
+          message: deviceCheck.reason === 'device_limit'
+            ? `Batas device paket sudah tercapai (${deviceCheck.current}/${deviceCheck.max}). Silakan revoke device lama atau upgrade paket.`
+            : 'Device ini sudah direvoke atau diblokir. Hubungi admin.',
+          error_code: deviceCheck.reason === 'device_limit' ? 'DEVICE_LIMIT' : 'DEVICE_REVOKED',
+          data: deviceCheck,
+        }
       }
     }
 
     // Login successful - reset rate limiter
     rateLimiter.resetAttempts(username)
     PenggunaModel.updateLastLogin(username)
+
+    // Track device
+    if (device.deviceId) {
+      DeviceController.upsert({
+        username,
+        device_id: device.deviceId,
+        device_name: device.deviceName ?? undefined,
+        platform: device.platform ?? undefined,
+        os_name: device.osName ?? undefined,
+        app_version: device.appVersion ?? undefined,
+        ip_address: device.ipAddress ?? undefined,
+      })
+    }
+
     const authSession = user.must_change_password
       ? null
       : AuthSessionModel.create(username, device)
@@ -301,6 +774,7 @@ export class AuthController {
       ip_address: device.ipAddress ?? null,
       device_id: device.deviceId ?? null,
       user_agent: device.userAgent ?? null,
+      event_type: 'login',
       detail: `Login berhasil dengan hash type: ${hashType}. ${deviceDetail(device)}`,
     })
 
@@ -316,7 +790,7 @@ export class AuthController {
   }
 
   static async loginWithPin(username: string, pin: string, deviceInfo?: AuthDeviceInfo | string | null) {
-    const device = normalizeDeviceInfo(deviceInfo)
+    const device = withDetectedDeviceInfo(normalizeDeviceInfo(deviceInfo))
     username = (username?.trim() || '')
 
     if (!username || !pin?.trim()) {
@@ -376,7 +850,8 @@ export class AuthController {
       return deny('PIN salah')
     }
 
-    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(user.access_expires_at)) {
+    const expiresAt = getEffectiveAccessExpiresAt(user)
+    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(expiresAt)) {
       ActivityLogModel.create({
         username,
         aktivitas: 'PIN_LOGIN_EXPIRED',
@@ -385,13 +860,49 @@ export class AuthController {
         ip_address: device.ipAddress ?? null,
         device_id: device.deviceId ?? null,
         user_agent: device.userAgent ?? null,
-        detail: `Masa akses akun berakhir pada ${user.access_expires_at}. ${deviceDetail(device)}`,
+        event_type: 'subscription',
+        detail: `Masa akses akun berakhir pada ${expiresAt}. ${deviceDetail(device)}`,
       })
 
       return {
         success: false,
         message: 'Masa akses akun sudah berakhir. Silakan hubungi admin.',
+        error_code: 'EXPIRED',
       }
+    }
+
+    if (device.deviceId) {
+      const deviceCheck = DeviceController.validateLogin(username, device.deviceId)
+      if (!deviceCheck.allowed) {
+        ActivityLogModel.create({
+          username,
+          aktivitas: deviceCheck.reason === 'device_limit' ? 'PIN_LOGIN_DEVICE_LIMIT' : 'PIN_LOGIN_DEVICE_REVOKED',
+          modul: 'AUTH',
+          tgl_aktivitas: new Date().toISOString(),
+          ip_address: device.ipAddress ?? null,
+          device_id: device.deviceId ?? null,
+          user_agent: device.userAgent ?? null,
+          event_type: 'device',
+          detail: `${deviceCheck.reason}; current=${deviceCheck.current}; max=${deviceCheck.max}. ${deviceDetail(device)}`,
+        })
+        return {
+          success: false,
+          message: deviceCheck.reason === 'device_limit'
+            ? `Batas device paket sudah tercapai (${deviceCheck.current}/${deviceCheck.max}). Silakan revoke device lama atau upgrade paket.`
+            : 'Device ini sudah direvoke atau diblokir. Hubungi admin.',
+          error_code: deviceCheck.reason === 'device_limit' ? 'DEVICE_LIMIT' : 'DEVICE_REVOKED',
+          data: deviceCheck,
+        }
+      }
+      DeviceController.upsert({
+        username,
+        device_id: device.deviceId,
+        device_name: device.deviceName ?? undefined,
+        platform: device.platform ?? undefined,
+        os_name: device.osName ?? undefined,
+        app_version: device.appVersion ?? undefined,
+        ip_address: device.ipAddress ?? undefined,
+      })
     }
 
     rateLimiter.resetAttempts(limiterKey)
@@ -406,6 +917,7 @@ export class AuthController {
       ip_address: device.ipAddress ?? null,
       device_id: device.deviceId ?? null,
       user_agent: device.userAgent ?? null,
+      event_type: 'login',
       detail: `Login PIN kasir berhasil. ${deviceDetail(device)}`,
     })
 
@@ -437,6 +949,7 @@ export class AuthController {
       ip_address: device.ipAddress ?? null,
       device_id: device.deviceId ?? null,
       user_agent: device.userAgent ?? null,
+      event_type: 'logout',
       detail: `Logout berhasil. ${deviceDetail(device)}`,
     })
 
@@ -450,7 +963,7 @@ export class AuthController {
   static restoreSession(input: string | RestoreSessionInput) {
     const username = (typeof input === 'string' ? input : input.username)?.trim() || ''
     const sessionToken = typeof input === 'string' ? '' : (input.sessionToken ?? '')
-    const device = typeof input === 'string' ? {} : normalizeDeviceInfo(input.deviceInfo)
+    const device = typeof input === 'string' ? {} : withDetectedDeviceInfo(normalizeDeviceInfo(input.deviceInfo))
     if (!username) {
       return { success: false, message: 'Session tidak valid' }
     }
@@ -474,8 +987,24 @@ export class AuthController {
       return { success: false, message: 'User tidak ditemukan atau tidak aktif' }
     }
 
-    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(user.access_expires_at)) {
+    const expiresAt = getEffectiveAccessExpiresAt(user)
+    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(expiresAt)) {
       return { success: false, message: 'Masa akses akun sudah berakhir' }
+    }
+
+    if (device.deviceId && DeviceController.isRevoked(username, device.deviceId)) {
+      ActivityLogModel.create({
+        username,
+        aktivitas: 'SESSION_RESTORE_REVOKED_DEVICE',
+        modul: 'AUTH',
+        tgl_aktivitas: new Date().toISOString(),
+        ip_address: device.ipAddress ?? null,
+        device_id: device.deviceId ?? null,
+        user_agent: device.userAgent ?? null,
+        event_type: 'device',
+        detail: `Session restore ditolak karena device revoked. ${deviceDetail(device)}`,
+      })
+      return { success: false, message: 'Device sudah direvoke atau diblokir' }
     }
 
     if (user.must_change_password) {
@@ -497,7 +1026,7 @@ export class AuthController {
     newPassword: string,
     deviceInfo?: AuthDeviceInfo | string | null
   ) {
-    const device = normalizeDeviceInfo(deviceInfo)
+    const device = withDetectedDeviceInfo(normalizeDeviceInfo(deviceInfo))
     // Validate new password strength
     const validation = validatePasswordStrength(newPassword)
     if (!validation.valid) {

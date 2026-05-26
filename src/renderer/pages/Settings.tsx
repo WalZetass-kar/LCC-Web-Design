@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toDataURL } from 'qrcode'
-import { Sun, Moon, Palette, Store, Receipt, Barcode, Printer, Database, Bell, AlertTriangle, Server, RefreshCw, Wifi, Bot, FileSpreadsheet, KeyRound, QrCode, Copy, CheckCircle2 } from 'lucide-react'
+import { Sun, Moon, Palette, Store, Receipt, Barcode, Printer, Database, Bell, AlertTriangle, Server, RefreshCw, Wifi, Bot, FileSpreadsheet, KeyRound, QrCode, Copy, CheckCircle2, Code2, ExternalLink } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -13,6 +13,7 @@ import { playDangerSound, playWarningSound } from '../utils/sound'
 import { DEFAULT_INDUSTRY_SETTINGS, defaultModelForProvider, normalizeIndustrySettings, type AiProvider, type IndustrySettings } from '../../shared/industrySettings'
 import type { Identitas } from '../../shared/types'
 import { normalizeSyncServerUrl } from '../../shared/endpointSecurity'
+import { GOOGLE_SHEETS_APPS_SCRIPT } from '../../shared/googleSheetsAppsScript'
 
 const COLORS: { key: ThemeColor; label: string; hex: string }[] = [
   { key: 'indigo', label: 'Indigo', hex: '#6366f1' },
@@ -161,6 +162,21 @@ export default function Settings() {
     const r = await api('integrations:testGoogleSheets')
     setTestingSheets(false)
     toast(r.message as string || (r.success ? 'Google Sheets tersambung' : 'Google Sheets gagal'), r.success ? 'success' : 'error')
+  }
+
+  const copyGoogleSheetsScript = async () => {
+    try {
+      await navigator.clipboard.writeText(GOOGLE_SHEETS_APPS_SCRIPT)
+      toast('Template Apps Script disalin', 'success')
+    } catch {
+      toast('Clipboard tidak tersedia', 'error')
+    }
+  }
+
+  const openAppsScript = () => {
+    api('app:openExternal', 'https://script.google.com/home').catch(() => {
+      window.open('https://script.google.com/home', '_blank', 'noopener,noreferrer')
+    })
   }
 
   const copyPairingData = async () => {
@@ -441,7 +457,16 @@ export default function Settings() {
                 onChange={e => changeIndustrySetting('googleSheetsWebAppUrl', e.target.value)}
                 placeholder="https://script.google.com/macros/s/.../exec"
                 icon={<FileSpreadsheet size={16} />}
+                helperText="Buat script dari file Google Sheets target, deploy sebagai Web App, lalu tempel URL /exec di sini."
               />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button type="button" variant="secondary" onClick={copyGoogleSheetsScript} icon={<Code2 size={14} />} className="w-full sm:w-auto">
+                  Salin Template Script
+                </Button>
+                <Button type="button" variant="ghost" onClick={openAppsScript} icon={<ExternalLink size={14} />} className="w-full sm:w-auto">
+                  Buka Apps Script
+                </Button>
+              </div>
             </div>
 
             <div className="pt-4 border-t border-slate-100 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -52,6 +52,10 @@ import { SecurityController } from '../backend/controllers/SecurityController.js
 import { EcommerceApiController } from '../backend/controllers/EcommerceApiController.js'
 import { IndustrySettingsController } from '../backend/controllers/IndustrySettingsController.js'
 import { AssistantController } from '../backend/controllers/AssistantController.js'
+import { LicenseController } from '../backend/controllers/LicenseController.js'
+import { DeviceController, detectPlatformOS } from '../backend/controllers/DeviceController.js'
+import { getSubscriptionStatus, checkTransactionLimit, getPopupRule, isFeatureEnabled, getActiveFeatures, getUpgradePopup } from '../backend/middleware/subscriptionGuard.js'
+import { sqlite } from '../database/connection.js'
 import { SyncServerService, setSyncChannelInvoker } from './syncServer.js'
 import { SyncClientService } from './syncClient.js'
 
@@ -90,7 +94,7 @@ function syncRendererSession(channel: string, result: any) {
     return
   }
 
-  if (!['auth:login', 'auth:loginPin', 'auth:restoreSession'].includes(channel)) return
+  if (!['auth:login', 'auth:loginPin', 'auth:restoreSession', 'auth:registerTrial'].includes(channel)) return
   if (!result?.success || !result.data || result.data.must_change_password) return
 
   const userData = result.data as { nama_pengguna?: string; hak_akses?: string }
@@ -143,6 +147,25 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   ))
   ipcMain.handle('auth:createInitialAdmin', (_e, data: { username?: string; nama_lengkap?: string; password?: string }) => (
     invokeRendererChannel('auth:createInitialAdmin', [data], authCreateInitialAdmin)
+  ))
+
+  const authRegisterTrial = registerChannel('auth:registerTrial', (data: {
+    username?: string
+    nama_lengkap?: string
+    email?: string
+    no_telp?: string
+    password?: string
+  }, deviceInfo?: any) => (
+    AuthController.registerTrial(data, deviceInfo)
+  ))
+  ipcMain.handle('auth:registerTrial', (_e, data: {
+    username?: string
+    nama_lengkap?: string
+    email?: string
+    no_telp?: string
+    password?: string
+  }, deviceInfo?: any) => (
+    invokeRendererChannel('auth:registerTrial', [data, deviceInfo], authRegisterTrial)
   ))
 
   const authLogin = registerChannel('auth:login', async (username: string, password: string, deviceInfo?: any) => {
@@ -291,10 +314,15 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── BARANG (Products) ─────────────────────────────────────────────
   handle(ipcMain, 'barang:getAll', () => BarangController.getAll())
   handle(ipcMain, 'barang:search', (q: string) => BarangController.search(q))
-  handle(ipcMain, 'barang:create', (data: any) => BarangController.create(data))
+  handle(ipcMain, 'barang:create', (data: any) => BarangController.create({
+    ...data,
+    nama_pengguna: demoSession.getUsername() ?? data?.nama_pengguna,
+  }))
   handle(ipcMain, 'barang:update', (kd: string, data: any) => BarangController.update(kd, data))
   handle(ipcMain, 'barang:delete', (kd: string) => BarangController.delete(kd))
-  handle(ipcMain, 'barang:bulkImport', (products: any[], username?: string) => BarangController.bulkImport(products, username))
+  handle(ipcMain, 'barang:bulkImport', (products: any[], username?: string) => (
+    BarangController.bulkImport(products, demoSession.getUsername() ?? username)
+  ))
 
   // ─── KATEGORI ──────────────────────────────────────────────────────
   handle(ipcMain, 'kategori:getAll', () => KategoriController.getAll())
@@ -311,7 +339,10 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── PENJUALAN (Transactions) ──────────────────────────────────────
   handle(ipcMain, 'penjualan:getAll', () => PenjualanController.getAll())
   handle(ipcMain, 'penjualan:getDetail', (kd: string) => PenjualanController.getDetail(kd))
-  handle(ipcMain, 'penjualan:create', (data: any) => PenjualanController.create(data))
+  handle(ipcMain, 'penjualan:create', (data: any) => PenjualanController.create({
+    ...data,
+    username: demoSession.getUsername() ?? data?.username,
+  }))
 
   // ─── DASHBOARD ─────────────────────────────────────────────────────
   handle(ipcMain, 'dashboard:getSummary', () => DashboardController.getSummary())
@@ -528,9 +559,10 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── SUBSCRIPTION PLANS ─────────────────────────────────────────────
   handle(ipcMain, 'plan:getAll', () => PlanController.getAll())
   handle(ipcMain, 'plan:getActive', () => PlanController.getActive())
-  handle(ipcMain, 'plan:create', (data: any) => PlanController.create(data))
-  handle(ipcMain, 'plan:update', (id: number, data: any) => PlanController.update(id, data))
-  handle(ipcMain, 'plan:deactivate', (id: number) => PlanController.deactivate(id))
+  handle(ipcMain, 'plan:create', (data: any) => PlanController.create(data, demoSession.getUsername()))
+  handle(ipcMain, 'plan:update', (id: number, data: any) => PlanController.update(id, data, demoSession.getUsername()))
+  handle(ipcMain, 'plan:deactivate', (id: number) => PlanController.deactivate(id, demoSession.getUsername()))
+  handle(ipcMain, 'plan:delete', (id: number) => PlanController.delete(id, demoSession.getUsername()))
 
   // ─── TUTORIALS ─────────────────────────────────────────────────────
   handle(ipcMain, 'tutorial:getAll', () => TutorialController.getAll())
@@ -623,7 +655,61 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
 
   // ─── ECOMMERCE API SETTINGS ────────────────────────────────────────
   handle(ipcMain, 'ecommerce:get', () => EcommerceApiController.get())
-  handle(ipcMain, 'ecommerce:save', (data: any) => EcommerceApiController.save(data))
+  handle(ipcMain, 'ecommerce:save', (data: any) => EcommerceApiController.save(data, demoSession.getUsername()))
+
+  // ─── DEVICE TRACKING ───────────────────────────────────────────────
+  handle(ipcMain, 'device:getAll', () => ({ success: true, data: DeviceController.getAllDevices() }))
+  handle(ipcMain, 'device:getByUser', (username: string) => ({ success: true, data: DeviceController.getByUser(username) }))
+  handle(ipcMain, 'device:revoke', (id: number, revokedBy: string) => DeviceController.revoke(id, revokedBy))
+  handle(ipcMain, 'device:revokeAll', (username: string, revokedBy: string) => DeviceController.revokeAll(username, revokedBy))
+  handle(ipcMain, 'device:getAllSessions', () => ({ success: true, data: DeviceController.getAllActiveSessions() }))
+  handle(ipcMain, 'device:revokeSession', (id: number, revokedBy?: string) => DeviceController.revokeSession(id, revokedBy))
+  handle(ipcMain, 'device:detectPlatformOS', (userAgent: string) => ({ success: true, data: detectPlatformOS(userAgent) }))
+
+  // ─── SUBSCRIPTION / FEATURE CHECK ──────────────────────────────────
+  handle(ipcMain, 'subscription:getStatus', (username: string) => ({ success: true, data: getSubscriptionStatus(username) }))
+  handle(ipcMain, 'subscription:checkTransactionLimit', (username: string) => ({ success: true, data: checkTransactionLimit(username) }))
+  handle(ipcMain, 'subscription:isFeatureEnabled', (username: string, featureKey: string) => ({ success: true, data: isFeatureEnabled(username, featureKey) }))
+  handle(ipcMain, 'subscription:getActiveFeatures', (username: string) => ({ success: true, data: getActiveFeatures(username) }))
+  handle(ipcMain, 'subscription:getPopupRule', (code: string) => ({ success: true, data: getPopupRule(code) }))
+  handle(ipcMain, 'subscription:getUpgradePopup', (username: string, featureKey?: string) => ({ success: true, data: getUpgradePopup(username, featureKey) }))
+
+  // ─── POPUP RULES ───────────────────────────────────────────────────
+  handle(ipcMain, 'popup:getAll', () => ({ success: true, data: sqlite.prepare('SELECT * FROM mediasoft_popup_rules ORDER BY id').all() }))
+  handle(ipcMain, 'popup:update', (id: number, data: any) => {
+    const allowed = new Set(['title', 'description', 'cta_text', 'cta_url', 'whatsapp_number', 'pricing_html', 'is_active', 'trigger_on'])
+    const entries = Object.entries(data ?? {}).filter(([k]) => allowed.has(k))
+    if (entries.length === 0) return { success: true }
+    const fields = entries.map(([k]) => `${k} = ?`).join(', ')
+    const vals = [...entries.map(([, v]) => v), id]
+    sqlite.prepare(`UPDATE mediasoft_popup_rules SET ${fields}, updated_at = datetime('now') WHERE id = ?`).run(...vals)
+    return { success: true }
+  })
+
+  // ─── LICENSE SERVER ────────────────────────────────────────────────
+  handle(ipcMain, 'license:getConfig', () => LicenseController.getConfig())
+  handle(ipcMain, 'license:testConnection', (url?: string) => LicenseController.testConnection(url))
+  handle(ipcMain, 'license:testAndSave', (url: string, email: string, password: string) => LicenseController.testAndSave(url, email, password))
+  handle(ipcMain, 'license:validateApplication', () => LicenseController.validateApplication())
+  handle(ipcMain, 'license:syncFromServer', () => LicenseController.syncFromServer())
+  handle(ipcMain, 'license:getUsers', (search?: string) => LicenseController.getUsers(search))
+  handle(ipcMain, 'license:createUser', (data: any) => LicenseController.createUser(data))
+  handle(ipcMain, 'license:updateUser', (id: string | number, data: any) => LicenseController.updateUser(id, data))
+  handle(ipcMain, 'license:deleteUser', (id: string | number) => LicenseController.deleteUser(id))
+  handle(ipcMain, 'license:changeUserPlan', (id: string | number, data: any) => LicenseController.changeUserPlan(id, data))
+  handle(ipcMain, 'license:resetUserPassword', (id: string | number) => LicenseController.resetUserPassword(id))
+  handle(ipcMain, 'license:getPlans', () => LicenseController.getLicensePlans())
+  handle(ipcMain, 'license:updatePlan', (id: string | number, data: any) => LicenseController.updateLicensePlan(id, data))
+  handle(ipcMain, 'license:getPlanFeatures', (planId: string | number) => LicenseController.getPlanFeatures(planId))
+  handle(ipcMain, 'license:setPlanFeatures', (planId: string | number, data: any) => LicenseController.setPlanFeatures(planId, data))
+  handle(ipcMain, 'license:getFeatures', () => LicenseController.getLicenseFeatures())
+  handle(ipcMain, 'license:createFeature', (data: any) => LicenseController.createLicenseFeature(data))
+  handle(ipcMain, 'license:updateFeature', (id: string | number, data: any) => LicenseController.updateLicenseFeature(id, data))
+  handle(ipcMain, 'license:getPopups', () => LicenseController.getPopups())
+  handle(ipcMain, 'license:updatePopup', (id: string | number, data: any) => LicenseController.updatePopup(id, data))
+  handle(ipcMain, 'license:getPayments', () => LicenseController.getPayments())
+  handle(ipcMain, 'license:createPayment', (data: any) => LicenseController.createPayment(data))
+  handle(ipcMain, 'license:approvePayment', (id: string | number) => LicenseController.approvePayment(id))
 
   // ─── DIALOG ────────────────────────────────────────────────────────
   handle(ipcMain, 'dialog:showSaveDialog', async (options: any) => {

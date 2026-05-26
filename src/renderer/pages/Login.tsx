@@ -40,9 +40,17 @@ export default function Login() {
   const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'error'>('checking')
   const [showDefaultLogin, setShowDefaultLogin] = useState(false)
   const [hasUsers, setHasUsers] = useState(true)
+  const [authView, setAuthView] = useState<'login' | 'register'>('login')
   const [authLoading, setAuthLoading] = useState(true)
   const [activePlans, setActivePlans] = useState<SubscriptionPlan[]>([])
-  const [setupForm, setSetupForm] = useState({ username: '', nama_lengkap: '', password: '', confirmPassword: '' })
+  const [setupForm, setSetupForm] = useState({
+    username: '',
+    nama_lengkap: '',
+    email: '',
+    no_telp: '',
+    password: '',
+    confirmPassword: '',
+  })
   const [forcePasswordUser, setForcePasswordUser] = useState<UserSession | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
@@ -133,9 +141,18 @@ export default function Login() {
     navigate('/', { replace: true })
   }
 
-  const handleInitialSetup = async (e: React.FormEvent) => {
+  const handleTrialRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (!setupForm.username.trim() || !setupForm.nama_lengkap.trim()) {
+      setError('Username dan nama lengkap wajib diisi')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(setupForm.email.trim())) {
+      setError('Email valid wajib diisi')
+      return
+    }
 
     const validation = validatePasswordStrength(setupForm.password)
     if (!validation.valid) {
@@ -149,20 +166,24 @@ export default function Login() {
 
     setLoading(true)
     try {
-      const r = await api('auth:createInitialAdmin', {
+      const r = await api<UserSession>('auth:registerTrial', {
         username: setupForm.username,
         nama_lengkap: setupForm.nama_lengkap,
+        email: setupForm.email,
+        no_telp: setupForm.no_telp,
         password: setupForm.password,
-      })
-      if (!r.success) {
-        setError(r.message ?? 'Gagal membuat akun admin')
+      }, collectAuthDeviceInfo())
+      if (!r.success || !r.data) {
+        setError(r.message ?? 'Gagal membuat akun trial')
         return
       }
       setHasUsers(true)
+      setAuthView('login')
       setUsername(setupForm.username.trim())
       setPassword('')
-      setSetupForm({ username: '', nama_lengkap: '', password: '', confirmPassword: '' })
-      toast('Akun admin pertama berhasil dibuat. Silakan login.', 'success')
+      setSetupForm({ username: '', nama_lengkap: '', email: '', no_telp: '', password: '', confirmPassword: '' })
+      toast('Trial 3 hari aktif. Beberapa fitur premium terkunci sampai upgrade.', 'success')
+      await completeLogin(r.data)
     } catch (err) {
       setError(String(err))
     } finally {
@@ -294,7 +315,8 @@ export default function Login() {
 
   const fi = (k: string, v: string) => setIdentitas(prev => ({ ...prev, [k]: v }))
   const renewalPlan = activePlans.find(plan => plan.is_recommended) ?? activePlans[0]
-  const isExpiredAccessError = /masa akses|berakhir|kadaluarsa|kedaluwarsa/i.test(error)
+  const isExpiredAccessError = /masa akses|berakhir|kadaluarsa|kedaluwarsa|batas device|limit produk|batas produk|upgrade paket/i.test(error)
+  const showRegisterForm = !hasUsers || authView === 'register'
 
   const handleForgotPassword = () => {
     openWhatsApp(
@@ -411,16 +433,16 @@ export default function Login() {
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center mb-4 shadow-lg shadow-primary-500/30 animate-pulse">
                   <Store size={22} className="text-white" />
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-1">{hasUsers ? 'Selamat datang' : 'Setup Admin'}</h3>
+                <h3 className="text-2xl font-bold text-white mb-1">{showRegisterForm ? 'Daftar Akun Trial' : 'Selamat datang'}</h3>
                 <p className="text-slate-400 text-sm">
-                  {hasUsers ? 'Masuk ke akun Anda untuk melanjutkan' : 'Buat akun superadmin pertama untuk mengaktifkan aplikasi'}
+                  {showRegisterForm ? 'Buat akun pembeli dan mulai trial terbatas 3 hari.' : 'Masuk ke akun Anda untuk melanjutkan'}
                 </p>
               </div>
 
-              {!hasUsers ? (
-              <form onSubmit={handleInitialSetup} className="space-y-4">
+              {showRegisterForm ? (
+              <form onSubmit={handleTrialRegister} className="space-y-3.5">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Username Admin</label>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Username</label>
                   <div className="relative group">
                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
                       <User size={16} />
@@ -439,7 +461,22 @@ export default function Login() {
                   label="Nama Lengkap"
                   value={setupForm.nama_lengkap}
                   onChange={e => setSetupForm(prev => ({ ...prev, nama_lengkap: e.target.value }))}
-                  placeholder="Nama pemilik/admin"
+                  placeholder="Nama pemilik akun"
+                />
+
+                <Input
+                  label="Email"
+                  type="email"
+                  value={setupForm.email}
+                  onChange={e => setSetupForm(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="email bisnis"
+                />
+
+                <Input
+                  label="No WhatsApp"
+                  value={setupForm.no_telp}
+                  onChange={e => setSetupForm(prev => ({ ...prev, no_telp: e.target.value }))}
+                  placeholder="contoh: 62812xxxx"
                 />
 
                 <Input
@@ -459,6 +496,13 @@ export default function Login() {
                   placeholder="Ulangi password"
                 />
 
+                <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-300">Trial terbatas</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                    Aktif 3 hari, 1 device, maksimal 20 transaksi per hari dan 30 produk. Laporan, export, backup, multi-user, dan fitur premium lain terkunci sampai upgrade.
+                  </p>
+                </div>
+
                 {error && (
                   <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
                     <span className="text-red-400 mt-0.5 shrink-0">!</span>
@@ -467,8 +511,18 @@ export default function Login() {
                 )}
 
                 <Button type="submit" className="w-full mt-1 bg-gradient-to-r from-primary-500 to-primary-400 hover:from-primary-600 hover:to-primary-500 border-0" size="lg" loading={loading}>
-                  {loading ? 'Membuat akun...' : 'Buat Akun Admin'}
+                  {loading ? 'Mengaktifkan trial...' : 'Mulai Trial 3 Hari'}
                 </Button>
+
+                {hasUsers && (
+                  <button
+                    type="button"
+                    onClick={() => { setAuthView('login'); setError('') }}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    Sudah punya akun? Masuk
+                  </button>
+                )}
               </form>
               ) : (
               <>
@@ -609,6 +663,15 @@ export default function Login() {
                   {loading ? 'Memproses...' : loginMode === 'pin' ? 'Masuk dengan PIN' : 'Masuk ke Dashboard'}
                 </Button>
 
+                <button
+                  type="button"
+                  onClick={() => { setAuthView('register'); setError(''); setShowDefaultLogin(false) }}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/15 hover:text-white"
+                >
+                  <User size={16} />
+                  Daftar Akun
+                </button>
+
                 {/* Keyboard Hint */}
                 <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
                   <Keyboard size={12} />
@@ -624,7 +687,7 @@ export default function Login() {
                     <div>
                       <p className="text-sm font-semibold text-blue-400">Bantuan Login</p>
                       <p className="text-xs text-slate-400">
-                        Gunakan akun yang dibuat saat setup awal atau hubungi superadmin untuk reset password.
+                        Gunakan akun trial/berlangganan yang sudah dibuat atau hubungi admin untuk reset password.
                       </p>
                     </div>
                   </div>

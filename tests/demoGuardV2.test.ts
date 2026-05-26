@@ -47,6 +47,9 @@ describe('demoGuardV2 role checks', () => {
     expect(shouldBlockChannel('plan:create')).toBe(true)
     expect(shouldBlockChannel('user:extendAccess')).toBe(true)
     expect(shouldBlockChannel('user:block')).toBe(true)
+    expect(shouldBlockChannel('device:getAll')).toBe(true)
+    expect(shouldBlockChannel('license:getConfig')).toBe(true)
+    expect(shouldBlockChannel('popup:getAll')).toBe(true)
   })
 
   it('allows privileged users to access administration channels', () => {
@@ -56,6 +59,9 @@ describe('demoGuardV2 role checks', () => {
     expect(shouldBlockChannel('backup:create')).toBe(false)
     expect(shouldBlockChannel('security:get')).toBe(false)
     expect(shouldBlockChannel('plan:create')).toBe(false)
+    expect(shouldBlockChannel('device:getAll')).toBe(false)
+    expect(shouldBlockChannel('license:getConfig')).toBe(false)
+    expect(shouldBlockChannel('popup:getAll')).toBe(false)
     expect(shouldBlockChannel('strukSettings:uploadQris')).toBe(false)
   })
 })

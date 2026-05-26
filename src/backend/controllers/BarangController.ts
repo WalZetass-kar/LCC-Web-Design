@@ -3,6 +3,8 @@ import { validateDemoMode } from '../utils/demoMode.js'
 import { paginate, type PaginationParams } from '../utils/pagination.js'
 import { batchDelete, batchUpdate, batchInsert } from '../utils/transaction.js'
 import { BackupController } from './BackupController.js'
+import { ActivityLogModel } from '../models/ActivityLogModel.js'
+import { checkProductLimit, getLimitPopup, getSubscriptionStatus, getUpgradePopup } from '../middleware/subscriptionGuard.js'
 
 export class BarangController {
   static getAll() {
@@ -64,6 +66,43 @@ export class BarangController {
     const demoError = validateDemoMode(username)
     if (demoError) return demoError
 
+    const account = username || 'system'
+    const subscription = getSubscriptionStatus(account)
+    if (subscription.is_expired) {
+      ActivityLogModel.create({
+        username: account,
+        aktivitas: 'PRODUCT_IMPORT_BLOCKED_EXPIRED',
+        modul: 'BARANG',
+        tgl_aktivitas: new Date().toISOString(),
+        event_type: 'subscription',
+        detail: `Import ${products.length} produk ditolak karena masa akses berakhir pada ${subscription.expires_at}`,
+      })
+      return {
+        success: false,
+        error_code: 'EXPIRED',
+        message: 'Masa akses akun sudah berakhir. Upgrade paket untuk melanjutkan import produk.',
+        data: { popup: getUpgradePopup(account) },
+      }
+    }
+
+    const limit = checkProductLimit(account, products.length)
+    if (!limit.allowed) {
+      ActivityLogModel.create({
+        username: account,
+        aktivitas: 'PRODUCT_IMPORT_LIMIT_BLOCKED',
+        modul: 'BARANG',
+        tgl_aktivitas: new Date().toISOString(),
+        event_type: 'subscription',
+        detail: `Import produk ditolak; used=${limit.used}; incoming=${products.length}; max=${limit.max}`,
+      })
+      return {
+        success: false,
+        error_code: 'PRODUCT_LIMIT',
+        message: `Limit produk paket Anda sudah tercapai (${limit.used}/${limit.max}). Upgrade paket untuk menambah produk.`,
+        data: { ...limit, incoming: products.length, popup: getLimitPopup('PRODUCT_LIMIT') },
+      }
+    }
+
     // Auto backup before import
     BackupController.autoBackup('bulk_import_products')
 
@@ -72,7 +111,7 @@ export class BarangController {
       const enriched = products.map(p => ({
         ...p,
         tgl_wkt_simpan: now,
-        nama_pengguna: username || 'system',
+        nama_pengguna: account,
       }))
 
       const result = batchInsert('mediasoft_barang', enriched)
@@ -90,14 +129,52 @@ export class BarangController {
   }
 
   static create(data: Record<string, unknown>) {
-    const demoError = validateDemoMode(data.nama_pengguna as string)
+    const username = String(data.nama_pengguna || 'system')
+    const demoError = validateDemoMode(username)
     if (demoError) return demoError
 
     if (!data.kd_barang || !data.nama_barang) {
       return { success: false, message: 'Kode dan nama barang wajib diisi' }
     }
+
+    const subscription = getSubscriptionStatus(username)
+    if (subscription.is_expired) {
+      ActivityLogModel.create({
+        username,
+        aktivitas: 'PRODUCT_CREATE_BLOCKED_EXPIRED',
+        modul: 'BARANG',
+        tgl_aktivitas: new Date().toISOString(),
+        event_type: 'subscription',
+        detail: `Tambah produk ${String(data.kd_barang)} ditolak karena masa akses berakhir pada ${subscription.expires_at}`,
+      })
+      return {
+        success: false,
+        error_code: 'EXPIRED',
+        message: 'Masa akses akun sudah berakhir. Upgrade paket untuk menambah produk.',
+        data: { popup: getUpgradePopup(username) },
+      }
+    }
+
+    const limit = checkProductLimit(username, 1)
+    if (!limit.allowed) {
+      ActivityLogModel.create({
+        username,
+        aktivitas: 'PRODUCT_CREATE_LIMIT_BLOCKED',
+        modul: 'BARANG',
+        tgl_aktivitas: new Date().toISOString(),
+        event_type: 'subscription',
+        detail: `Tambah produk ${String(data.kd_barang)} ditolak; used=${limit.used}; max=${limit.max}`,
+      })
+      return {
+        success: false,
+        error_code: 'PRODUCT_LIMIT',
+        message: `Limit produk paket Anda sudah tercapai (${limit.used}/${limit.max}). Upgrade paket untuk menambah produk.`,
+        data: { ...limit, popup: getLimitPopup('PRODUCT_LIMIT') },
+      }
+    }
+
     const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
-    const enriched = { ...data, tgl_wkt_simpan: now, nama_pengguna: data.nama_pengguna || 'system' }
+    const enriched = { ...data, tgl_wkt_simpan: now, nama_pengguna: username }
     BarangModel.create(enriched as Parameters<typeof BarangModel.create>[0])
     return { success: true, message: 'Produk berhasil ditambahkan' }
   }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Globe, Key, Copy, Check, AlertTriangle, RefreshCw, Code, Database, ShoppingCart, Package } from 'lucide-react'
+import { Globe, Key, Copy, Check, AlertTriangle, RefreshCw, Code, CreditCard, MessageCircle } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -9,12 +9,24 @@ import { useToast } from '../contexts/ToastContext'
 import { api } from '../utils/api'
 import { normalizeHttpsUrl } from '../../shared/endpointSecurity'
 import { appConfig, validateProductionConfig } from '../utils/productionConfig'
+import type { SubscriptionPlan } from '../../shared/types'
 
 interface ApiConfig {
   apiKey: string
   apiSecret: string
   webhookUrl: string
   enabled: boolean
+  whatsappNumber: string
+  paymentLink: string
+  autoActivate: boolean
+  activationPlanId: number | null
+  paymentGateway: {
+    provider: string
+    serverKey: string
+    clientKey: string
+    isProduction: boolean
+    enabled: boolean
+  }
 }
 
 interface Endpoint {
@@ -44,7 +56,19 @@ export default function EcommerceApi() {
     apiSecret: '',
     webhookUrl: '',
     enabled: false,
+    whatsappNumber: '',
+    paymentLink: '',
+    autoActivate: false,
+    activationPlanId: null,
+    paymentGateway: {
+      provider: 'midtrans',
+      serverKey: '',
+      clientKey: '',
+      isProduction: false,
+      enabled: false,
+    },
   })
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [showSecret, setShowSecret] = useState(false)
   const [generatedKey, setGeneratedKey] = useState('')
   const [keyModal, setKeyModal] = useState(false)
@@ -56,6 +80,9 @@ export default function EcommerceApi() {
       if (r.success && r.data) {
         setConfig(r.data)
       }
+    })
+    api<SubscriptionPlan[]>('plan:getActive').then(r => {
+      if (r.success) setPlans(r.data ?? [])
     })
   }, [])
 
@@ -70,6 +97,16 @@ export default function EcommerceApi() {
         return
       }
       payload = { ...config, webhookUrl: webhook.url }
+      setConfig(payload)
+    }
+    if (config.paymentLink.trim()) {
+      const paymentLink = normalizeHttpsUrl(config.paymentLink)
+      if (!paymentLink.valid || !paymentLink.url) {
+        setEndpointError(paymentLink.message ?? 'Payment link tidak valid')
+        toast(paymentLink.message as string, 'error')
+        return
+      }
+      payload = { ...payload, paymentLink: paymentLink.url }
       setConfig(payload)
     }
 
@@ -135,6 +172,99 @@ export default function EcommerceApi() {
         </div>
       </Card>
 
+      <Card title="Payment Gateway & Aktivasi">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+            <div className="flex items-start gap-3">
+              <CreditCard className="text-primary-500 mt-0.5" size={20} />
+              <div>
+                <p className="font-medium text-slate-700 dark:text-slate-200">Payment Gateway</p>
+                <p className="text-sm text-slate-500">Midtrans/webhook pembayaran untuk aktivasi akun otomatis</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setConfig({ ...config, paymentGateway: { ...config.paymentGateway, enabled: !config.paymentGateway.enabled } })}
+              className={`w-14 h-8 rounded-full transition-colors ${config.paymentGateway.enabled ? 'bg-green-500' : 'bg-slate-300'}`}
+            >
+              <div className={`w-7 h-7 bg-white rounded-full shadow transform transition-transform ${config.paymentGateway.enabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Provider</label>
+              <select
+                value={config.paymentGateway.provider}
+                onChange={e => setConfig({ ...config, paymentGateway: { ...config.paymentGateway, provider: e.target.value } })}
+                className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400"
+              >
+                <option value="midtrans">Midtrans</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 cursor-pointer rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 w-full">
+                <input
+                  type="checkbox"
+                  checked={config.paymentGateway.isProduction}
+                  onChange={e => setConfig({ ...config, paymentGateway: { ...config.paymentGateway, isProduction: e.target.checked } })}
+                  className="w-4 h-4 rounded accent-primary-500"
+                />
+                <span className="text-sm text-slate-700 dark:text-slate-200">Production mode</span>
+              </label>
+            </div>
+            <Input
+              label="Server Key"
+              type={showSecret ? 'text' : 'password'}
+              value={config.paymentGateway.serverKey}
+              onChange={e => setConfig({ ...config, paymentGateway: { ...config.paymentGateway, serverKey: e.target.value } })}
+            />
+            <Input
+              label="Client Key"
+              value={config.paymentGateway.clientKey}
+              onChange={e => setConfig({ ...config, paymentGateway: { ...config.paymentGateway, clientKey: e.target.value } })}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="WhatsApp Pembayaran"
+              value={config.whatsappNumber}
+              onChange={e => setConfig({ ...config, whatsappNumber: e.target.value })}
+              placeholder="62812xxxx"
+            />
+            <Input
+              label="Payment Link"
+              value={config.paymentLink}
+              onChange={e => setConfig({ ...config, paymentLink: e.target.value })}
+              placeholder="https://domain-anda.com/pay"
+            />
+            <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+              <span>
+                <span className="block text-xs font-medium text-slate-600 dark:text-slate-400">Auto Aktivasi</span>
+                <span className="block text-[11px] text-slate-400">Aktifkan akun setelah webhook sukses</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={config.autoActivate}
+                onChange={e => setConfig({ ...config, autoActivate: e.target.checked })}
+                className="w-4 h-4 rounded accent-primary-500"
+              />
+            </label>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Paket Aktivasi Default</label>
+              <select
+                value={config.activationPlanId ?? ''}
+                onChange={e => setConfig({ ...config, activationPlanId: e.target.value ? Number(e.target.value) : null })}
+                className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400"
+              >
+                <option value="">Pilih saat aktivasi</option>
+                {plans.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {endpointError && (
         <Card className="border-red-200 bg-red-50 dark:bg-red-900/20">
           <p className="text-sm font-medium text-red-700 dark:text-red-300">Endpoint belum siap</p>
@@ -174,6 +304,10 @@ export default function EcommerceApi() {
               placeholder="https://domain-anda.com/api/webhook"
             />
             <p className="text-xs text-slate-400 mt-1">URL untuk menerima notifikasi real-time</p>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-xs text-slate-500">
+            <MessageCircle size={14} />
+            Link WhatsApp/payment untuk popup upgrade dikontrol dari konfigurasi pembayaran ini.
           </div>
         </div>
       </Card>

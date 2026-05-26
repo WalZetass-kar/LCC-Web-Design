@@ -127,6 +127,21 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t)
   }, [isDemo, user])
 
+  // Trial/paid account nearing expiry trigger
+  useEffect(() => {
+    if (isDemo || !user) return
+    const days = user.access_days_remaining
+    if (days === null || days === undefined || days > 3) return
+
+    const t = setTimeout(() => {
+      if (isCooldownElapsed()) {
+        setTriggerReason('access_expiring')
+        setIsPricingOpen(true)
+      }
+    }, 1800)
+    return () => clearTimeout(t)
+  }, [isDemo, user?.nama_pengguna, user?.access_days_remaining])
+
   const isOverLimit = useMemo(
     () => state.is_demo && state.usage_count >= state.usage_limit,
     [state.is_demo, state.usage_count, state.usage_limit]

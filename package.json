@@ -8,27 +8,42 @@
   "license": "MIT",
   "scripts": {
     "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
+    "predev": "node scripts/ensure-native-deps.cjs",
+    "dev:license": "npm --prefix license-server run dev",
+    "dev:with-license": "concurrently -k \"npm run dev:license\" \"npm run dev\"",
     "dev:vite": "vite",
     "dev:electron": "wait-on http://localhost:5173 && npm run build:electron && electron .",
     "build": "npm run build:electron && npm run build:vite && electron-builder",
     "build:vite": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json && node scripts/copy-electron-assets.cjs",
+    "build:desktop": "npm run build:electron && npm run build:vite",
     "build:android": "npm run build:vite && npx cap sync android",
+    "build:ios": "npm run build:vite && npx cap sync ios",
     "android:sync": "npx cap sync android",
     "android:open": "npx cap open android",
     "android:debug": "npm run build:android && node scripts/build-android.cjs assembleDebug",
     "prepare:android-network-security": "node scripts/prepare-android-network-security.cjs",
     "prepare:android-signing": "node scripts/prepare-android-signing.cjs",
     "android:release": "npm run build:vite && npm run prepare:android-network-security && npx cap sync android && npm run prepare:android-signing && node scripts/build-android.cjs assembleRelease",
-    "desktop:win": "npm run build:electron && npm run build:vite && electron-builder --win zip --publish never",
-    "desktop:win:installer": "npm run build:electron && npm run build:vite && electron-builder --win --publish never",
+    "android:aab": "npm run build:vite && npm run prepare:android-network-security && npx cap sync android && npm run prepare:android-signing && node scripts/build-android.cjs bundleRelease",
+    "ios:add": "npx cap add ios",
+    "ios:sync": "npm run build:ios",
+    "ios:open": "npx cap open ios",
+    "ios:doctor": "npx cap doctor ios",
+    "mobile:android:debug": "npm run android:debug",
+    "mobile:android:release": "npm run android:release",
+    "mobile:android:aab": "npm run android:aab",
+    "mobile:ios:sync": "npm run ios:sync",
+    "desktop:win": "npm run build:desktop && electron-builder --win zip --publish never",
+    "desktop:win:installer": "npm run build:desktop && electron-builder --win --publish never",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm run test",
     "rebuild:electron": "./node_modules/.bin/electron-rebuild -f -w better-sqlite3",
     "rebuild:node": "npm rebuild better-sqlite3",
-    "desktop:linux": "npm run build:electron && npm run build:vite && electron-builder --linux --publish never",
-    "desktop:mac": "npm run build:electron && npm run build:vite && electron-builder --mac --publish never",
+    "desktop:linux": "npm run build:desktop && electron-builder --linux --publish never",
+    "desktop:mac": "npm run build:desktop && electron-builder --mac --publish never",
+    "desktop:all:ci": "npm run build:desktop && electron-builder --win --linux --mac --publish never",
     "postinstall": "npm run rebuild:electron"
   },
   "dependencies": {
@@ -36,6 +51,7 @@
     "@capacitor/android": "^8.3.4",
     "@capacitor/core": "^8.3.4",
     "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/ios": "^8.3.4",
     "@capacitor/preferences": "^8.0.1",
     "@tanstack/react-table": "^8.17.3",
     "@types/qrcode": "^1.5.6",
@@ -112,6 +128,10 @@
         "to": "sistem_pos.db"
       },
       {
+        "from": "migrations",
+        "to": "migrations"
+      },
+      {
         "from": "build/icon.png",
         "to": "app-icon.png"
       }
@@ -119,8 +139,14 @@
     "asarUnpack": [
       "node_modules/**/*.node"
     ],
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "linux": {
-      "target": "AppImage"
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "maintainer": "Zetass"
     },
     "win": {
       "target": [
@@ -129,6 +155,13 @@
       ],
       "icon": "build/icon.ico",
       "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.business"
     },
     "nsis": {
       "oneClick": false,

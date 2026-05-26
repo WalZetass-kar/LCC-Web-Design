@@ -210,6 +210,12 @@ export interface Pengguna {
   access_expires_at: string | null
   must_change_password?: number | boolean | null
   pin_enabled?: number | boolean | null
+  subscription_plan_id?: number | null
+  subscription_expires_at?: string | null
+  is_buyer?: number | boolean | null
+  plan_name?: string | null
+  current_devices?: number | null
+  max_devices?: number | null
 }
 
 export interface ActivityLog {
@@ -219,7 +225,10 @@ export interface ActivityLog {
   modul: string
   tgl_aktivitas: string
   ip_address: string | null
+  device_id?: string | null
+  user_agent?: string | null
   detail: string | null
+  event_type?: string | null
 }
 
 export interface LaporanPenjualan {
@@ -237,6 +246,7 @@ export interface IpcResponse<T = unknown> {
   data?: T
   message?: string
   kd_transaksi?: string
+  error_code?: string
 }
 
 export interface UserSession {
@@ -249,6 +259,8 @@ export interface UserSession {
   session_token?: string
   session_expires_at?: string
   device_id?: string | null
+  subscription_plan_id?: number | null
+  subscription_expires_at?: string | null
 }
 
 export interface SubscriptionPlan {
@@ -261,6 +273,11 @@ export interface SubscriptionPlan {
   is_recommended: boolean
   created_at: string
   updated_at: string | null
+  max_devices: number
+  max_transactions_per_day: number
+  max_products: number
+  max_users: number
+  feature_flags: Record<string, boolean>
 }
 
 export interface Tutorial {

@@ -2,6 +2,18 @@ import { db } from '../../database/connection.js'
 import { activityLog } from '../../database/schema.js'
 import { eq, desc, and, like, gte, lte } from 'drizzle-orm'
 
+function inferEventType(modul: string, aktivitas: string): string {
+  const raw = `${modul} ${aktivitas}`.toLowerCase()
+  if (raw.includes('login')) return 'login'
+  if (raw.includes('revoke') || raw.includes('remote logout')) return 'revoke'
+  if (raw.includes('device')) return 'device'
+  if (raw.includes('logout')) return 'logout'
+  if (raw.includes('subscription') || raw.includes('langganan') || raw.includes('paket') || raw.includes('masa akses')) return 'subscription'
+  if (raw.includes('payment') || raw.includes('pembayaran') || raw.includes('gateway') || raw.includes('ecommerce')) return 'payment'
+  if (raw.includes('api') || raw.includes('error') || raw.includes('gagal')) return 'error'
+  return 'general'
+}
+
 export class ActivityLogModel {
   static getAll() {
     return db.select().from(activityLog).orderBy(desc(activityLog.tgl_aktivitas)).all()
@@ -28,6 +40,7 @@ export class ActivityLogModel {
   static search(filters: {
     username?: string
     modul?: string
+    eventType?: string
     startDate?: string
     endDate?: string
     keyword?: string
@@ -42,6 +55,10 @@ export class ActivityLogModel {
 
     if (filters.modul) {
       conditions.push(eq(activityLog.modul, filters.modul))
+    }
+
+    if (filters.eventType) {
+      conditions.push(eq(activityLog.event_type, filters.eventType))
     }
 
     if (filters.startDate) {
@@ -67,7 +84,7 @@ export class ActivityLogModel {
     return db.insert(activityLog).values(data).run()
   }
 
-  static log(username: string, aktivitas: string, modul: string, detail?: string) {
+  static log(username: string, aktivitas: string, modul: string, detail?: string, eventType?: string) {
     const tgl_aktivitas = new Date().toISOString()
     return this.create({
       username,
@@ -76,6 +93,7 @@ export class ActivityLogModel {
       tgl_aktivitas,
       ip_address: null,
       detail: detail || null,
+      event_type: eventType ?? inferEventType(modul, aktivitas),
     })
   }
 

@@ -36,6 +36,8 @@ function toPublicSession(session: StoredSession): UserSession {
     access_expires_at: session.access_expires_at ?? null,
     access_days_remaining: session.access_days_remaining ?? null,
     must_change_password: session.must_change_password ?? false,
+    subscription_plan_id: session.subscription_plan_id ?? null,
+    subscription_expires_at: session.subscription_expires_at ?? null,
   }
 }
 

@@ -31,6 +31,7 @@ export class ActivityLogController {
   static search(filters: {
     username?: string
     modul?: string
+    eventType?: string
     startDate?: string
     endDate?: string
     keyword?: string

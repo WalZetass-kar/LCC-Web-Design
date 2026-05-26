@@ -1,0 +1,4 @@
+project_id = "mediasoft-pos-license"
+
+[functions.mediasoft-license]
+verify_jwt = false

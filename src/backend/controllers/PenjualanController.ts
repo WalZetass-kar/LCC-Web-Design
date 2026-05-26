@@ -5,6 +5,8 @@ import { sqlite } from '../../database/connection.js'
 import { validateDemoMode } from '../utils/demoMode.js'
 import { withTransaction } from '../utils/transaction.js'
 import { WhatsAppController } from './WhatsAppController.js'
+import { ActivityLogModel } from '../models/ActivityLogModel.js'
+import { checkTransactionLimit, getLimitPopup, getSubscriptionStatus, getUpgradePopup } from '../middleware/subscriptionGuard.js'
 
 interface CartItem {
   kd_barang: string
@@ -93,6 +95,41 @@ export class PenjualanController {
     // Block demo user
     const demoError = validateDemoMode(payload.username)
     if (demoError) return demoError
+
+    const username = payload.username || 'KASIR'
+    const subscription = getSubscriptionStatus(username)
+    if (subscription.is_expired) {
+      ActivityLogModel.log(
+        username,
+        'Transaksi ditolak karena langganan berakhir',
+        'PENJUALAN',
+        `expires_at=${subscription.expires_at ?? '-'}; plan=${subscription.plan_name ?? '-'}`,
+        'subscription'
+      )
+      return {
+        success: false,
+        error_code: 'EXPIRED',
+        message: 'Masa langganan akun sudah berakhir. Silakan perpanjang atau upgrade paket.',
+        data: { popup: getUpgradePopup(username) },
+      }
+    }
+
+    const transactionLimit = checkTransactionLimit(username)
+    if (!transactionLimit.allowed) {
+      ActivityLogModel.log(
+        username,
+        'Transaksi ditolak karena limit paket habis',
+        'PENJUALAN',
+        `used=${transactionLimit.used}; max=${transactionLimit.max}`,
+        'subscription'
+      )
+      return {
+        success: false,
+        error_code: 'TRANSACTION_LIMIT',
+        message: `Limit transaksi harian paket sudah tercapai (${transactionLimit.used}/${transactionLimit.max}). Silakan upgrade paket untuk melanjutkan.`,
+        data: { ...transactionLimit, popup: getLimitPopup('TRANSACTION_LIMIT') },
+      }
+    }
 
     if (!payload.items?.length) {
       return { success: false, message: 'Keranjang kosong' }

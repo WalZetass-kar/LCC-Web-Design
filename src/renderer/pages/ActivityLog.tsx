@@ -20,6 +20,7 @@ export default function ActivityLogPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [filterUsername, setFilterUsername] = useState('')
   const [filterModul, setFilterModul] = useState('')
+  const [filterEventType, setFilterEventType] = useState('')
   const [modal, setModal] = useState<'delete' | 'clean' | null>(null)
   const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null)
 
@@ -63,6 +64,7 @@ export default function ActivityLogPage() {
   const filtered = data.filter(log => {
     if (filterUsername && !log.username?.toLowerCase().includes(filterUsername.toLowerCase())) return false
     if (filterModul && !log.modul?.toLowerCase().includes(filterModul.toLowerCase())) return false
+    if (filterEventType && log.event_type !== filterEventType) return false
     return true
   })
 
@@ -71,11 +73,14 @@ export default function ActivityLogPage() {
     BARANG: 'purple',
     PENJUALAN: 'green',
     PEMBELIAN: 'amber',
-    CUSTOMER: 'pink',
-    SUPPLIER: 'indigo',
+    CUSTOMER: 'purple',
+    SUPPLIER: 'blue',
     USER: 'red',
-    KAS: 'emerald',
-    SYSTEM: 'slate',
+    KAS: 'green',
+    SYSTEM: 'gray',
+    SECURITY: 'red',
+    SUBSCRIPTION: 'purple',
+    ECOMMERCE_API: 'amber',
   }
 
   const columns: ColumnDef<ActivityLog>[] = [
@@ -85,8 +90,12 @@ export default function ActivityLogPage() {
       accessorKey: 'modul', header: 'Modul', size: 100,
       cell: ({ getValue }) => {
         const modul = getValue() as string
-        return <Badge label={modul} variant={MODUL_COLOR[modul] as any ?? 'slate'} />
+        return <Badge label={modul} variant={MODUL_COLOR[modul] as any ?? 'gray'} />
       }
+    },
+    {
+      accessorKey: 'event_type', header: 'Event', size: 100,
+      cell: ({ getValue }) => <Badge label={String(getValue() ?? 'general').toUpperCase()} variant="gray" />
     },
     { accessorKey: 'aktivitas', header: 'Aktivitas' },
     { accessorKey: 'detail', header: 'Detail', cell: ({ getValue }) => <span className="text-xs text-slate-500">{getValue() as string ?? '-'}</span> },
@@ -139,8 +148,22 @@ export default function ActivityLogPage() {
             onChange={e => setFilterModul(e.target.value)}
             className="flex-1"
           />
-          {(filterUsername || filterModul) && (
-            <Button variant="secondary" icon={<X size={14} />} onClick={() => { setFilterUsername(''); setFilterModul('') }} className="text-xs">
+          <select
+            value={filterEventType}
+            onChange={e => setFilterEventType(e.target.value)}
+            className="rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400"
+          >
+            <option value="">Semua event</option>
+            <option value="login">Login</option>
+            <option value="logout">Logout</option>
+            <option value="device">Device</option>
+            <option value="subscription">Subscription</option>
+            <option value="payment">Payment</option>
+            <option value="revoke">Revoke</option>
+            <option value="error">Error/API</option>
+          </select>
+          {(filterUsername || filterModul || filterEventType) && (
+            <Button variant="secondary" icon={<X size={14} />} onClick={() => { setFilterUsername(''); setFilterModul(''); setFilterEventType('') }} className="text-xs">
               Clear
             </Button>
           )}

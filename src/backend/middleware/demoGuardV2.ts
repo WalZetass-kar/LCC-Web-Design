@@ -66,6 +66,14 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   // Ecommerce API
   'ecommerce:save',
 
+  // License / device / popup administration
+  'license:testAndSave',
+  'license:syncFromServer',
+  'device:revoke',
+  'device:revokeAll',
+  'device:revokeSession',
+  'popup:update',
+
   // Supplier
   'supplier:create',
   'supplier:update',
@@ -181,6 +189,7 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   'plan:create',
   'plan:update',
   'plan:deactivate',
+  'plan:delete',
 
   // HPP Calculator (delete own record)
   'hpp:delete',
@@ -467,6 +476,39 @@ const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
   'plan:create',
   'plan:update',
   'plan:deactivate',
+  'plan:delete',
+  'device:getAll',
+  'device:getByUser',
+  'device:revoke',
+  'device:revokeAll',
+  'device:getAllSessions',
+  'device:revokeSession',
+  'device:detectPlatformOS',
+  'popup:getAll',
+  'popup:update',
+  'license:getConfig',
+  'license:testConnection',
+  'license:testAndSave',
+  'license:validateApplication',
+  'license:syncFromServer',
+  'license:getUsers',
+  'license:createUser',
+  'license:updateUser',
+  'license:deleteUser',
+  'license:changeUserPlan',
+  'license:resetUserPassword',
+  'license:getPlans',
+  'license:updatePlan',
+  'license:getPlanFeatures',
+  'license:setPlanFeatures',
+  'license:getFeatures',
+  'license:createFeature',
+  'license:updateFeature',
+  'license:getPopups',
+  'license:updatePopup',
+  'license:getPayments',
+  'license:createPayment',
+  'license:approvePayment',
 
   // Audit maintenance
   'audit:getAll',
@@ -478,6 +520,23 @@ function canAccessAdminChannel(role: string | null): boolean {
   return role !== null && ADMIN_ROLES.has(role)
 }
 
+const FEATURE_CHANNELS: Array<{ match: (channel: string) => boolean; feature: string }> = [
+  { match: channel => channel.startsWith('laporan:'), feature: 'reports' },
+  { match: channel => channel === 'export:penjualanExcel' || channel === 'export:stokExcel' || channel === 'export:toExcel', feature: 'export_excel' },
+  { match: channel => channel === 'export:penjualanPDF' || channel === 'export:stokPDF' || channel === 'export:toPDF', feature: 'export_pdf' },
+  { match: channel => channel === 'backup:restore' || channel === 'backup:import', feature: 'restore' },
+  { match: channel => channel.startsWith('backup:') && channel !== 'backup:getAll', feature: 'backup' },
+  { match: channel => channel.startsWith('opname:'), feature: 'stock_opname' },
+  { match: channel => channel.startsWith('shift:'), feature: 'shift_management' },
+  { match: channel => channel.startsWith('debt:'), feature: 'debt_management' },
+  { match: channel => channel.startsWith('branch:'), feature: 'multi_branch' },
+  { match: channel => channel.startsWith('return:'), feature: 'return_refund' },
+  { match: channel => channel.startsWith('ecommerce:'), feature: 'api_access' },
+]
+
+function requiredFeatureForChannel(channel: string): string | null {
+  return FEATURE_CHANNELS.find(rule => rule.match(channel))?.feature ?? null
+}
 
 /**
  * Check if a channel is a mutation (write) operation.
@@ -569,6 +628,21 @@ export function withDemoGuard<T extends (...args: any[]) => any>(
 
       console.warn(`🚫 ACCESS DENIED: channel="${channel}" user="${demoSession.getUsername()}" role="${demoSession.getRole()}"`)
       return { ...ACCESS_DENIED_RESPONSE }
+    }
+
+    const username = demoSession.getUsername()
+    const feature = requiredFeatureForChannel(channel)
+    if (feature && username && !canAccessAdminChannel(demoSession.getRole())) {
+      const { getUpgradePopup, isFeatureEnabled } = await import('./subscriptionGuard.js')
+      if (!isFeatureEnabled(username, feature)) {
+        const popup = getUpgradePopup(username, feature)
+        return {
+          success: false,
+          error_code: 'FEATURE_LOCKED',
+          message: 'Fitur ini tidak aktif untuk paket langganan akun Anda.',
+          data: { feature, popup },
+        }
+      }
     }
 
     // Execute the original handler

@@ -2,13 +2,30 @@
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import path from 'path'
+import fs from 'fs'
 import { app } from 'electron'
 import * as schema from './schema.js'
 
-// Resolve DB path: use app resources in production, project root in dev
+function copyBundledDatabaseIfNeeded(targetPath: string) {
+  if (fs.existsSync(targetPath)) return
+
+  const bundledPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'sistem_pos.db')
+    : path.join(process.cwd(), 'sistem_pos.db')
+
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true })
+
+  if (fs.existsSync(bundledPath)) {
+    fs.copyFileSync(bundledPath, targetPath)
+  }
+}
+
+// Resolve DB path: packaged apps must write to userData, not install resources.
 function getDbPath(): string {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'sistem_pos.db')
+    const userDbPath = path.join(app.getPath('userData'), 'sistem_pos.db')
+    copyBundledDatabaseIfNeeded(userDbPath)
+    return userDbPath
   }
   return path.join(process.cwd(), 'sistem_pos.db')
 }
@@ -564,6 +581,219 @@ function runMigrations() {
 
 // Run migrations before creating drizzle instance
 runMigrations()
+
+// Add license server config columns to identitas table
+;(function addLicenseColumns() {
+  const cols = sqlite.prepare('PRAGMA table_info(mediasoft_identitas)').all() as Array<{ name: string }>
+  const names = cols.map(c => c.name)
+  if (!names.includes('license_server_url')) {
+    sqlite.exec(`ALTER TABLE mediasoft_identitas ADD COLUMN license_server_url TEXT`)
+  }
+  if (!names.includes('license_admin_token')) {
+    sqlite.exec(`ALTER TABLE mediasoft_identitas ADD COLUMN license_admin_token TEXT`)
+  }
+})()
+
+// License integration migration (idempotent)
+;(function licenseIntegrationMigration() {
+  function addCol(table: string, col: string, def: string) {
+    const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+    if (!cols.some(c => c.name === col)) {
+      try { sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`) } catch {}
+    }
+  }
+
+  // mediasoft_pengguna
+  addCol('mediasoft_pengguna', 'subscription_plan_id', 'INTEGER DEFAULT NULL')
+  addCol('mediasoft_pengguna', 'subscription_expires_at', 'TEXT DEFAULT NULL')
+  addCol('mediasoft_pengguna', 'is_buyer', 'INTEGER DEFAULT 0')
+
+  // mediasoft_auth_sessions
+  addCol('mediasoft_auth_sessions', 'platform', 'TEXT DEFAULT NULL')
+  addCol('mediasoft_auth_sessions', 'os_name', 'TEXT DEFAULT NULL')
+  addCol('mediasoft_auth_sessions', 'app_version', 'TEXT DEFAULT NULL')
+  addCol('mediasoft_auth_sessions', 'is_revoked', 'INTEGER DEFAULT 0')
+  sqlite.exec(`UPDATE mediasoft_auth_sessions SET is_revoked = 0 WHERE is_revoked IS NULL`)
+
+  // mediasoft_subscription_plans
+  addCol('mediasoft_subscription_plans', 'max_devices', 'INTEGER DEFAULT 1')
+  addCol('mediasoft_subscription_plans', 'max_transactions_per_day', 'INTEGER DEFAULT -1')
+  addCol('mediasoft_subscription_plans', 'max_products', 'INTEGER DEFAULT -1')
+  addCol('mediasoft_subscription_plans', 'max_users', 'INTEGER DEFAULT 1')
+  addCol('mediasoft_subscription_plans', 'feature_flags', "TEXT DEFAULT '{}'")
+
+  sqlite.prepare(`
+    UPDATE mediasoft_subscription_plans
+    SET max_devices = 1,
+        max_transactions_per_day = 20,
+        max_products = 30,
+        max_users = 1,
+        feature_flags = ?
+    WHERE name = 'Harian' AND (feature_flags IS NULL OR feature_flags = '{}')
+  `).run(JSON.stringify({
+    reports: false,
+    export_excel: false,
+    export_pdf: false,
+    multi_user: false,
+    backup: false,
+    stock_opname: false,
+    debt_management: false,
+    shift_management: false,
+    api_access: false,
+  }))
+  sqlite.prepare(`
+    UPDATE mediasoft_subscription_plans
+    SET max_devices = 2,
+        max_transactions_per_day = -1,
+        max_products = 500,
+        max_users = 2,
+        feature_flags = ?
+    WHERE name = 'Bulanan' AND (feature_flags IS NULL OR feature_flags = '{}')
+  `).run(JSON.stringify({
+    reports: true,
+    export_excel: true,
+    export_pdf: true,
+    multi_user: true,
+    backup: true,
+    stock_opname: false,
+    debt_management: false,
+    shift_management: false,
+    api_access: false,
+  }))
+  sqlite.prepare(`
+    UPDATE mediasoft_subscription_plans
+    SET max_devices = -1,
+        max_transactions_per_day = -1,
+        max_products = -1,
+        max_users = -1,
+        feature_flags = ?
+    WHERE name = 'Tahunan' AND (feature_flags IS NULL OR feature_flags = '{}')
+  `).run(JSON.stringify({
+    reports: true,
+    export_excel: true,
+    export_pdf: true,
+    multi_user: true,
+    backup: true,
+    restore: true,
+    stock_opname: true,
+    debt_management: true,
+    shift_management: true,
+    api_access: true,
+    multi_branch: true,
+    return_refund: true,
+  }))
+
+  const trialFlags = JSON.stringify({
+    reports: false,
+    export_excel: false,
+    export_pdf: false,
+    multi_user: false,
+    backup: false,
+    restore: false,
+    stock_opname: false,
+    debt_management: false,
+    shift_management: false,
+    api_access: false,
+    multi_branch: false,
+    return_refund: false,
+  })
+  const trialPlan = sqlite.prepare(
+    `SELECT id FROM mediasoft_subscription_plans WHERE name = 'Trial 3 Hari' LIMIT 1`
+  ).get() as { id: number } | undefined
+  if (!trialPlan) {
+    sqlite.prepare(`
+      INSERT INTO mediasoft_subscription_plans
+        (name, price, duration_days, features, is_active, is_recommended, created_at,
+         max_devices, max_transactions_per_day, max_products, max_users, feature_flags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'Trial 3 Hari',
+      0,
+      3,
+      JSON.stringify([
+        'Trial terbatas 3 hari',
+        '1 device',
+        '20 transaksi per hari',
+        '30 produk',
+        'Fitur premium terkunci',
+      ]),
+      0,
+      0,
+      new Date().toISOString(),
+      1,
+      20,
+      30,
+      1,
+      trialFlags,
+    )
+  }
+
+  // mediasoft_activity_log
+  addCol('mediasoft_activity_log', 'event_type', "TEXT DEFAULT 'general'")
+
+  // mediasoft_ecommerce_api
+  addCol('mediasoft_ecommerce_api', 'whatsapp_number', 'TEXT DEFAULT NULL')
+  addCol('mediasoft_ecommerce_api', 'payment_link', 'TEXT DEFAULT NULL')
+  addCol('mediasoft_ecommerce_api', 'auto_activate', 'INTEGER DEFAULT 0')
+  addCol('mediasoft_ecommerce_api', 'activation_plan_id', 'INTEGER DEFAULT NULL')
+
+  // Tabel baru: user_devices
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_user_devices (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      username      TEXT NOT NULL,
+      device_id     TEXT NOT NULL,
+      device_name   TEXT,
+      platform      TEXT,
+      os_name       TEXT,
+      app_version   TEXT,
+      ip_address    TEXT,
+      last_seen_at  TEXT,
+      first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+      status        TEXT NOT NULL DEFAULT 'active',
+      revoked_at    TEXT,
+      revoked_by    TEXT,
+      UNIQUE(username, device_id)
+    )
+  `)
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_user_devices_username ON mediasoft_user_devices(username)`)
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_user_devices_status ON mediasoft_user_devices(status)`)
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_user_devices_last_seen ON mediasoft_user_devices(last_seen_at)`)
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_auth_sessions_device ON mediasoft_auth_sessions(username, device_id)`)
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_activity_log_event_type ON mediasoft_activity_log(event_type, tgl_aktivitas)`)
+
+  // Tabel baru: popup_rules
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_popup_rules (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      code            TEXT NOT NULL UNIQUE,
+      title           TEXT NOT NULL,
+      description     TEXT,
+      cta_text        TEXT DEFAULT 'Upgrade Sekarang',
+      cta_url         TEXT,
+      whatsapp_number TEXT,
+      pricing_html    TEXT,
+      is_active       INTEGER DEFAULT 1,
+      trigger_on      TEXT DEFAULT '{}',
+      updated_at      TEXT DEFAULT (datetime('now'))
+    )
+  `)
+
+  // Seed popup rules
+  const popups = [
+    ['DEMO_LIMIT',    'Batas Demo Tercapai',   'Anda telah mencapai batas akun demo. Upgrade untuk akses penuh.'],
+    ['ACCESS_EXPIRING', 'Trial Hampir Habis', 'Trial Anda segera berakhir. Upgrade sekarang agar transaksi dan data toko tetap berjalan.'],
+    ['EXPIRED',       'Langganan Habis',        'Masa langganan Anda sudah berakhir. Perpanjang untuk melanjutkan.'],
+    ['FEATURE_LOCKED','Fitur Ini Terkunci',     'Fitur ini tidak tersedia di paket Anda saat ini.'],
+    ['DEVICE_LIMIT',  'Batas Device Tercapai',  'Anda telah mencapai batas jumlah device untuk paket ini.'],
+    ['TRANSACTION_LIMIT', 'Limit Transaksi Tercapai', 'Limit transaksi harian paket Anda sudah habis. Upgrade paket untuk melanjutkan transaksi.'],
+    ['PRODUCT_LIMIT', 'Limit Produk Tercapai', 'Limit jumlah produk paket Anda sudah habis. Upgrade paket untuk menambah produk.'],
+  ]
+  const insertPopup = sqlite.prepare(
+    `INSERT OR IGNORE INTO mediasoft_popup_rules (code, title, description) VALUES (?, ?, ?)`
+  )
+  for (const [code, title, desc] of popups) insertPopup.run(code, title, desc)
+})()
 
 export const db = drizzle(sqlite, { schema })
 export type DB = typeof db

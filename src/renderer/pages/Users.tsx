@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, Pencil, Trash2, Key, ShieldCheck, Lock, Power, CalendarPlus } from 'lucide-react'
+import { Plus, Pencil, Trash2, Key, ShieldCheck, Lock, Power, CalendarPlus, Monitor, Smartphone, RefreshCw } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
@@ -13,7 +13,7 @@ import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
 import { MENU_GROUPS } from '../layouts/Sidebar'
-import type { Pengguna } from '../../shared/types'
+import type { Pengguna, SubscriptionPlan } from '../../shared/types'
 import { formatDate } from '../utils/format'
 
 interface FormState {
@@ -28,6 +28,9 @@ interface FormState {
   email: string
   no_telp: string
   access_expires_at: string
+  subscription_plan_id: string
+  subscription_expires_at: string
+  is_buyer: boolean
 }
 
 const EMPTY: FormState = {
@@ -42,6 +45,9 @@ const EMPTY: FormState = {
   email: '',
   no_telp: '',
   access_expires_at: '',
+  subscription_plan_id: '',
+  subscription_expires_at: '',
+  is_buyer: false,
 }
 
 function isDeveloperAccount(user?: Pick<Pengguna, 'hak_akses'> | null) {
@@ -106,7 +112,9 @@ export default function Users() {
   const toast = useToast()
   const { user: currentUser } = useAuth()
   const { guardPremiumFeature } = useDemoGuard()
+  const [activeTab, setActiveTab] = useState<'users' | 'devices'>('users')
   const [data, setData] = useState<Pengguna[]>([])
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [modal, setModal] = useState<'add' | 'edit' | 'delete' | 'password' | 'permissions' | 'extend' | null>(null)
   const [form, setForm] = useState<FormState>({ ...EMPTY })
   const [selected, setSelected] = useState<Pengguna | null>(null)
@@ -125,7 +133,12 @@ export default function Users() {
     setLoadingData(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    api<SubscriptionPlan[]>('plan:getActive').then(r => {
+      if (r.success) setPlans(r.data ?? [])
+    })
+  }, [])
 
   const openAdd = () => {
     if (guardPremiumFeature('multi_user', 'Tambah User')) return
@@ -146,6 +159,9 @@ export default function Users() {
       email: row.email ?? '',
       no_telp: row.no_telp ?? '',
       access_expires_at: toDateInputValue(row.access_expires_at),
+      subscription_plan_id: row.subscription_plan_id ? String(row.subscription_plan_id) : '',
+      subscription_expires_at: toDateInputValue(row.subscription_expires_at),
+      is_buyer: !!row.is_buyer,
     })
     const r = await api<Record<string, boolean>>('user:getPermissions', row.nama_pengguna)
     setPermissions(normalizePermissions(r.success ? (r.data ?? {}) : {}))
@@ -193,6 +209,9 @@ export default function Users() {
     const payload = {
       ...form,
       access_expires_at: form.access_expires_at || null,
+      subscription_plan_id: form.subscription_plan_id ? Number(form.subscription_plan_id) : null,
+      subscription_expires_at: form.subscription_expires_at || null,
+      is_buyer: form.is_buyer,
       pin: form.pin || undefined,
       permissions,
       _caller: currentUser?.nama_pengguna,
@@ -308,10 +327,46 @@ export default function Users() {
       },
     },
     {
+      accessorKey: 'plan_name',
+      header: 'Paket',
+      size: 130,
+      cell: ({ row }) => {
+        const planName = row.original.plan_name
+        if (!planName) return <span className="text-xs text-slate-400">Lokal</span>
+        return (
+          <div className="space-y-0.5">
+            <Badge label={planName} variant="blue" />
+            <p className="text-[10px] text-slate-400">
+              {row.original.subscription_expires_at ? formatDate(row.original.subscription_expires_at) : 'Tanpa masa aktif'}
+            </p>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: 'current_devices',
+      header: 'Device',
+      size: 90,
+      cell: ({ row }) => (
+        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+          {row.original.current_devices ?? 0}/{row.original.max_devices === -1 ? '∞' : row.original.max_devices ?? 1}
+        </span>
+      ),
+    },
+    {
       accessorKey: 'pin_enabled',
       header: 'PIN',
       size: 80,
       cell: ({ getValue }) => <Badge label={getValue() ? 'AKTIF' : 'OFF'} variant={getValue() ? 'green' : 'gray'} />,
+    },
+    {
+      accessorKey: 'terakhir_login',
+      header: 'Last Login',
+      size: 140,
+      cell: ({ getValue }) => {
+        const value = getValue() as string | null
+        return <span className="text-xs text-slate-500">{value ? formatDate(value) : '-'}</span>
+      },
     },
     {
       id: 'actions', header: 'Aksi',
@@ -423,6 +478,20 @@ export default function Users() {
 
   return (
     <div className="space-y-4">
+      {/* Tab bar */}
+      <div className="flex gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 w-fit">
+        {(['users', 'devices'] as const).map(t => (
+          <button key={t} onClick={() => setActiveTab(t)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === t ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+            {t === 'users' ? '👥 Pengguna' : '📱 Devices'}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'devices' && <DevicesTab currentUser={currentUser?.nama_pengguna ?? ''} />}
+
+      {activeTab === 'users' && (
+      <>
       {loadingData ? (
         <SkeletonPage rows={5} />
       ) : (
@@ -485,6 +554,38 @@ export default function Users() {
           </div>
           <Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} />
           <Input label="No. Telepon" value={form.no_telp} onChange={e => f('no_telp', e.target.value)} />
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Paket Langganan</label>
+            <select
+              value={form.subscription_plan_id}
+              onChange={e => setForm(prev => ({ ...prev, subscription_plan_id: e.target.value }))}
+              className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            >
+              <option value="">Tanpa paket / lokal</option>
+              {plans.map(plan => (
+                <option key={plan.id} value={plan.id}>{plan.name}</option>
+              ))}
+            </select>
+          </div>
+          <Input
+            label="Masa Langganan"
+            type="date"
+            value={form.subscription_expires_at}
+            onChange={e => f('subscription_expires_at', e.target.value)}
+            helperText="Kosongkan agar mengikuti durasi paket saat paket dipilih"
+          />
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+            <span>
+              <span className="block text-xs font-medium text-slate-600 dark:text-slate-400">Akun Pembeli</span>
+              <span className="block text-[11px] text-slate-400">Tandai akun customer/subscriber eksternal</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={form.is_buyer}
+              onChange={e => setForm(prev => ({ ...prev, is_buyer: e.target.checked }))}
+              className="w-4 h-4 rounded accent-primary-500"
+            />
+          </label>
           <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
             <span>
               <span className="block text-xs font-medium text-slate-600 dark:text-slate-400">Login PIN Kasir</span>
@@ -628,6 +729,114 @@ export default function Users() {
       >
         {permissionGroupsView}
       </Modal>
+      </>
+      )}
     </div>
+  )
+}
+
+// ─── DevicesTab ───────────────────────────────────────────────────────────────
+interface DeviceRow {
+  id: number
+  username: string
+  nama_lengkap?: string | null
+  device_id: string | null
+  device_name: string | null
+  platform: string | null
+  os_name: string | null
+  app_version?: string | null
+  ip_address: string | null
+  last_seen_at: string | null
+  first_seen_at?: string | null
+  status: string
+  plan_name?: string | null
+}
+
+function DevicesTab({ currentUser }: { currentUser: string }) {
+  const toast = useToast()
+  const [devices, setDevices] = useState<DeviceRow[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    setLoading(true)
+    const r = await api<DeviceRow[]>('device:getAll')
+    if (r.success) setDevices((r.data as any) ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const revoke = async (id: number) => {
+    if (!confirm('Revoke device ini? User akan di-logout dari device tersebut.')) return
+    await api('device:revoke', id, currentUser)
+    toast('Device berhasil di-revoke', 'success')
+    load()
+  }
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-slate-800 dark:text-white">Riwayat Device User</h3>
+        <Button icon={<RefreshCw size={14} />} variant="ghost" onClick={load}>Refresh</Button>
+      </div>
+      {loading ? <SkeletonPage rows={3} /> : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 text-left">
+              <tr>
+                <th className="px-3 py-2">User</th>
+                <th>Device</th>
+                <th>Platform</th>
+                <th>OS</th>
+                <th>IP</th>
+                <th>Status</th>
+                <th>Terakhir Aktif</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {devices.length === 0 ? (
+                <tr><td colSpan={8} className="text-center py-8 text-slate-400">Belum ada device tercatat</td></tr>
+              ) : devices.map((d: any) => (
+                <tr key={d.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-3 py-2">
+                    <p className="font-medium">{d.username}</p>
+                    <p className="text-[10px] text-slate-400">{d.nama_lengkap || d.plan_name || '-'}</p>
+                  </td>
+                  <td className="text-slate-600 dark:text-slate-400">
+                    <p>{d.device_name || d.device_id?.slice(0, 12) || '—'}</p>
+                    <p className="text-[10px] text-slate-400">{d.app_version || d.device_id?.slice(0, 12) || '-'}</p>
+                  </td>
+                  <td>
+                    <span className="flex items-center gap-1 text-xs">
+                      {d.platform === 'android' ? <Smartphone size={12} /> : <Monitor size={12} />}
+                      {d.platform || '—'}
+                    </span>
+                  </td>
+                  <td className="text-xs text-slate-500">{d.os_name || '—'}</td>
+                  <td className="text-xs font-mono text-slate-500">{d.ip_address || '—'}</td>
+                  <td>
+                    <Badge
+                      label={(d.status || 'active').toUpperCase()}
+                      variant={d.status === 'active' ? 'green' : d.status === 'blocked' ? 'red' : 'amber'}
+                    />
+                  </td>
+                  <td className="text-xs text-slate-500">{d.last_seen_at ? new Date(d.last_seen_at).toLocaleString('id-ID') : '—'}</td>
+                  <td>
+                    <button
+                      onClick={() => revoke(d.id)}
+                      disabled={d.status !== 'active'}
+                      className="px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Revoke
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   )
 }

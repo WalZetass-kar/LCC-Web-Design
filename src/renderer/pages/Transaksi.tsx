@@ -46,7 +46,7 @@ interface QrisStatus {
 export default function Transaksi() {
   const toast = useToast()
   const { user } = useAuth()
-  const { trackUsage, isOverLimit, remainingUsage, isDemo } = useDemoGuard()
+  const { trackUsage, isOverLimit, remainingUsage, isDemo, showPricing } = useDemoGuard()
   const [products, setProducts] = useState<Barang[]>([])
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
@@ -307,10 +307,13 @@ export default function Transaksi() {
       }
       return true
     } else {
+      if (['TRANSACTION_LIMIT', 'FEATURE_LOCKED', 'EXPIRED'].includes(r.error_code ?? '')) {
+        showPricing()
+      }
       toast(r.message as string, 'error')
       return false
     }
-  }, [isDemo, remainingUsage, toast, trackUsage])
+  }, [isDemo, remainingUsage, showPricing, toast, trackUsage])
 
   const createQrisPayment = async () => {
     const payload = buildSalePayload('QRIS', totalBayar)
@@ -460,6 +463,14 @@ export default function Transaksi() {
     if (isDemo && isOverLimit) {
       toast('Batas transaksi demo tercapai. Upgrade untuk melanjutkan.', 'error')
       return
+    }
+    if (user?.nama_pengguna) {
+      const limit = await api<{ allowed: boolean; used: number; max: number }>('subscription:checkTransactionLimit', user.nama_pengguna)
+      if (limit.success && limit.data && !limit.data.allowed) {
+        toast(`Limit transaksi harian paket sudah tercapai (${limit.data.used}/${limit.data.max}).`, 'error')
+        showPricing()
+        return
+      }
     }
     setLoading(true)
     if (jenisBayar === 'QRIS') {

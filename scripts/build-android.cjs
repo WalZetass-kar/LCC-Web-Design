@@ -6,6 +6,7 @@ const rootDir = path.resolve(__dirname, '..')
 const androidDir = path.join(rootDir, 'android')
 const releaseDir = path.join(rootDir, 'release')
 const releaseApkName = 'MediaSoft POS Zetass v2.0.apk'
+const releaseAabName = 'MediaSoft POS Zetass v2.0.aab'
 const task = process.argv[2] || 'assembleDebug'
 const signingEnvPath = path.join(rootDir, '.keys', 'android-release.env')
 
@@ -109,20 +110,26 @@ const result = spawnSync(gradleCommand, [task], {
 })
 
 const status = result.status ?? 1
-if (status === 0 && (task === 'assembleDebug' || task === 'assembleRelease')) {
-  const sourceApk = task === 'assembleDebug'
+if (status === 0 && (task === 'assembleDebug' || task === 'assembleRelease' || task === 'bundleRelease')) {
+  const isBundle = task === 'bundleRelease'
+  const sourceArtifact = task === 'assembleDebug'
     ? path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
-    : path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
-  if (fs.existsSync(sourceApk)) {
+    : task === 'assembleRelease'
+      ? path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
+      : path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'release', 'app-release.aab')
+  if (fs.existsSync(sourceArtifact)) {
     fs.mkdirSync(releaseDir, { recursive: true })
     for (const entry of fs.readdirSync(releaseDir)) {
-      if (/^MediaSoft POS .*\.apk$/i.test(entry) || entry === releaseApkName) {
+      const isSameArtifactType = isBundle
+        ? (/^MediaSoft POS .*\.aab$/i.test(entry) || entry === releaseAabName)
+        : (/^MediaSoft POS .*\.apk$/i.test(entry) || entry === releaseApkName)
+      if (isSameArtifactType) {
         fs.rmSync(path.join(releaseDir, entry), { force: true })
       }
     }
-    const releaseApk = path.join(releaseDir, releaseApkName)
-    fs.copyFileSync(sourceApk, releaseApk)
-    console.log(`Copied Android APK to ${path.relative(rootDir, releaseApk)}`)
+    const releaseArtifact = path.join(releaseDir, isBundle ? releaseAabName : releaseApkName)
+    fs.copyFileSync(sourceArtifact, releaseArtifact)
+    console.log(`Copied Android ${isBundle ? 'AAB' : 'APK'} to ${path.relative(rootDir, releaseArtifact)}`)
   }
 }
 

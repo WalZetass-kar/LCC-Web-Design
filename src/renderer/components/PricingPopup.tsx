@@ -25,6 +25,20 @@ import { openWhatsAppUpgrade, SUBSCRIPTION_UPGRADE_WA_NUMBER } from '../utils/wh
 import { secureStorage } from '../utils/secureStorage'
 import type { Identitas, SubscriptionPlan } from '../../shared/types'
 
+interface PopupRule {
+  code: string
+  title: string
+  description: string | null
+  cta_text?: string | null
+  cta_url?: string | null
+  whatsapp_number?: string | null
+}
+
+interface EcommerceUpgradeConfig {
+  paymentLink?: string
+  whatsappNumber?: string
+}
+
 // ─── Dynamic plan helpers ────────────────────────────────────────────────────
 
 function getPlanIcon(name: string) {
@@ -96,6 +110,8 @@ export default function PricingPopup() {
   const [isAnimating, setIsAnimating] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const [storeName, setStoreName] = useState<string | null>(null)
+  const [popupRule, setPopupRule] = useState<PopupRule | null>(null)
+  const [ecommerceConfig, setEcommerceConfig] = useState<EcommerceUpgradeConfig>({})
 
   const loadPlans = useCallback(async () => {
     const r = await api<SubscriptionPlan[] | SubscriptionPlan>('plan:getActive')
@@ -121,11 +137,30 @@ export default function PricingPopup() {
         setStoreName(r.data.namatoko)
       }
     })
+    api<EcommerceUpgradeConfig>('ecommerce:get').then(r => {
+      if (r.success && r.data) {
+        setEcommerceConfig({
+          paymentLink: r.data.paymentLink,
+          whatsappNumber: r.data.whatsappNumber,
+        })
+      }
+    })
   }, [])
 
   useEffect(() => {
-    if (isPricingOpen) void loadPlans()
-  }, [isPricingOpen, loadPlans])
+    if (!isPricingOpen) return
+    void loadPlans()
+    const code = triggerReason === 'premium_feature'
+      ? 'FEATURE_LOCKED'
+      : triggerReason === 'usage_limit'
+        ? 'DEMO_LIMIT'
+        : triggerReason === 'access_expiring'
+          ? 'ACCESS_EXPIRING'
+          : 'DEMO_LIMIT'
+    api<PopupRule>('subscription:getPopupRule', code).then(r => {
+      setPopupRule(r.success ? r.data ?? null : null)
+    })
+  }, [isPricingOpen, loadPlans, triggerReason])
 
   // Animation on open
   useEffect(() => {
@@ -151,7 +186,11 @@ export default function PricingPopup() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
   }, [countdown])
 
-  const msgs = TRIGGER_MESSAGES[triggerReason ?? 'manual']
+  const fallbackMsgs = TRIGGER_MESSAGES[triggerReason ?? 'manual']
+  const msgs = {
+    title: popupRule?.title ?? fallbackMsgs.title,
+    subtitle: popupRule?.description ?? fallbackMsgs.subtitle,
+  }
   const usagePercent = Math.min(100,
     Math.round((state.usage_count / state.usage_limit) * 100)
   )
@@ -175,10 +214,15 @@ export default function PricingPopup() {
       secureStorage.setJSON('pos_analytics', analytics.slice(-50))
     } catch {}
 
-    // Open WhatsApp with pre-filled upgrade message. Still open chat if plans
-    // cannot be loaded, so the renewal CTA never becomes a dead button.
+    const ctaUrl = popupRule?.cta_url || ecommerceConfig.paymentLink
+    if (ctaUrl) {
+      api('app:openExternal', ctaUrl)
+      closePricing()
+      return
+    }
+
     openWhatsAppUpgrade({
-      phone: SUBSCRIPTION_UPGRADE_WA_NUMBER,
+      phone: popupRule?.whatsapp_number || ecommerceConfig.whatsappNumber || SUBSCRIPTION_UPGRADE_WA_NUMBER,
       planName: selectedPlanData?.name ?? 'Konsultasi Paket',
       planPrice: selectedPlanData ? formatPrice(selectedPlanData.price) : 'Harga menyesuaikan',
       planPeriod: selectedPlanData ? getPlanPeriod(selectedPlanData.duration_days) : '',
@@ -451,7 +495,7 @@ export default function PricingPopup() {
             title="Anda akan diarahkan ke WhatsApp admin"
           >
             <MessageCircle size={20} className="group-hover:animate-bounce" />
-            <span>Upgrade via WhatsApp</span>
+            <span>{popupRule?.cta_text || 'Upgrade via WhatsApp'}</span>
             <ChevronRight size={16} className="opacity-60 group-hover:translate-x-0.5 transition-transform" />
           </button>
           <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5">

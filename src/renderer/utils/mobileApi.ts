@@ -567,14 +567,24 @@ function publicUser(user: MobileStore['users'][number]): Pengguna {
   return safeUser
 }
 
+function accessDaysRemaining(expiresAt?: string | null): number | null {
+  if (!expiresAt) return null
+  const time = new Date(expiresAt).getTime()
+  if (!Number.isFinite(time)) return null
+  return Math.max(0, Math.ceil((time - Date.now()) / 86400000))
+}
+
 function toSession(user: MobileStore['users'][number]): UserSession {
+  const expiresAt = user.subscription_expires_at ?? user.access_expires_at ?? null
   return {
     nama_pengguna: user.nama_pengguna,
     nama_lengkap: user.nama_lengkap,
     hak_akses: user.hak_akses,
-    access_expires_at: user.access_expires_at,
-    access_days_remaining: null,
+    access_expires_at: expiresAt,
+    access_days_remaining: accessDaysRemaining(expiresAt),
     must_change_password: !!user.must_change_password,
+    subscription_plan_id: user.subscription_plan_id ?? null,
+    subscription_expires_at: user.subscription_expires_at ?? null,
   }
 }
 
@@ -1129,6 +1139,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const data = args[0] as AnyRecord
       const username = String(data?.username ?? '').trim()
       const namaLengkap = String(data?.nama_lengkap ?? '').trim()
+      const email = String(data?.email ?? '').trim()
       const password = String(data?.password ?? '')
 
       if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) {
@@ -1157,6 +1168,90 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       store.users.push(row)
       saveStore(store)
       return ok(publicUser(row) as T, 'Akun admin pertama berhasil dibuat')
+    }
+
+    case 'auth:registerTrial': {
+      const data = args[0] as AnyRecord
+      const device = authDevice(args[1] ?? collectAuthDeviceInfo())
+      const username = String(data?.username ?? '').trim()
+      const namaLengkap = String(data?.nama_lengkap ?? '').trim()
+      const email = String(data?.email ?? '').trim()
+      const password = String(data?.password ?? '')
+
+      if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) {
+        return fail('Username minimal 3 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau strip')
+      }
+      if (store.users.some(item => Number(item.is_buyer ?? 0) === 1)) {
+        return fail('Akun pembeli trial sudah terdaftar. Silakan login atau upgrade akun yang sudah ada.')
+      }
+      if (store.users.some(item => item.nama_pengguna === username)) {
+        return fail('Username sudah digunakan. Pilih username lain.')
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return fail('Email valid wajib diisi untuk daftar akun trial')
+      }
+      if (!namaLengkap) return fail('Nama lengkap wajib diisi')
+
+      const validation = validatePasswordStrength(password)
+      if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
+
+      let trialPlan = store.plans.find(plan => plan.name === 'Trial 3 Hari')
+      if (!trialPlan) {
+        trialPlan = {
+          id: nextCounter(store, 'plan'),
+          name: 'Trial 3 Hari',
+          price: 0,
+          duration_days: 3,
+          features: ['Trial terbatas 3 hari', '1 device', '20 transaksi per hari', '30 produk', 'Fitur premium terkunci'],
+          is_active: false,
+          is_recommended: false,
+          created_at: now(),
+          updated_at: null,
+          max_devices: 1,
+          max_transactions_per_day: 20,
+          max_products: 30,
+          max_users: 1,
+          feature_flags: {
+            reports: false,
+            export_excel: false,
+            export_pdf: false,
+            multi_user: false,
+            backup: false,
+            restore: false,
+            stock_opname: false,
+            debt_management: false,
+            shift_management: false,
+            api_access: false,
+            multi_branch: false,
+            return_refund: false,
+          },
+        }
+        store.plans.push(trialPlan)
+      }
+
+      const expiresAt = new Date(Date.now() + 3 * 86400000).toISOString()
+      const row: MobileUser = {
+        nama_pengguna: username,
+        nama_lengkap: namaLengkap,
+        email,
+        no_telp: String(data?.no_telp ?? '').trim() || null,
+        hak_akses: 'admin',
+        status_user: 'Aktif',
+        terakhir_login: now(),
+        tgl_wkt_simpan: now(),
+        access_expires_at: expiresAt,
+        subscription_plan_id: Number(trialPlan.id),
+        subscription_expires_at: expiresAt,
+        is_buyer: 1,
+        password_hash: await hashMobilePassword(password),
+        password_hash_type: 'bcrypt',
+        must_change_password: 0,
+        permissions: {},
+      }
+      store.users.push(row)
+      auditAuth(store, username, 'TRIAL_REGISTERED', `Akun pembeli trial 3 hari dibuat; expires_at=${expiresAt}`, device)
+      saveStore(store)
+      return ok(createMobileSession(row, device) as T, 'Trial 3 hari aktif. Beberapa fitur premium dikunci sampai upgrade.')
     }
 
     case 'auth:login': {

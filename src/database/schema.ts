@@ -17,6 +17,9 @@ export const pengguna = sqliteTable('mediasoft_pengguna', {
   pin_hash: text('pin_hash'),
   pin_hash_type: text('pin_hash_type').default('bcrypt'),
   pin_enabled: integer('pin_enabled').default(0),
+  subscription_plan_id: integer('subscription_plan_id'),
+  subscription_expires_at: text('subscription_expires_at'),
+  is_buyer: integer('is_buyer').default(0),
 })
 
 export const satuan = sqliteTable('mediasoft_satuan', {
@@ -213,6 +216,7 @@ export const activityLog = sqliteTable('mediasoft_activity_log', {
   device_id: text('device_id'),
   user_agent: text('user_agent'),
   detail: text('detail'),
+  event_type: text('event_type').default('general'),
 })
 
 export const authSessions = sqliteTable('mediasoft_auth_sessions', {
@@ -227,6 +231,10 @@ export const authSessions = sqliteTable('mediasoft_auth_sessions', {
   device_id: text('device_id'),
   device_name: text('device_name'),
   user_agent: text('user_agent'),
+  platform: text('platform'),
+  os_name: text('os_name'),
+  app_version: text('app_version'),
+  is_revoked: integer('is_revoked').default(0),
 })
 
 export const subscriptionPlans = sqliteTable('mediasoft_subscription_plans', {
@@ -238,6 +246,41 @@ export const subscriptionPlans = sqliteTable('mediasoft_subscription_plans', {
   is_active: integer('is_active').default(1), // 1 = active, 0 = inactive
   is_recommended: integer('is_recommended').default(0),
   created_at: text('created_at').notNull(),
+  updated_at: text('updated_at'),
+  max_devices: integer('max_devices').default(1),
+  max_transactions_per_day: integer('max_transactions_per_day').default(-1),
+  max_products: integer('max_products').default(-1),
+  max_users: integer('max_users').default(1),
+  feature_flags: text('feature_flags').default('{}'), // JSON object: { "reports": true }
+})
+
+export const userDevices = sqliteTable('mediasoft_user_devices', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  username: text('username').notNull(),
+  device_id: text('device_id').notNull(),
+  device_name: text('device_name'),
+  platform: text('platform'),
+  os_name: text('os_name'),
+  app_version: text('app_version'),
+  ip_address: text('ip_address'),
+  last_seen_at: text('last_seen_at'),
+  first_seen_at: text('first_seen_at'),
+  status: text('status').default('active').notNull(),
+  revoked_at: text('revoked_at'),
+  revoked_by: text('revoked_by'),
+})
+
+export const popupRules = sqliteTable('mediasoft_popup_rules', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  code: text('code').notNull().unique(),
+  title: text('title').notNull(),
+  description: text('description'),
+  cta_text: text('cta_text').default('Upgrade Sekarang'),
+  cta_url: text('cta_url'),
+  whatsapp_number: text('whatsapp_number'),
+  pricing_html: text('pricing_html'),
+  is_active: integer('is_active').default(1),
+  trigger_on: text('trigger_on').default('{}'),
   updated_at: text('updated_at'),
 })
 

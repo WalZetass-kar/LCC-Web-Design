@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Shield, Lock, Key, AlertTriangle, CheckCircle, RefreshCw, Eye, EyeOff } from 'lucide-react'
+import { Shield, CheckCircle, RefreshCw, Monitor, Smartphone, LogOut } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -17,6 +17,18 @@ interface SecuritySettings {
   ipWhitelist: string[]
 }
 
+interface ActiveSession {
+  id: number
+  username: string
+  device_id: string | null
+  device_name: string | null
+  platform: string | null
+  os_name: string | null
+  ip_address: string | null
+  last_seen_at: string | null
+  expires_at: string
+}
+
 export default function Security() {
   const toast = useToast()
   const [loading, setLoading] = useState(false)
@@ -31,11 +43,18 @@ export default function Security() {
   const [showPassword, setShowPassword] = useState(false)
   const [ipModal, setIpModal] = useState(false)
   const [newIp, setNewIp] = useState('')
+  const [sessions, setSessions] = useState<ActiveSession[]>([])
+
+  const loadSessions = async () => {
+    const r = await api<ActiveSession[]>('device:getAllSessions')
+    if (r.success) setSessions(r.data ?? [])
+  }
 
   useEffect(() => {
     api<any>('security:get').then(r => {
       if (r.success && r.data) setSettings(r.data)
     })
+    loadSessions()
   }, [])
 
   const handleSave = async () => {
@@ -55,6 +74,16 @@ export default function Security() {
 
   const removeIp = (ip: string) => {
     setSettings({ ...settings, ipWhitelist: settings.ipWhitelist.filter(i => i !== ip) })
+  }
+
+  const revokeSession = async (id: number) => {
+    const r = await api('device:revokeSession', id, 'security-admin')
+    if (r.success) {
+      toast('Session berhasil direvoke')
+      loadSessions()
+    } else {
+      toast(r.message as string ?? 'Gagal revoke session', 'error')
+    }
   }
 
   return (
@@ -112,6 +141,54 @@ export default function Security() {
               <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${settings.requireStrongPassword ? 'translate-x-6' : 'translate-x-0.5'}`} />
             </button>
           </div>
+        </div>
+      </Card>
+
+      <Card title="Session Control & Remote Logout">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-slate-600 dark:text-slate-400">Sesi aktif yang dapat direvoke dari backend.</p>
+          <Button variant="secondary" onClick={loadSessions} icon={<RefreshCw size={14} />}>Refresh</Button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 text-left">
+              <tr>
+                <th className="px-3 py-2">User</th>
+                <th>Device</th>
+                <th>Platform</th>
+                <th>IP</th>
+                <th>Last Seen</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {sessions.length === 0 ? (
+                <tr><td colSpan={6} className="py-8 text-center text-slate-400">Tidak ada sesi aktif</td></tr>
+              ) : sessions.map(session => (
+                <tr key={session.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-3 py-2 font-medium text-slate-700 dark:text-slate-200">{session.username}</td>
+                  <td className="text-slate-600 dark:text-slate-400">{session.device_name || session.device_id?.slice(0, 12) || '-'}</td>
+                  <td>
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                      {session.platform === 'android' ? <Smartphone size={12} /> : <Monitor size={12} />}
+                      {session.platform || '-'} / {session.os_name || '-'}
+                    </span>
+                  </td>
+                  <td className="font-mono text-xs text-slate-500">{session.ip_address || '-'}</td>
+                  <td className="text-xs text-slate-500">{session.last_seen_at ? new Date(session.last_seen_at).toLocaleString('id-ID') : '-'}</td>
+                  <td className="text-right">
+                    <button
+                      onClick={() => revokeSession(session.id)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400"
+                    >
+                      <LogOut size={12} />
+                      Logout
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Card>
 

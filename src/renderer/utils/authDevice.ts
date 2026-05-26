@@ -4,6 +4,9 @@ export interface RendererAuthDeviceInfo {
   deviceId: string
   deviceName: string
   userAgent: string
+  platform: string
+  osName: string
+  appVersion: string
 }
 
 const DEVICE_ID_KEY = 'auth_device_id'
@@ -25,9 +28,30 @@ export function getAuthDeviceId(): string {
 }
 
 export function collectAuthDeviceInfo(): RendererAuthDeviceInfo {
+  const userAgent = navigator.userAgent || 'unknown'
+  const platform = /Android/i.test(userAgent)
+    ? 'android'
+    : /Electron/i.test(userAgent)
+      ? 'electron'
+      : 'web'
+  const osName = /Windows/i.test(userAgent)
+    ? 'Windows'
+    : /Android/i.test(userAgent)
+      ? 'Android'
+      : /Mac OS|Macintosh/i.test(userAgent)
+        ? 'macOS'
+        : /Linux/i.test(userAgent)
+          ? 'Linux'
+          : /iPhone|iPad/i.test(userAgent)
+            ? 'iOS'
+            : 'Unknown'
+
   return {
     deviceId: getAuthDeviceId(),
     deviceName: navigator.platform || 'unknown',
-    userAgent: navigator.userAgent || 'unknown',
+    userAgent,
+    platform,
+    osName,
+    appVersion: '2.0.0',
   }
 }

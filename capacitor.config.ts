@@ -8,6 +8,9 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
   },
+  ios: {
+    scheme: 'MediaSoftPOSZetass',
+  },
 }
 
 export default config

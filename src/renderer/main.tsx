@@ -38,6 +38,7 @@ import Loyalty from './pages/Loyalty'
 import WhatsApp from './pages/WhatsApp'
 import PrintQueue from './pages/PrintQueue'
 import EcommerceApi from './pages/EcommerceApi'
+import LicenseCenter from './pages/LicenseCenter'
 import ErrorBoundary from './components/ErrorBoundary'
 import { validateProductionConfig } from './utils/productionConfig'
 import './styles/globals.css'
@@ -134,6 +135,7 @@ function App() {
           <Route path="/whatsapp" element={<WhatsApp />} />
           <Route path="/print-queue" element={<PrintQueue />} />
           <Route path="/ecommerce-api" element={<EcommerceApi />} />
+          <Route path="/license-admin" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><LicenseCenter /></RequireExactRoles>} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
