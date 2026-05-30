@@ -1,23 +1,40 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, CheckCircle } from 'lucide-react'
+import { Plus, CheckCircle, Trash2 } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
-interface PaymentRow { id: string; user_name: string; user_email: string; plan_code: string | null; amount: number; method: string | null; status: string; created_at: string }
+interface PaymentRow {
+  id: string
+  user_name: string
+  user_email: string
+  plan_code: string | null
+  amount: number
+  method: string | null
+  provider?: string | null
+  invoice_number?: string | null
+  payment_url?: string | null
+  status: string
+  created_at: string
+}
 interface UserRow { id: string; name: string; email: string }
 interface PlanRow { id: string; code: string; name: string; price: number }
 
 const statusColor: Record<string, string> = {
+  paid: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   success: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
   failed:  'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  expired: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
 }
 
 export default function LicensePaymentsPage() {
   const toast = useToast()
   const [payments, setPayments] = useState<PaymentRow[]>([])
   const [showAdd, setShowAdd] = useState(false)
+  const [deletePayment, setDeletePayment] = useState<PaymentRow | null>(null)
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -28,6 +45,17 @@ export default function LicensePaymentsPage() {
   }, [toast])
 
   useEffect(() => { void load() }, [load])
+
+  async function handleDeletePayment() {
+    if (!deletePayment) return
+    setDeletingId(deletePayment.id)
+    const r = await api('license:deletePayment', deletePayment.id)
+    setDeletingId(null)
+    if (!r.success) return toast(r.message || 'Gagal menghapus pembayaran', 'error')
+    toast('Pembayaran berhasil dihapus', 'success')
+    setDeletePayment(null)
+    void load()
+  }
 
   return (
     <div className="space-y-4">
@@ -55,16 +83,29 @@ export default function LicensePaymentsPage() {
                 </td>
                 <td><span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 px-2 py-0.5 rounded-full text-xs font-medium">{p.plan_code || '—'}</span></td>
                 <td className="font-medium">Rp {Number(p.amount).toLocaleString('id-ID')}</td>
-                <td className="text-slate-500 text-xs">{p.method}</td>
+                <td className="text-slate-500 text-xs">
+                  <p>{p.provider || p.method}</p>
+                  {p.invoice_number && <p className="font-mono text-[11px]">{p.invoice_number}</p>}
+                </td>
                 <td><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[p.status] || 'bg-slate-100 text-slate-600'}`}>{p.status}</span></td>
                 <td className="text-xs text-slate-400">{new Date(p.created_at).toLocaleString('id-ID')}</td>
                 <td className="pr-3">
-                  {p.status === 'pending' && (
-                    <button onClick={async () => { await api('license:approvePayment', p.id); load() }}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs">
-                      <CheckCircle className="w-3 h-3" />Approve
+                  <div className="flex justify-end gap-1">
+                    {p.status === 'pending' && (
+                      <button onClick={async () => { await api('license:approvePayment', p.id); load() }}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs">
+                        <CheckCircle className="w-3 h-3" />Approve
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setDeletePayment(p)}
+                      disabled={deletingId === p.id}
+                      className="flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/70 dark:text-red-400 dark:hover:bg-red-950/30"
+                      title="Hapus pembayaran"
+                    >
+                      <Trash2 className="w-3 h-3" />Hapus
                     </button>
-                  )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -72,6 +113,24 @@ export default function LicensePaymentsPage() {
         </table>
       </div>
       {showAdd && <AddPaymentModal onClose={() => setShowAdd(false)} onSaved={load} />}
+      <ConfirmDialog
+        open={!!deletePayment}
+        onClose={() => setDeletePayment(null)}
+        onConfirm={handleDeletePayment}
+        title="Hapus Pembayaran"
+        message={`Pembayaran ${deletePayment?.invoice_number || deletePayment?.id || ''} akan dihapus dari Developer Panel.`}
+        confirmText="Hapus"
+        variant="danger"
+        loading={!!deletePayment && deletingId === deletePayment.id}
+      >
+        {deletePayment && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/70">
+            <div className="flex justify-between gap-3"><span className="text-slate-500">User</span><span className="font-semibold text-slate-800 dark:text-slate-100">{deletePayment.user_email}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-slate-500">Jumlah</span><span className="font-semibold text-slate-800 dark:text-slate-100">Rp {Number(deletePayment.amount).toLocaleString('id-ID')}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-slate-500">Status</span><span className="font-semibold text-slate-800 dark:text-slate-100">{deletePayment.status}</span></div>
+          </div>
+        )}
+      </ConfirmDialog>
     </div>
   )
 }
@@ -80,7 +139,7 @@ function AddPaymentModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
   const toast = useToast()
   const [users, setUsers] = useState<UserRow[]>([])
   const [plans, setPlans] = useState<PlanRow[]>([])
-  const [form, setForm] = useState({ user_id: '', plan_code: 'BASIC_MONTHLY', amount: 99000, method: 'manual_transfer', status: 'success' as 'success' | 'pending', notes: '' })
+  const [form, setForm] = useState({ user_id: '', plan_code: 'BASIC_MONTHLY', amount: 99000, method: 'manual_transfer', status: 'paid' as 'paid' | 'pending' | 'failed' | 'expired', notes: '' })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -134,9 +193,11 @@ function AddPaymentModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Status</label>
-              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as 'success' | 'pending' })} className={inp}>
-                <option value="success">success (auto perpanjang)</option>
-                <option value="pending">pending (butuh approve)</option>
+              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as 'paid' | 'pending' | 'failed' | 'expired' })} className={inp}>
+                <option value="paid">paid (auto perpanjang)</option>
+                <option value="pending">pending (butuh approve/webhook)</option>
+                <option value="failed">failed</option>
+                <option value="expired">expired</option>
               </select>
             </div>
           </div>

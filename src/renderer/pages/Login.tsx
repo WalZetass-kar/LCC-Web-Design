@@ -8,10 +8,17 @@ import { api } from '../utils/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { openWhatsApp, openWhatsAppUpgrade, SUBSCRIPTION_UPGRADE_WA_NUMBER } from '../utils/whatsapp'
-import type { UserSession, Identitas, SubscriptionPlan } from '../../shared/types'
+import type { UserSession, Identitas } from '../../shared/types'
 import { validatePasswordStrength } from '../../shared/passwordPolicy'
 import { secureStorage } from '../utils/secureStorage'
 import { collectAuthDeviceInfo } from '../utils/authDevice'
+
+interface PublicPlan {
+  name: string
+  price: number
+  duration_days: number
+  is_recommended?: boolean
+}
 
 function formatPrice(n: number): string {
   return 'Rp ' + n.toLocaleString('id-ID')
@@ -42,7 +49,7 @@ export default function Login() {
   const [hasUsers, setHasUsers] = useState(true)
   const [authView, setAuthView] = useState<'login' | 'register'>('login')
   const [authLoading, setAuthLoading] = useState(true)
-  const [activePlans, setActivePlans] = useState<SubscriptionPlan[]>([])
+  const [activePlans, setActivePlans] = useState<PublicPlan[]>([])
   const [setupForm, setSetupForm] = useState({
     username: '',
     nama_lengkap: '',
@@ -86,7 +93,9 @@ export default function Login() {
 
         const userCheck = await api<{ hasUsers: boolean }>('auth:hasUsers')
         if (userCheck.success) {
-          setHasUsers(!!userCheck.data?.hasUsers)
+          const hasExistingUsers = !!userCheck.data?.hasUsers
+          setHasUsers(hasExistingUsers)
+          setAuthView(hasExistingUsers ? 'login' : 'register')
         }
       } catch {
         setDbStatus('error')
@@ -99,7 +108,7 @@ export default function Login() {
   }, [])
 
   useEffect(() => {
-    api<SubscriptionPlan[] | SubscriptionPlan>('plan:getActive').then(r => {
+    api<PublicPlan[] | PublicPlan>('license:getPublicPlans').then(r => {
       const plans = Array.isArray(r.data) ? r.data : (r.data ? [r.data] : [])
       if (r.success) setActivePlans(plans)
     })
@@ -316,7 +325,7 @@ export default function Login() {
   const fi = (k: string, v: string) => setIdentitas(prev => ({ ...prev, [k]: v }))
   const renewalPlan = activePlans.find(plan => plan.is_recommended) ?? activePlans[0]
   const isExpiredAccessError = /masa akses|berakhir|kadaluarsa|kedaluwarsa|batas device|limit produk|batas produk|upgrade paket/i.test(error)
-  const showRegisterForm = !hasUsers || authView === 'register'
+  const showRegisterForm = authView === 'register'
 
   const handleForgotPassword = () => {
     openWhatsApp(
@@ -514,15 +523,13 @@ export default function Login() {
                   {loading ? 'Mengaktifkan trial...' : 'Mulai Trial 3 Hari'}
                 </Button>
 
-                {hasUsers && (
-                  <button
-                    type="button"
-                    onClick={() => { setAuthView('login'); setError('') }}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-                  >
-                    Sudah punya akun? Masuk
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => { setAuthView('login'); setError('') }}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  Sudah punya akun? Masuk
+                </button>
               </form>
               ) : (
               <>

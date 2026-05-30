@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Globe, Key, Copy, Check, AlertTriangle, RefreshCw, Code, CreditCard, MessageCircle } from 'lucide-react'
+import { Globe, Key, Copy, Check, AlertTriangle, RefreshCw, Code, CreditCard, MessageCircle, Store, Clock, ListChecks } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -33,6 +33,36 @@ interface Endpoint {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   path: string
   description: string
+}
+
+interface EcommerceIntegration {
+  platform: 'woocommerce'
+  storeUrl: string
+  consumerKey: string
+  consumerSecret: string
+  enabled: boolean
+  autoSync: boolean
+  intervalMinutes: number
+  lastSyncAt: string | null
+  lastStatus: string
+  lastError: string
+  logs: Array<{ id: number; status: string; message: string; detail?: string; created_at: string }>
+  queue: Array<{ id: number; action: string; attempts: number; status: string; last_error?: string; created_at: string }>
+}
+
+const DEFAULT_INTEGRATION: EcommerceIntegration = {
+  platform: 'woocommerce',
+  storeUrl: '',
+  consumerKey: '',
+  consumerSecret: '',
+  enabled: false,
+  autoSync: false,
+  intervalMinutes: 30,
+  lastSyncAt: null,
+  lastStatus: 'Belum pernah sync',
+  lastError: '',
+  logs: [],
+  queue: [],
 }
 
 const ENDPOINTS: Endpoint[] = [
@@ -73,7 +103,10 @@ export default function EcommerceApi() {
   const [generatedKey, setGeneratedKey] = useState('')
   const [keyModal, setKeyModal] = useState(false)
   const [endpointError, setEndpointError] = useState('')
+  const [integration, setIntegration] = useState<EcommerceIntegration>(DEFAULT_INTEGRATION)
+  const [syncLoading, setSyncLoading] = useState(false)
   const apiBaseUrl = appConfig.apiBaseUrl?.trim() || ''
+  const documentedApiBaseUrl = apiBaseUrl || appConfig.supabaseUrl || 'VITE_API_BASE_URL'
 
   useEffect(() => {
     api<any>('ecommerce:get').then(r => {
@@ -84,7 +117,18 @@ export default function EcommerceApi() {
     api<SubscriptionPlan[]>('plan:getActive').then(r => {
       if (r.success) setPlans(r.data ?? [])
     })
+    api<EcommerceIntegration>('ecommerce:getIntegration').then(r => {
+      if (r.success && r.data) setIntegration({ ...DEFAULT_INTEGRATION, ...r.data })
+    })
   }, [])
+
+  useEffect(() => {
+    if (!integration.autoSync || !integration.enabled) return
+    const timer = window.setInterval(() => {
+      void handleSyncNow()
+    }, Math.max(15, integration.intervalMinutes) * 60000)
+    return () => window.clearInterval(timer)
+  }, [integration.autoSync, integration.enabled, integration.intervalMinutes])
 
   const handleSave = async () => {
     setEndpointError('')
@@ -138,6 +182,31 @@ export default function EcommerceApi() {
     toast('Berhasil disalin ke clipboard')
   }
 
+  const saveIntegration = async () => {
+    setLoading(true)
+    const r = await api<EcommerceIntegration>('ecommerce:saveIntegration', integration)
+    setLoading(false)
+    if (r.success && r.data) {
+      setIntegration({ ...DEFAULT_INTEGRATION, ...r.data })
+      toast('Integrasi e-commerce disimpan')
+    } else {
+      toast(r.message as string ?? 'Gagal menyimpan integrasi', 'error')
+    }
+  }
+
+  const handleSyncNow = async () => {
+    setSyncLoading(true)
+    const r = await api<any>('ecommerce:syncNow')
+    setSyncLoading(false)
+    if (r.success) {
+      toast(r.message as string || 'Sync berhasil', 'success')
+    } else {
+      toast(r.message as string || 'Sync gagal', 'error')
+    }
+    const latest = await api<EcommerceIntegration>('ecommerce:getIntegration')
+    if (latest.success && latest.data) setIntegration({ ...DEFAULT_INTEGRATION, ...latest.data })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -169,6 +238,104 @@ export default function EcommerceApi() {
           >
             <div className={`w-7 h-7 bg-white rounded-full shadow transform transition-transform ${config.enabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
           </button>
+        </div>
+      </Card>
+
+      <Card title="Integrasi Marketplace" action={<Store size={16} className={integration.enabled ? 'text-emerald-500' : 'text-slate-400'} />}>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Platform</label>
+                <select
+                  value={integration.platform}
+                  onChange={e => setIntegration(prev => ({ ...prev, platform: e.target.value as 'woocommerce' }))}
+                  className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                >
+                  <option value="woocommerce">WooCommerce</option>
+                </select>
+              </div>
+              <Input
+                label="URL Toko"
+                value={integration.storeUrl}
+                onChange={e => setIntegration(prev => ({ ...prev, storeUrl: e.target.value }))}
+                placeholder="URL toko HTTPS"
+              />
+              <Input
+                label="Consumer Key"
+                value={integration.consumerKey}
+                onChange={e => setIntegration(prev => ({ ...prev, consumerKey: e.target.value }))}
+              />
+              <Input
+                label="Consumer Secret"
+                type={showSecret ? 'text' : 'password'}
+                value={integration.consumerSecret}
+                onChange={e => setIntegration(prev => ({ ...prev, consumerSecret: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+                <span className="text-sm text-slate-700 dark:text-slate-200">Aktif</span>
+                <input type="checkbox" checked={integration.enabled} onChange={e => setIntegration(prev => ({ ...prev, enabled: e.target.checked }))} className="w-4 h-4 rounded accent-primary-500" />
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+                <span className="text-sm text-slate-700 dark:text-slate-200">Auto-sync</span>
+                <input type="checkbox" checked={integration.autoSync} onChange={e => setIntegration(prev => ({ ...prev, autoSync: e.target.checked }))} className="w-4 h-4 rounded accent-primary-500" />
+              </label>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Interval</label>
+                <select
+                  value={integration.intervalMinutes}
+                  onChange={e => setIntegration(prev => ({ ...prev, intervalMinutes: Number(e.target.value) }))}
+                  className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                >
+                  <option value={15}>15 menit</option>
+                  <option value={30}>30 menit</option>
+                  <option value={60}>60 menit</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button onClick={saveIntegration} loading={loading} className="w-full sm:w-auto">Simpan Integrasi</Button>
+              <Button variant="secondary" onClick={handleSyncNow} loading={syncLoading} icon={<RefreshCw size={16} />} className="w-full sm:w-auto">
+                Sync Sekarang
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+              <div className="flex items-start gap-2">
+                <Clock size={16} className="mt-0.5 text-primary-500" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Status Sync</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{integration.lastStatus}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{integration.lastSyncAt ? new Date(integration.lastSyncAt).toLocaleString('id-ID') : 'Belum ada waktu sync'}</p>
+                </div>
+              </div>
+              {integration.lastError && <p className="mt-2 text-xs text-red-600 dark:text-red-300">{integration.lastError}</p>}
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                <ListChecks size={16} />
+                Log Terakhir
+              </div>
+              <div className="mt-2 max-h-40 space-y-2 overflow-y-auto text-xs">
+                {integration.logs.length === 0 ? (
+                  <p className="text-slate-400">Belum ada log sync</p>
+                ) : integration.logs.slice(0, 5).map(log => (
+                  <div key={log.id} className="rounded-lg bg-slate-50 px-2 py-1.5 dark:bg-slate-800">
+                    <p className={log.status === 'error' ? 'text-red-600 dark:text-red-300' : 'text-slate-600 dark:text-slate-300'}>{log.message}</p>
+                    <p className="text-[10px] text-slate-400">{new Date(log.created_at).toLocaleString('id-ID')}</p>
+                  </div>
+                ))}
+              </div>
+              {integration.queue.length > 0 && <p className="mt-2 text-xs text-amber-600">{integration.queue.length} item menunggu retry otomatis</p>}
+            </div>
+          </div>
         </div>
       </Card>
 
@@ -236,7 +403,7 @@ export default function EcommerceApi() {
               label="Payment Link"
               value={config.paymentLink}
               onChange={e => setConfig({ ...config, paymentLink: e.target.value })}
-              placeholder="https://domain-anda.com/pay"
+              placeholder="Link pembayaran HTTPS"
             />
             <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
               <span>
@@ -301,7 +468,7 @@ export default function EcommerceApi() {
             <Input 
               value={config.webhookUrl} 
               onChange={e => setConfig({ ...config, webhookUrl: e.target.value })}
-              placeholder="https://domain-anda.com/api/webhook"
+              placeholder="URL webhook HTTPS"
             />
             <p className="text-xs text-slate-400 mt-1">URL untuk menerima notifikasi real-time</p>
           </div>
@@ -346,14 +513,14 @@ export default function EcommerceApi() {
         <div className="space-y-4">
           <div className="p-4 rounded-lg bg-slate-900 text-slate-100 font-mono text-sm overflow-x-auto">
             <p className="text-green-400"># Get Products</p>
-            <p>curl -X GET "{apiBaseUrl || 'https://api-domain-anda.com'}/api/v1/products"</p>
+            <p>curl -X GET "{documentedApiBaseUrl}/api/v1/products"</p>
             <p className="text-green-400 mt-2"># Headers</p>
             <p>Authorization: Bearer YOUR_API_KEY</p>
             <p>Content-Type: application/json</p>
           </div>
           <div className="p-4 rounded-lg bg-slate-900 text-slate-100 font-mono text-sm overflow-x-auto">
             <p className="text-green-400"># Create Order</p>
-            <p>curl -X POST "{apiBaseUrl || 'https://api-domain-anda.com'}/api/v1/orders"</p>
+            <p>curl -X POST "{documentedApiBaseUrl}/api/v1/orders"</p>
             <p className="text-green-400 mt-2"># Body</p>
             <p className="text-amber-300">{'{'}</p>
             <p className="text-amber-300">  "customer_id": "C001",</p>

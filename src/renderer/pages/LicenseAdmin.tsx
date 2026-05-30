@@ -7,6 +7,7 @@ import {
   LicenseProvider,
   AdminPanel,
 } from '../license'
+import { appConfig } from '../utils/productionConfig'
 
 const STORAGE_KEY = 'license_admin_config'
 
@@ -45,13 +46,13 @@ export default function LicenseAdmin() {
     setClientReady(true)
   }, [stored])
 
-  if (!user || (user.hak_akses !== 'developer' && user.hak_akses !== 'superadmin')) {
+  if (!user || user.hak_akses !== 'developer') {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="glass-card rounded-2xl p-10 text-center max-w-sm">
           <div className="text-5xl mb-4">🚫</div>
           <h2 className="heading-2 mb-2">Akses Ditolak</h2>
-          <p className="text-body">Halaman ini hanya untuk akun developer / super admin.</p>
+          <p className="text-body">Halaman ini hanya untuk akun developer.</p>
         </div>
       </div>
     )
@@ -93,8 +94,9 @@ interface ConnectFormProps {
 }
 
 function ConnectForm({ defaults, onConnected }: ConnectFormProps) {
+  const defaultBaseURL = defaults?.baseURL || appConfig.apiBaseUrl || ''
   const [form, setForm] = useState({
-    baseURL: defaults?.baseURL || 'http://localhost:4000/api',
+    baseURL: defaultBaseURL,
     email: defaults?.email || 'admin@mediasoft.local',
     password: '',
   })
@@ -166,7 +168,7 @@ function ConnectForm({ defaults, onConnected }: ConnectFormProps) {
                       required
                       value={form.baseURL}
                       onChange={(e) => { setForm({ ...form, baseURL: e.target.value }); setPingOk(null) }}
-                      placeholder="http://localhost:4000/api"
+                      placeholder="URL license server HTTPS"
                       className="w-full pl-9 pr-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500"
                     />
                   </div>

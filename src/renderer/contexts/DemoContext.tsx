@@ -51,6 +51,39 @@ const PREMIUM_FEATURES = [
   'debt_management', 'shift_management', 'returns', 'bulk_import',
 ]
 
+const REMOTE_POPUP_BY_REASON: Record<PopupTriggerReason, { code: string; title: string; description: string }> = {
+  first_login: {
+    code: 'DEMO_LIMIT',
+    title: 'Upgrade Akun',
+    description: 'Pilih paket resmi dari server developer untuk membuka akses penuh.',
+  },
+  usage_limit: {
+    code: 'TRANSACTION_LIMIT',
+    title: 'Limit Demo Tercapai',
+    description: 'Limit penggunaan akun demo sudah habis. Upgrade paket untuk melanjutkan.',
+  },
+  premium_feature: {
+    code: 'FEATURE_LOCKED',
+    title: 'Fitur Terkunci',
+    description: 'Fitur ini belum aktif untuk paket Anda saat ini.',
+  },
+  session_start: {
+    code: 'DEMO_LIMIT',
+    title: 'Upgrade Akun',
+    description: 'Pilih paket resmi dari server developer untuk membuka akses penuh.',
+  },
+  access_expiring: {
+    code: 'ACCESS_EXPIRING',
+    title: 'Akses Hampir Berakhir',
+    description: 'Perpanjang lisensi agar aplikasi tetap aktif.',
+  },
+  manual: {
+    code: 'DEMO_LIMIT',
+    title: 'Upgrade / Perpanjang',
+    description: 'Pilih paket resmi dari server developer.',
+  },
+}
+
 const DemoContext = createContext<DemoContextValue | null>(null)
 
 function restoreDemoState(): Partial<DemoState> {
@@ -113,6 +146,22 @@ export function DemoProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { setState(p => ({ ...p, is_demo: isDemo })) }, [isDemo])
   useEffect(() => { saveDemoState(state) }, [state])
+  useEffect(() => {
+    if (!isPricingOpen || !triggerReason) return
+    const popup = REMOTE_POPUP_BY_REASON[triggerReason]
+    window.dispatchEvent(new CustomEvent('license:remote-popup', {
+      detail: {
+        force: false,
+        popup: {
+          ...popup,
+          cta_text: 'Upgrade Sekarang',
+          severity: 'warning',
+          dismissible: true,
+        },
+      },
+    }))
+    setIsPricingOpen(false)
+  }, [isPricingOpen, triggerReason])
 
   // First login trigger
   useEffect(() => {

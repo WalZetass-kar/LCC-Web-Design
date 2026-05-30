@@ -592,6 +592,9 @@ runMigrations()
   if (!names.includes('license_admin_token')) {
     sqlite.exec(`ALTER TABLE mediasoft_identitas ADD COLUMN license_admin_token TEXT`)
   }
+  if (!names.includes('license_admin_refresh_token')) {
+    sqlite.exec(`ALTER TABLE mediasoft_identitas ADD COLUMN license_admin_refresh_token TEXT`)
+  }
 })()
 
 // License integration migration (idempotent)
@@ -793,6 +796,18 @@ runMigrations()
     `INSERT OR IGNORE INTO mediasoft_popup_rules (code, title, description) VALUES (?, ?, ?)`
   )
   for (const [code, title, desc] of popups) insertPopup.run(code, title, desc)
+})()
+
+;(function normalizeLocalDeveloperRole() {
+  try {
+    sqlite.prepare(`
+      UPDATE mediasoft_pengguna
+      SET hak_akses = 'developer'
+      WHERE hak_akses = 'superadmin'
+    `).run()
+  } catch (err: any) {
+    console.error('⚠️ Developer role normalization:', err.message)
+  }
 })()
 
 export const db = drizzle(sqlite, { schema })

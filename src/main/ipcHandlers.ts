@@ -9,7 +9,7 @@
  */
 
 import type { IpcMain } from 'electron'
-import { dialog, BrowserWindow, shell } from 'electron'
+import { dialog, BrowserWindow } from 'electron'
 import { BarangController } from '../backend/controllers/BarangController.js'
 import { KategoriController } from '../backend/controllers/KategoriController.js'
 import { SatuanController } from '../backend/controllers/SatuanController.js'
@@ -58,6 +58,7 @@ import { getSubscriptionStatus, checkTransactionLimit, getPopupRule, isFeatureEn
 import { sqlite } from '../database/connection.js'
 import { SyncServerService, setSyncChannelInvoker } from './syncServer.js'
 import { SyncClientService } from './syncClient.js'
+import { openExternalHttps } from './platformSecurity.js'
 
 type ChannelHandler = (...args: any[]) => any
 
@@ -129,13 +130,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   setSyncChannelInvoker(invokeRegisteredChannel)
 
   ipcMain.handle('app:openExternal', async (_e, rawUrl: string) => {
-    const url = String(rawUrl ?? '')
-    if (!/^https?:\/\//i.test(url)) {
-      return { success: false, message: 'URL eksternal tidak valid' }
-    }
-
-    await shell.openExternal(url)
-    return { success: true }
+    return openExternalHttps(rawUrl)
   })
 
   // ─── AUTH (always allowed — no demo guard needed) ───────────────────
@@ -205,8 +200,8 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   const authCheckIdentitas = registerChannel('auth:checkIdentitas', () => AuthController.checkIdentitas())
   ipcMain.handle('auth:checkIdentitas', () => invokeRendererChannel('auth:checkIdentitas', [], authCheckIdentitas))
 
-  const authRestoreSession = registerChannel('auth:restoreSession', (input: any) => {
-    const result = AuthController.restoreSession(input)
+  const authRestoreSession = registerChannel('auth:restoreSession', async (input: any) => {
+    const result = await AuthController.restoreSession(input)
     if (result.success && result.data) {
       const userData = result.data as { nama_pengguna: string; hak_akses: string }
       demoSession.setSession(userData.nama_pengguna, userData.hak_akses || 'kasir')
@@ -477,6 +472,8 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── INDUSTRY INTEGRATIONS ─────────────────────────────────────────
   handle(ipcMain, 'integrations:get', () => IndustrySettingsController.get())
   handle(ipcMain, 'integrations:save', (data: any) => IndustrySettingsController.save(data))
+  handle(ipcMain, 'integrations:testAi', (data?: any) => AssistantController.test(data))
+  handle(ipcMain, 'integrations:listAiModels', (data?: any) => AssistantController.listModels(data))
   handle(ipcMain, 'integrations:testGoogleSheets', () => IndustrySettingsController.testGoogleSheets())
   handle(ipcMain, 'integrations:exportDashboardToSheets', (summary: any) => IndustrySettingsController.exportDashboardToSheets(summary))
 
@@ -648,6 +645,10 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'whatsapp:get', () => WhatsAppController.get())
   handle(ipcMain, 'whatsapp:save', (data: any) => WhatsAppController.save(data))
   handle(ipcMain, 'whatsapp:test', (phone: string) => WhatsAppController.test(phone))
+  handle(ipcMain, 'whatsapp:getTemplates', () => WhatsAppController.getTemplates())
+  handle(ipcMain, 'whatsapp:saveTemplate', (data: any) => WhatsAppController.saveTemplate(data))
+  handle(ipcMain, 'whatsapp:getBroadcastHistory', () => WhatsAppController.getBroadcastHistory())
+  handle(ipcMain, 'whatsapp:saveBroadcastHistory', (data: any) => WhatsAppController.saveBroadcastHistory(data))
 
   // ─── SECURITY SETTINGS ─────────────────────────────────────────────
   handle(ipcMain, 'security:get', () => SecurityController.get())
@@ -656,6 +657,10 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── ECOMMERCE API SETTINGS ────────────────────────────────────────
   handle(ipcMain, 'ecommerce:get', () => EcommerceApiController.get())
   handle(ipcMain, 'ecommerce:save', (data: any) => EcommerceApiController.save(data, demoSession.getUsername()))
+  handle(ipcMain, 'ecommerce:getIntegration', () => EcommerceApiController.getIntegration())
+  handle(ipcMain, 'ecommerce:saveIntegration', (data: any) => EcommerceApiController.saveIntegration(data, demoSession.getUsername()))
+  handle(ipcMain, 'ecommerce:syncNow', () => EcommerceApiController.syncNow(demoSession.getUsername()))
+  handle(ipcMain, 'ecommerce:enqueueStockUpdate', (productId: string | number, qty: number) => EcommerceApiController.enqueueStockUpdate(productId, qty))
 
   // ─── DEVICE TRACKING ───────────────────────────────────────────────
   handle(ipcMain, 'device:getAll', () => ({ success: true, data: DeviceController.getAllDevices() }))
@@ -692,6 +697,11 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'license:testAndSave', (url: string, email: string, password: string) => LicenseController.testAndSave(url, email, password))
   handle(ipcMain, 'license:validateApplication', () => LicenseController.validateApplication())
   handle(ipcMain, 'license:syncFromServer', () => LicenseController.syncFromServer())
+  handle(ipcMain, 'license:syncBuyerLicense', (username: string, deviceInfo?: any) => LicenseController.syncBuyerLicense(username, deviceInfo))
+  handle(ipcMain, 'license:createPaymentInvoice', (data: any) => LicenseController.createPaymentInvoice(data))
+  handle(ipcMain, 'license:createManualPaymentRequest', (data: any) => LicenseController.createManualPaymentRequest(data))
+  handle(ipcMain, 'license:getPaymentStatus', (externalRef: string) => LicenseController.getPaymentStatus(externalRef))
+  handle(ipcMain, 'license:getPublicPlans', () => LicenseController.getPublicPlans())
   handle(ipcMain, 'license:getUsers', (search?: string) => LicenseController.getUsers(search))
   handle(ipcMain, 'license:createUser', (data: any) => LicenseController.createUser(data))
   handle(ipcMain, 'license:updateUser', (id: string | number, data: any) => LicenseController.updateUser(id, data))
@@ -699,7 +709,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'license:changeUserPlan', (id: string | number, data: any) => LicenseController.changeUserPlan(id, data))
   handle(ipcMain, 'license:resetUserPassword', (id: string | number) => LicenseController.resetUserPassword(id))
   handle(ipcMain, 'license:getPlans', () => LicenseController.getLicensePlans())
+  handle(ipcMain, 'license:createPlan', (data: any) => LicenseController.createLicensePlan(data))
   handle(ipcMain, 'license:updatePlan', (id: string | number, data: any) => LicenseController.updateLicensePlan(id, data))
+  handle(ipcMain, 'license:deletePlan', (id: string | number) => LicenseController.deleteLicensePlan(id))
   handle(ipcMain, 'license:getPlanFeatures', (planId: string | number) => LicenseController.getPlanFeatures(planId))
   handle(ipcMain, 'license:setPlanFeatures', (planId: string | number, data: any) => LicenseController.setPlanFeatures(planId, data))
   handle(ipcMain, 'license:getFeatures', () => LicenseController.getLicenseFeatures())
@@ -710,6 +722,25 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'license:getPayments', () => LicenseController.getPayments())
   handle(ipcMain, 'license:createPayment', (data: any) => LicenseController.createPayment(data))
   handle(ipcMain, 'license:approvePayment', (id: string | number) => LicenseController.approvePayment(id))
+  handle(ipcMain, 'license:deletePayment', (id: string | number) => LicenseController.deletePayment(id))
+  handle(ipcMain, 'license:getStats', () => LicenseController.getStats())
+  handle(ipcMain, 'license:getRevenue', () => LicenseController.getRevenue())
+  handle(ipcMain, 'license:getDevices', (query?: { search?: string; status?: string; platform?: string }) => LicenseController.getDevices(query))
+  handle(ipcMain, 'license:getDeviceDetail', (id: string | number) => LicenseController.getDeviceDetail(id))
+  handle(ipcMain, 'license:blockDevice', (id: string | number) => LicenseController.blockDevice(id))
+  handle(ipcMain, 'license:unblockDevice', (id: string | number) => LicenseController.unblockDevice(id))
+  handle(ipcMain, 'license:suspendDeviceLicense', (id: string | number) => LicenseController.suspendDeviceLicense(id))
+  handle(ipcMain, 'license:activateDeviceLicense', (id: string | number) => LicenseController.activateDeviceLicense(id))
+  handle(ipcMain, 'license:extendDeviceLicense', (id: string | number, data: any) => LicenseController.extendDeviceLicense(id, data))
+  handle(ipcMain, 'license:getAppUpdates', () => LicenseController.getAppUpdates())
+  handle(ipcMain, 'license:saveAppUpdate', (data: any) => LicenseController.saveAppUpdate(data))
+  handle(ipcMain, 'license:getErrors', (query?: { type?: string }) => LicenseController.getErrors(query))
+  handle(ipcMain, 'license:getAnnouncements', () => LicenseController.getAnnouncements())
+  handle(ipcMain, 'license:createAnnouncement', (data: any) => LicenseController.createAnnouncement(data))
+  handle(ipcMain, 'license:updateAnnouncement', (id: string | number, data: any) => LicenseController.updateAnnouncement(id, data))
+  handle(ipcMain, 'license:deleteAnnouncement', (id: string | number) => LicenseController.deleteAnnouncement(id))
+  handle(ipcMain, 'license:heartbeat', (data: any, token?: string | null) => LicenseController.heartbeat(data, token))
+  handle(ipcMain, 'license:logError', (data: any) => LicenseController.logError(data))
 
   // ─── DIALOG ────────────────────────────────────────────────────────
   handle(ipcMain, 'dialog:showSaveDialog', async (options: any) => {

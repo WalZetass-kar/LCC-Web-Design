@@ -2,8 +2,33 @@ import { sqlite } from '../../database/connection.js'
 import { normalizeIndustrySettings, type IndustrySettings } from '../../shared/industrySettings.js'
 import { dashboardSummaryToSheetsPayload, testGoogleSheetsPayload } from '../../shared/googleSheetsExport.js'
 import type { DashboardSummary } from '../../shared/types.js'
+import { decryptData, encryptData } from '../services/crypto.js'
 
 const TABLE = 'mediasoft_industry_settings'
+const AI_KEY_PREFIX = 'enc:v1:'
+
+function encryptionSecret() {
+  return process.env.MEDIASOFT_LOCAL_SECRET || `${process.cwd()}:mediasoft-pos-zetass:v2`
+}
+
+function encryptAiKey(value: string) {
+  const plain = String(value ?? '').trim()
+  if (!plain) return ''
+  if (plain.startsWith(AI_KEY_PREFIX)) return plain
+  return `${AI_KEY_PREFIX}${encryptData(plain, encryptionSecret())}`
+}
+
+function decryptAiKey(value: unknown) {
+  const stored = String(value ?? '').trim()
+  if (!stored) return ''
+  if (!stored.startsWith(AI_KEY_PREFIX)) return stored
+
+  try {
+    return decryptData(stored.slice(AI_KEY_PREFIX.length), encryptionSecret())
+  } catch {
+    return ''
+  }
+}
 
 function initTable() {
   sqlite.exec(`
@@ -49,7 +74,17 @@ function readSettings(): IndustrySettings {
   initTable()
   sqlite.prepare(`INSERT OR IGNORE INTO ${TABLE} (id) VALUES (1)`).run()
   const row = sqlite.prepare(`SELECT * FROM ${TABLE} WHERE id = 1`).get() as Record<string, unknown> | undefined
-  return normalizeIndustrySettings(row)
+  const settings = normalizeIndustrySettings({
+    ...row,
+    ai_api_key: decryptAiKey(row?.ai_api_key),
+  })
+
+  const storedKey = String(row?.ai_api_key ?? '').trim()
+  if (storedKey && !storedKey.startsWith(AI_KEY_PREFIX)) {
+    sqlite.prepare(`UPDATE ${TABLE} SET ai_api_key = ? WHERE id = 1`).run(encryptAiKey(storedKey))
+  }
+
+  return settings
 }
 
 function assertWebAppUrl(url: string) {
@@ -112,7 +147,7 @@ export class IndustrySettingsController {
         settings.aiProvider,
         settings.aiModel,
         settings.aiBaseUrl,
-        settings.aiApiKey,
+        encryptAiKey(settings.aiApiKey),
         settings.googleSheetsEnabled ? 1 : 0,
         settings.googleSheetsWebAppUrl,
         settings.autoBackupEnabled ? 1 : 0,

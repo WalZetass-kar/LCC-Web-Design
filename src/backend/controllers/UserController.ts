@@ -6,10 +6,11 @@ import { demoSession } from '../services/demoSessionManager.js'
 import { validatePasswordStrength } from '../../shared/passwordPolicy.js'
 import { hashPassword } from '../services/crypto.js'
 
-// Role hierarchy: developer > superadmin > admin > operator > kasir
-const ROLE_HIERARCHY = ['developer', 'superadmin', 'admin', 'operator', 'kasir']
-const CAN_MANAGE_PERMISSIONS = ['developer', 'superadmin'] // Can set permissions for others
-const UNLIMITED_ACCESS_ROLES = ['developer', 'superadmin']
+// Role hierarchy: developer > admin > operator > kasir
+const ROLE_HIERARCHY = ['developer', 'admin', 'operator', 'kasir']
+const CAN_MANAGE_PERMISSIONS = ['developer'] // Can set permissions for others
+const UNLIMITED_ACCESS_ROLES = ['developer']
+const LOCAL_ROLES = new Set(ROLE_HIERARCHY)
 const PIN_PATTERN = /^\d{4,8}$/
 
 type UserRoleRecord = { hak_akses?: string | null } | null | undefined
@@ -20,6 +21,11 @@ function isDeveloperAccount(user: UserRoleRecord): boolean {
 
 function developerLockedMessage(action: string): string {
   return `Akun dengan role developer tidak dapat ${action}`
+}
+
+function normalizeLocalRole(role?: string | null): string {
+  if (role === 'superadmin') return 'developer'
+  return LOCAL_ROLES.has(role ?? '') ? String(role) : 'kasir'
 }
 
 function normalizeAccessExpiresAt(value?: string | null): string | null | undefined {
@@ -132,6 +138,7 @@ export class UserController {
       if (data.pin_enabled && data.hak_akses !== 'kasir') {
         return { success: false, message: 'PIN login hanya boleh diaktifkan untuk role kasir' }
       }
+      const role = normalizeLocalRole(data.hak_akses)
 
       await PenggunaModel.create({
         nama_pengguna: data.nama_pengguna,
@@ -139,8 +146,8 @@ export class UserController {
         nama_lengkap: data.nama_lengkap,
         email: data.email,
         no_telp: data.no_telp,
-        hak_akses: data.hak_akses || 'kasir',
-        access_expires_at: UNLIMITED_ACCESS_ROLES.includes(data.hak_akses || 'kasir')
+        hak_akses: role,
+        access_expires_at: UNLIMITED_ACCESS_ROLES.includes(role)
           ? null
           : normalizeAccessExpiresAt(data.access_expires_at),
         must_change_password: 1,
@@ -162,7 +169,7 @@ export class UserController {
           data._caller,
           `Menambah user baru: ${data.nama_pengguna}`,
           'USER_MANAGEMENT',
-          `Hak akses: ${data.hak_akses || 'kasir'}; paket=${data.subscription_plan_id ?? '-'}; buyer=${data.is_buyer ? 1 : 0}`,
+          `Hak akses: ${role}; paket=${data.subscription_plan_id ?? '-'}; buyer=${data.is_buyer ? 1 : 0}`,
           data.subscription_plan_id ? 'subscription' : 'general'
         )
       }
@@ -210,7 +217,7 @@ export class UserController {
       const pinError = validatePin(data.pin)
       if (pinError) return { success: false, message: pinError }
 
-      const targetRole = payload.hak_akses ?? existing?.hak_akses ?? 'kasir'
+      const targetRole = normalizeLocalRole(payload.hak_akses ?? existing?.hak_akses ?? 'kasir')
       if (requestedPinEnabled && targetRole !== 'kasir') {
         return { success: false, message: 'PIN login hanya boleh diaktifkan untuk role kasir' }
       }
@@ -219,10 +226,12 @@ export class UserController {
       }
       const normalizedPayload: Record<string, unknown> = {
         ...payload,
+        hak_akses: payload.hak_akses === undefined ? undefined : targetRole,
         access_expires_at: UNLIMITED_ACCESS_ROLES.includes(targetRole)
           ? null
           : normalizeAccessExpiresAt(payload.access_expires_at),
       }
+      if (payload.hak_akses === undefined) delete normalizedPayload.hak_akses
       if (payload.subscription_plan_id !== undefined) {
         normalizedPayload.subscription_plan_id = payload.subscription_plan_id ?? null
       }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildLocalAssistantResponse } from '../src/shared/dashboardAssistant'
 import { dashboardSummaryToSheetsPayload, dashboardSummaryToTsv } from '../src/shared/googleSheetsExport'
-import { normalizeIndustrySettings } from '../src/shared/industrySettings'
+import { normalizeIndustrySettings, openAiCompatibleChatUrl, openAiCompatibleModelsUrl } from '../src/shared/industrySettings'
 import type { DashboardSummary } from '../src/shared/types'
 
 const summary: DashboardSummary = {
@@ -58,5 +58,11 @@ describe('industry features', () => {
     expect(settings.aiEnabled).toBe(true)
     expect(settings.googleSheetsEnabled).toBe(true)
     expect(settings.backupRetentionDays).toBe(365)
+  })
+
+  it('normalizes BluesMinds API endpoints', () => {
+    expect(openAiCompatibleChatUrl('https://api.bluesminds.com')).toBe('https://api.bluesminds.com/v1/chat/completions')
+    expect(openAiCompatibleChatUrl('https://api.bluesminds.com/v1beta/models')).toBe('https://api.bluesminds.com/v1/chat/completions')
+    expect(openAiCompatibleModelsUrl('https://api.bluesminds.com/v1')).toBe('https://api.bluesminds.com/v1beta/models')
   })
 })

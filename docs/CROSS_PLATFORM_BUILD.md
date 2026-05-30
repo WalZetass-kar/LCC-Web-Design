@@ -32,6 +32,8 @@ Catatan:
 - macOS `.dmg` final harus dibuat di macOS, lalu code signing dan notarization.
 - Linux menghasilkan AppImage dan deb.
 - `desktop:all:ci` disediakan untuk CI matrix, bukan pengganti signing per OS.
+- Desktop mendaftarkan deep link `mediasoftposzetass://...`, membatasi external link ke HTTPS,
+  dan melakukan certificate pinning untuk endpoint Supabase/license utama.
 
 ## Android
 
@@ -94,6 +96,10 @@ Di Xcode:
 2. Set Bundle Identifier `com.mediasoft.pos.zetass`.
 3. Archive.
 4. Upload ke TestFlight atau export `.ipa`.
+
+Konfigurasi iOS sudah memuat privacy usage text untuk kamera, Bluetooth printer,
+file backup/export, local network sync, deep link `mediasoftposzetass://...`,
+ATS HTTPS-only, dan pinning SPKI untuk endpoint Supabase/license utama.
 
 ## Backend Production
 

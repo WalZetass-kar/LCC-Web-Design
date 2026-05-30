@@ -23,7 +23,7 @@ class RateLimiter {
   // Login rate limiter
   private loginAttempts: Map<string, LoginAttempt> = new Map()
   private readonly MAX_LOGIN_ATTEMPTS = 5
-  private readonly LOGIN_LOCK_DURATION = 15 * 60 * 1000 // 15 minutes
+  private readonly LOGIN_LOCK_DURATION = 5 * 60 * 1000 // 5 minutes
   private readonly LOGIN_ATTEMPT_WINDOW = 5 * 60 * 1000 // 5 minutes
 
   // API rate limiter (per IP)

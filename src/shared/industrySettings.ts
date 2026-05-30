@@ -1,4 +1,4 @@
-export type AiProvider = 'local' | 'deepseek' | 'openrouter' | 'gemini' | 'custom'
+export type AiProvider = 'local' | 'openai' | 'gemini' | 'custom' | 'deepseek' | 'openrouter' | 'bluesminds'
 
 export interface IndustrySettings {
   aiEnabled: boolean
@@ -24,7 +24,7 @@ export const DEFAULT_INDUSTRY_SETTINGS: IndustrySettings = {
   backupRetentionDays: 30,
 }
 
-const AI_PROVIDERS: AiProvider[] = ['local', 'deepseek', 'openrouter', 'gemini', 'custom']
+const AI_PROVIDERS: AiProvider[] = ['local', 'openai', 'gemini', 'custom', 'deepseek', 'openrouter', 'bluesminds']
 
 function toBool(value: unknown, fallback = false) {
   if (value === undefined || value === null) return fallback
@@ -60,8 +60,59 @@ export function normalizeIndustrySettings(input: Partial<IndustrySettings> | Rec
 }
 
 export function defaultModelForProvider(provider: AiProvider) {
+  if (provider === 'openai') return 'gpt-4o-mini'
   if (provider === 'deepseek') return 'deepseek-chat'
   if (provider === 'openrouter') return 'deepseek/deepseek-r1:free'
+  if (provider === 'bluesminds') return 'gpt-4o'
   if (provider === 'gemini') return 'gemini-1.5-flash'
   return ''
+}
+
+export function defaultBaseUrlForProvider(provider: AiProvider) {
+  if (provider === 'openai') return 'https://api.openai.com/v1/chat/completions'
+  if (provider === 'deepseek') return 'https://api.deepseek.com/chat/completions'
+  if (provider === 'openrouter') return 'https://openrouter.ai/api/v1/chat/completions'
+  if (provider === 'bluesminds') return 'https://api.bluesminds.com/v1'
+  if (provider === 'gemini') return 'https://generativelanguage.googleapis.com/v1beta'
+  return ''
+}
+
+export function openAiCompatibleChatUrl(baseUrl: string) {
+  const trimmed = toText(baseUrl).replace(/\/+$/, '')
+  if (!trimmed) return ''
+
+  let parsed: URL
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    return trimmed
+  }
+
+  const path = parsed.pathname.replace(/\/+$/, '')
+  if (parsed.hostname.toLowerCase() === 'api.bluesminds.com') return `${parsed.origin}/v1/chat/completions`
+  if (/\/chat\/completions$/i.test(path)) return trimmed
+  if (/\/v\d+(?:beta)?$/i.test(path)) return `${trimmed}/chat/completions`
+  return trimmed
+}
+
+export function openAiCompatibleModelsUrl(baseUrl: string) {
+  const trimmed = toText(baseUrl).replace(/\/+$/, '')
+  if (!trimmed) return ''
+
+  let parsed: URL
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    return trimmed
+  }
+
+  const path = parsed.pathname.replace(/\/+$/, '')
+  if (parsed.hostname.toLowerCase() === 'api.bluesminds.com') return `${parsed.origin}/v1beta/models`
+  if (/\/chat\/completions$/i.test(path)) {
+    parsed.pathname = path.replace(/\/chat\/completions$/i, '/models')
+    parsed.search = ''
+    return parsed.toString().replace(/\/+$/, '')
+  }
+  if (/\/v\d+(?:beta)?$/i.test(path)) return `${trimmed}/models`
+  return `${trimmed}/models`
 }

@@ -2,6 +2,7 @@ import { useState, useEffect, type ChangeEvent, type DragEvent } from 'react'
 import { X, Save, Upload, Trash2 } from 'lucide-react'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
+import ConfirmDialog from './ConfirmDialog'
 
 const DEFAULT_FOOTER_TEXT = 'Terima kasih atas kunjungan Anda'
 const MAX_QRIS_SIZE = 5 * 1024 * 1024
@@ -61,6 +62,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+  const [confirmRemoveQris, setConfirmRemoveQris] = useState(false)
   const [settings, setSettings] = useState<StrukSettings>({
     printer_type: 'thermal',
     paper_size: '58mm',
@@ -190,13 +192,12 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
   }
 
   const handleRemoveQris = async () => {
-    if (!confirm('Hapus gambar QRIS?')) return
-
     setUploading(true)
     try {
       const r = await api<any>('strukSettings:removeQris')
       if (r.success) {
         toast('QRIS berhasil dihapus')
+        setConfirmRemoveQris(false)
         if (r.data) {
           setSettings(prev => ({
             ...prev,
@@ -217,8 +218,9 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-h-[92vh] overflow-hidden flex flex-col">
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-h-[92vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="border-b border-slate-200 dark:border-slate-700 px-5 sm:px-6 py-4 flex items-start justify-between gap-4 shrink-0">
           <div className="min-w-0">
@@ -422,7 +424,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                     </label>
                     <button
                       type="button"
-                      onClick={handleRemoveQris}
+                      onClick={() => setConfirmRemoveQris(true)}
                       disabled={uploading}
                       className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-60 transition-colors"
                     >
@@ -495,7 +497,18 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
             )}
           </button>
         </div>
+        </div>
       </div>
-    </div>
+      <ConfirmDialog
+        open={confirmRemoveQris}
+        onClose={() => setConfirmRemoveQris(false)}
+        onConfirm={handleRemoveQris}
+        title="Hapus Gambar QRIS"
+        message="Gambar QRIS di struk akan dihapus."
+        confirmText="Hapus"
+        variant="danger"
+        loading={uploading}
+      />
+    </>
   )
 }

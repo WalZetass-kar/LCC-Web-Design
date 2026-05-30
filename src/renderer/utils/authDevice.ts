@@ -29,28 +29,23 @@ export function getAuthDeviceId(): string {
 
 export function collectAuthDeviceInfo(): RendererAuthDeviceInfo {
   const userAgent = navigator.userAgent || 'unknown'
-  const platform = /Android/i.test(userAgent)
-    ? 'android'
-    : /Electron/i.test(userAgent)
-      ? 'electron'
-      : 'web'
-  const osName = /Windows/i.test(userAgent)
-    ? 'Windows'
+  const osName = /iPhone|iPad/i.test(userAgent)
+    ? 'iOS'
     : /Android/i.test(userAgent)
       ? 'Android'
-      : /Mac OS|Macintosh/i.test(userAgent)
-        ? 'macOS'
-        : /Linux/i.test(userAgent)
-          ? 'Linux'
-          : /iPhone|iPad/i.test(userAgent)
-            ? 'iOS'
+      : /Windows/i.test(userAgent)
+        ? 'Windows'
+        : /Mac OS|Macintosh/i.test(userAgent)
+          ? 'macOS'
+          : /Linux/i.test(userAgent)
+            ? 'Linux'
             : 'Unknown'
 
   return {
     deviceId: getAuthDeviceId(),
     deviceName: navigator.platform || 'unknown',
     userAgent,
-    platform,
+    platform: osName,
     osName,
     appVersion: '2.0.0',
   }

@@ -18,26 +18,30 @@ interface ConfirmDialogProps {
 const variants = {
   danger: {
     icon: Trash2,
-    iconBg: 'bg-red-100 dark:bg-red-900/30',
+    iconBg: 'bg-red-50 ring-red-100 dark:bg-red-950/40 dark:ring-red-900/50',
     iconColor: 'text-red-600 dark:text-red-400',
+    panel: 'border-red-100 bg-red-50/80 text-red-700 dark:border-red-900/60 dark:bg-red-950/25 dark:text-red-300',
     buttonVariant: 'danger' as const
   },
   warning: {
     icon: AlertTriangle,
-    iconBg: 'bg-amber-100 dark:bg-amber-900/30',
+    iconBg: 'bg-amber-50 ring-amber-100 dark:bg-amber-950/40 dark:ring-amber-900/50',
     iconColor: 'text-amber-600 dark:text-amber-400',
+    panel: 'border-amber-100 bg-amber-50/80 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-300',
     buttonVariant: 'primary' as const
   },
   info: {
     icon: Info,
-    iconBg: 'bg-pink-100 dark:bg-pink-900/30',
+    iconBg: 'bg-pink-50 ring-pink-100 dark:bg-pink-950/40 dark:ring-pink-900/50',
     iconColor: 'text-pink-600 dark:text-pink-400',
+    panel: 'border-pink-100 bg-pink-50/80 text-pink-700 dark:border-pink-900/60 dark:bg-pink-950/25 dark:text-pink-300',
     buttonVariant: 'primary' as const
   },
   success: {
     icon: CheckCircle,
-    iconBg: 'bg-emerald-100 dark:bg-emerald-900/30',
+    iconBg: 'bg-emerald-50 ring-emerald-100 dark:bg-emerald-950/40 dark:ring-emerald-900/50',
     iconColor: 'text-emerald-600 dark:text-emerald-400',
+    panel: 'border-emerald-100 bg-emerald-50/80 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/25 dark:text-emerald-300',
     buttonVariant: 'primary' as const
   }
 }
@@ -60,7 +64,7 @@ export default function ConfirmDialog({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={loading ? () => undefined : onClose}
       title={title}
       size="sm"
       footer={
@@ -76,12 +80,15 @@ export default function ConfirmDialog({
     >
       <div className="space-y-4">
         <div className="flex items-start gap-4">
-          <div className={`shrink-0 w-12 h-12 rounded-xl ${config.iconBg} flex items-center justify-center`}>
+          <div className={`shrink-0 w-12 h-12 rounded-2xl ${config.iconBg} ring-8 flex items-center justify-center`}>
             <Icon size={24} className={config.iconColor} />
           </div>
           <div className="flex-1 pt-1">
-            <p className="text-sm text-slate-600 dark:text-slate-300">{message}</p>
+            <p className="text-sm font-medium leading-6 text-slate-700 dark:text-slate-200">{message}</p>
           </div>
+        </div>
+        <div className={`rounded-xl border px-3 py-2 text-xs leading-5 ${config.panel}`}>
+          Periksa detail sebelum melanjutkan. Aksi ini akan langsung dikirim ke sistem.
         </div>
         {children}
       </div>

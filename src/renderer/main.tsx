@@ -1,6 +1,6 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import ReactDOM from 'react-dom/client'
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import './i18n' // initialize i18next
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ToastProvider } from './contexts/ToastContext'
@@ -28,7 +28,6 @@ import Returns from './pages/Returns'
 import Shifts from './pages/Shifts'
 import Debts from './pages/Debts'
 import StockOpname from './pages/StockOpname'
-import SubscriptionPlans from './pages/SubscriptionPlans'
 import Tutorials from './pages/Tutorials'
 import Hpp from './pages/Hpp'
 import Promo from './pages/Promo'
@@ -39,8 +38,11 @@ import WhatsApp from './pages/WhatsApp'
 import PrintQueue from './pages/PrintQueue'
 import EcommerceApi from './pages/EcommerceApi'
 import LicenseCenter from './pages/LicenseCenter'
+import PaymentInvoice from './pages/PaymentInvoice'
 import ErrorBoundary from './components/ErrorBoundary'
+import RemoteLicensePopup from './components/RemoteLicensePopup'
 import { validateProductionConfig } from './utils/productionConfig'
+import { registerDeepLinkHandlers } from './utils/deepLinks'
 import './styles/globals.css'
 
 function ProductionConfigGate({ children }: { children: React.ReactNode }) {
@@ -76,8 +78,8 @@ function RequireRole({ children, minRole }: { children: React.ReactNode; minRole
   // Demo users can ACCESS role-gated operational pages (read-only) — security is in IPC layer
   if (user.hak_akses === 'demo') return <>{children}</>
   
-  // Hierarchy: developer > superadmin > admin > operator > kasir
-  const hierarchy = ['developer', 'superadmin', 'admin', 'operator', 'kasir']
+  // Hierarchy: developer > admin > operator > kasir
+  const hierarchy = ['developer', 'admin', 'operator', 'kasir']
   const userLevel = hierarchy.indexOf(user.hak_akses ?? 'kasir')
   const requiredLevel = hierarchy.indexOf(minRole)
   
@@ -95,9 +97,18 @@ function RequireExactRoles({ children, allowedRoles }: { children: React.ReactNo
   return <>{children}</>
 }
 
+function DeepLinkBridge() {
+  const navigate = useNavigate()
+
+  useEffect(() => registerDeepLinkHandlers(route => navigate(route)), [navigate])
+
+  return null
+}
+
 function App() {
   return (
     <HashRouter>
+      <DeepLinkBridge />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route
@@ -118,14 +129,14 @@ function App() {
           <Route path="/kas" element={<Kas />} />
           <Route path="/laporan" element={<RequireRole minRole="admin"><Laporan /></RequireRole>} />
           <Route path="/pembelian" element={<Pembelian />} />
-          <Route path="/users" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><Users /></RequireExactRoles>} />
-          <Route path="/backup" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><Backup /></RequireExactRoles>} />
-          <Route path="/activity-log" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><ActivityLog /></RequireExactRoles>} />
+          <Route path="/users" element={<RequireExactRoles allowedRoles={['developer']}><Users /></RequireExactRoles>} />
+          <Route path="/backup" element={<RequireExactRoles allowedRoles={['developer']}><Backup /></RequireExactRoles>} />
+          <Route path="/activity-log" element={<RequireExactRoles allowedRoles={['developer']}><ActivityLog /></RequireExactRoles>} />
           <Route path="/returns" element={<Returns />} />
           <Route path="/shifts" element={<Shifts />} />
           <Route path="/debts" element={<Debts />} />
           <Route path="/stock-opname" element={<StockOpname />} />
-          <Route path="/subscription-plans" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><SubscriptionPlans /></RequireExactRoles>} />
+          <Route path="/subscription-plans" element={<Navigate to="/license-admin" replace />} />
           <Route path="/tutorials" element={<Tutorials />} />
           <Route path="/hpp" element={<Hpp />} />
           <Route path="/promo" element={<Promo />} />
@@ -135,7 +146,8 @@ function App() {
           <Route path="/whatsapp" element={<WhatsApp />} />
           <Route path="/print-queue" element={<PrintQueue />} />
           <Route path="/ecommerce-api" element={<EcommerceApi />} />
-          <Route path="/license-admin" element={<RequireExactRoles allowedRoles={['developer', 'superadmin']}><LicenseCenter /></RequireExactRoles>} />
+          <Route path="/payment" element={<PaymentInvoice />} />
+          <Route path="/license-admin" element={<RequireExactRoles allowedRoles={['developer']}><LicenseCenter /></RequireExactRoles>} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -153,6 +165,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <AuthProvider>
               <DemoProvider>
                 <App />
+                <RemoteLicensePopup />
               </DemoProvider>
             </AuthProvider>
           </ToastProvider>

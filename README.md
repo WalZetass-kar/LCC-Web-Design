@@ -247,7 +247,7 @@ Gunakan 1 desktop sebagai **Server Developer** di halaman Settings > Sinkronisas
 
 ## 🔐 Login Awal
 
-Saat database belum memiliki pengguna, aplikasi menampilkan setup awal untuk membuat akun superadmin pertama. Tidak ada kredensial default yang disimpan di source code.
+Saat database belum memiliki pengguna, aplikasi menampilkan setup awal untuk membuat akun developer pertama. Tidak ada kredensial default yang disimpan di source code.
 
 > ⚠️ **PENTING:**
 > - Gunakan password kuat: minimal 8 karakter dengan huruf besar, huruf kecil, angka, dan simbol.
@@ -390,7 +390,7 @@ npx electron-rebuild
 
 - Jangan menyimpan password user di storage browser, file konfigurasi, atau dokumentasi.
 - Channel IPC baru harus didaftarkan di `src/main/ipcHandlers.ts` dan `src/main/preload.cjs`; `tests/ipcChannels.test.ts` akan gagal jika keduanya tidak sinkron.
-- Endpoint administrasi seperti user management, backup, security, ecommerce API, activity log, dan subscription plan dibatasi ke role `developer`/`superadmin` di main process.
+- Endpoint administrasi seperti user management, backup, security, ecommerce API, dan activity log dibatasi ke role lokal `developer` di main process.
 
 ---
 

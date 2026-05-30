@@ -3,7 +3,22 @@ import { Save } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
 
-interface PopupRow { id: string; code: string; title: string; description: string | null; cta_text: string | null; cta_url: string | null; whatsapp_number: string | null; image_url: string | null; pricing_html: string | null; is_active: number | boolean }
+interface PopupRow {
+  id: string
+  code: string
+  title: string
+  description: string | null
+  cta_text: string | null
+  cta_url: string | null
+  whatsapp_number: string | null
+  image_url: string | null
+  pricing_html: string | null
+  is_active: number | boolean
+  force_popup?: number | boolean
+  force_popup_until?: string | null
+  severity?: 'info' | 'warning' | 'danger'
+  dismissible?: number | boolean
+}
 
 const POPUP_META: Record<string, { label: string; color: string; desc: string }> = {
   DEMO_LIMIT:     { label: 'Demo Limit',     color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400', desc: 'Muncul saat user demo melewati batas harian' },
@@ -49,6 +64,10 @@ function PopupCard({ popup, onSaved }: { popup: PopupRow; onSaved: () => void })
       title: form.title, description: form.description ?? '', cta_text: form.cta_text ?? '',
       cta_url: form.cta_url ?? '', whatsapp_number: form.whatsapp_number ?? '',
       image_url: form.image_url ?? '', pricing_html: form.pricing_html ?? '', is_active: !!form.is_active,
+      force_popup: !!form.force_popup,
+      force_popup_until: form.force_popup_until ?? '',
+      severity: form.severity ?? 'info',
+      dismissible: form.dismissible !== false && form.dismissible !== 0,
     })
     setSaving(false)
     if (r.success) { setSaved(true); setTimeout(() => setSaved(false), 2000); onSaved() }
@@ -87,6 +106,29 @@ function PopupCard({ popup, onSaved }: { popup: PopupRow; onSaved: () => void })
           <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Pricing HTML</label>
           <textarea rows={3} value={form.pricing_html || ''} onChange={e => setForm({ ...form, pricing_html: e.target.value })} className={`${inp} font-mono text-xs`} placeholder="<ul><li>Basic Rp 99.000/bln</li></ul>" />
         </div>
+        <div>
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Severity</label>
+          <select value={form.severity || 'info'} onChange={e => setForm({ ...form, severity: e.target.value as PopupRow['severity'] })} className={inp}>
+            <option value="info">info</option>
+            <option value="warning">warning</option>
+            <option value="danger">danger</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Force Popup Until</label>
+          <input type="datetime-local" value={toDateTimeLocal(form.force_popup_until)} onChange={e => setForm({ ...form, force_popup_until: e.target.value ? new Date(e.target.value).toISOString() : null })} className={inp} />
+        </div>
+        <label className="col-span-2 flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
+          <span>
+            <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Force popup ke semua device</span>
+            <span className="block text-xs text-slate-400">Jika aktif, semua aplikasi menampilkan popup ini pada sync berikutnya.</span>
+          </span>
+          <input type="checkbox" checked={!!form.force_popup} onChange={e => setForm({ ...form, force_popup: e.target.checked })} />
+        </label>
+        <label className="col-span-2 flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Bisa ditutup user</span>
+          <input type="checkbox" checked={form.dismissible !== false && form.dismissible !== 0} onChange={e => setForm({ ...form, dismissible: e.target.checked })} />
+        </label>
       </div>
       <div className="px-5 pb-5 flex items-center gap-3">
         <button onClick={save} disabled={saving}
@@ -97,4 +139,12 @@ function PopupCard({ popup, onSaved }: { popup: PopupRow; onSaved: () => void })
       </div>
     </div>
   )
+}
+
+function toDateTimeLocal(value?: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }

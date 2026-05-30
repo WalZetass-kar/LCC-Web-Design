@@ -7,6 +7,7 @@ import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useDemo } from '../contexts/DemoContext'
+import ConfirmDialog from '../components/ConfirmDialog'
 import type { HppCalculation } from '../../shared/types'
 
 const DEMO_LIMIT = 10
@@ -132,7 +133,7 @@ function ResultCard({ result }: ResultCardProps) {
 
 interface HistoryRowProps {
   item: HppCalculation
-  onDelete: (id: number) => void
+  onDelete: (item: HppCalculation) => void
 }
 
 function HistoryRow({ item, onDelete }: HistoryRowProps) {
@@ -176,7 +177,7 @@ function HistoryRow({ item, onDelete }: HistoryRowProps) {
             </div>
           </div>
           <button
-            onClick={() => onDelete(item.id)}
+            onClick={() => onDelete(item)}
             className="flex items-center gap-1 text-xs text-red-400 hover:text-red-500 transition-colors"
           >
             <Trash2 size={11} /> Hapus riwayat ini
@@ -206,6 +207,8 @@ export default function Hpp() {
   const [history, setHistory] = useState<HppCalculation[]>([])
   const [usageCount, setUsageCount] = useState(0)
   const [loadingHistory, setLoadingHistory] = useState(true)
+  const [deleteTarget, setDeleteTarget] = useState<HppCalculation | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const resultRef = useRef<HTMLDivElement>(null)
 
   const username = user?.nama_pengguna ?? ''
@@ -262,13 +265,16 @@ export default function Hpp() {
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Hapus riwayat kalkulasi ini?')) return
-    const r = await api('hpp:delete', id, username)
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    const r = await api('hpp:delete', deleteTarget.id, username)
+    setDeleting(false)
     if (r.success) {
       toast('Riwayat dihapus')
+      setDeleteTarget(null)
       loadData()
-      if (lastResult?.id === id) setLastResult(null)
+      if (lastResult?.id === deleteTarget.id) setLastResult(null)
     } else {
       toast(r.message as string || 'Gagal menghapus', 'error')
     }
@@ -424,12 +430,29 @@ export default function Hpp() {
           ) : (
             <div className="space-y-2">
               {history.map(item => (
-                <HistoryRow key={item.id} item={item} onDelete={handleDelete} />
+                <HistoryRow key={item.id} item={item} onDelete={setDeleteTarget} />
               ))}
             </div>
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Hapus Riwayat HPP"
+        message={`Riwayat kalkulasi ${deleteTarget?.nama_produk ?? ''} akan dihapus.`}
+        confirmText="Hapus"
+        variant="danger"
+        loading={deleting}
+      >
+        {deleteTarget && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/70">
+            <div className="flex justify-between gap-3"><span className="text-slate-500">Total HPP</span><span className="font-semibold text-slate-800 dark:text-slate-100">{formatRupiah(deleteTarget.total_hpp)}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-slate-500">Tanggal</span><span className="font-semibold text-slate-800 dark:text-slate-100">{formatDate(deleteTarget.created_at)}</span></div>
+          </div>
+        )}
+      </ConfirmDialog>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useMemo, useEffect, useCallback, type ReactNode } from 'react'
+import { createClient } from '@supabase/supabase-js'
 import type { UserSession } from '../../shared/types'
 import { api } from '../utils/api'
 import { secureStorage } from '../utils/secureStorage'
@@ -8,6 +9,12 @@ import { collectAuthDeviceInfo } from '../utils/authDevice'
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000
 /** Check session expiry every 60 seconds */
 const EXPIRY_CHECK_INTERVAL_MS = 60 * 1000
+/** Re-check remote Supabase license every 30 seconds while logged in. */
+const REMOTE_LICENSE_SYNC_INTERVAL_MS = 30 * 1000
+const LICENSE_LAST_SUCCESS_KEY = 'license_last_success_at'
+const LICENSE_OFFLINE_GRACE_MS = Number(import.meta.env.VITE_LICENSE_OFFLINE_GRACE_HOURS ?? 72) * 60 * 60 * 1000
+const SUPABASE_REALTIME_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
+const SUPABASE_REALTIME_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
 interface StoredSession extends UserSession {
   loginAt: number
@@ -27,17 +34,26 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+function normalizeLocalRole(role?: string | null): string | null {
+  return role === 'superadmin' ? 'developer' : role ?? null
+}
+
 /** Restore encrypted session with expiry validation */
 function toPublicSession(session: StoredSession): UserSession {
   return {
     nama_pengguna: session.nama_pengguna,
     nama_lengkap: session.nama_lengkap,
-    hak_akses: session.hak_akses,
+    email: session.email ?? null,
+    hak_akses: normalizeLocalRole(session.hak_akses),
     access_expires_at: session.access_expires_at ?? null,
     access_days_remaining: session.access_days_remaining ?? null,
     must_change_password: session.must_change_password ?? false,
     subscription_plan_id: session.subscription_plan_id ?? null,
     subscription_expires_at: session.subscription_expires_at ?? null,
+    remote_license_token: session.remote_license_token ?? null,
+    remote_license_refresh_token: session.remote_license_refresh_token ?? null,
+    remote_customer_id: session.remote_customer_id ?? null,
+    remote_auth_user_id: session.remote_auth_user_id ?? null,
   }
 }
 
@@ -115,6 +131,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(toPublicSession(stored))
     secureStorage.setJSON('pos_session', stored)
+    if (u.remote_customer_id || u.remote_license_token) {
+      secureStorage.setItem(LICENSE_LAST_SUCCESS_KEY, String(Date.now()))
+    }
   }, [])
 
   useEffect(() => {
@@ -140,6 +159,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       username: user.nama_pengguna,
       sessionToken: stored.sessionToken,
       deviceInfo: collectAuthDeviceInfo(),
+      remoteLicenseToken: stored.remote_license_token ?? null,
+      remoteLicenseRefreshToken: stored.remote_license_refresh_token ?? null,
     })
       .then(result => {
         if (cancelled) return
@@ -154,6 +175,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           sessionToken: stored.sessionToken,
           sessionExpiresAt: stored.sessionExpiresAt,
           deviceId: stored.deviceId,
+          remote_license_token: restored.remote_license_token ?? stored.remote_license_token ?? null,
+          remote_license_refresh_token: restored.remote_license_refresh_token ?? stored.remote_license_refresh_token ?? null,
+          remote_customer_id: restored.remote_customer_id ?? stored.remote_customer_id ?? null,
+          remote_auth_user_id: restored.remote_auth_user_id ?? stored.remote_auth_user_id ?? null,
           loginAt: stored.loginAt,
           expiresAt: Math.min(stored.expiresAt, new Date(stored.sessionExpiresAt).getTime()),
         }
@@ -169,6 +194,200 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => { cancelled = true }
   }, [user?.nama_pengguna, logout])
+
+  useEffect(() => {
+    if (!user?.nama_pengguna) return
+
+    let cancelled = false
+    const sendHeartbeat = () => {
+      if (cancelled) return
+      const deviceInfo = collectAuthDeviceInfo()
+      void api('license:heartbeat', {
+        email: user.email ?? user.nama_pengguna,
+        customer_id: user.remote_customer_id ?? null,
+        auth_user_id: user.remote_auth_user_id ?? null,
+        device: deviceInfo,
+        ...deviceInfo,
+      }, user.remote_license_token ?? null)
+    }
+
+    sendHeartbeat()
+    const heartbeat = window.setInterval(sendHeartbeat, 60 * 1000)
+    window.addEventListener('focus', sendHeartbeat)
+    document.addEventListener('visibilitychange', sendHeartbeat)
+    return () => {
+      cancelled = true
+      window.clearInterval(heartbeat)
+      window.removeEventListener('focus', sendHeartbeat)
+      document.removeEventListener('visibilitychange', sendHeartbeat)
+    }
+  }, [user?.nama_pengguna, user?.email, user?.remote_auth_user_id, user?.remote_customer_id, user?.remote_license_token])
+
+  useEffect(() => {
+    if (!user?.nama_pengguna) return
+
+    const report = (errorType: string, message: string, stack?: string) => {
+      const deviceInfo = collectAuthDeviceInfo()
+      void api('license:logError', {
+        email: user.email ?? user.nama_pengguna,
+        customer_id: user.remote_customer_id ?? null,
+        auth_user_id: user.remote_auth_user_id ?? null,
+        error_type: errorType,
+        error_message: message.slice(0, 1000),
+        stack_trace: stack?.slice(0, 8000) ?? null,
+        app_version: deviceInfo.appVersion,
+        platform: deviceInfo.platform,
+        device: deviceInfo,
+      })
+    }
+    const onError = (event: ErrorEvent) => report('application', event.message || 'Application error', event.error?.stack)
+    const onRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason
+      report('application', reason instanceof Error ? reason.message : String(reason), reason instanceof Error ? reason.stack : undefined)
+    }
+    window.addEventListener('error', onError)
+    window.addEventListener('unhandledrejection', onRejection)
+    return () => {
+      window.removeEventListener('error', onError)
+      window.removeEventListener('unhandledrejection', onRejection)
+    }
+  }, [user?.nama_pengguna, user?.email, user?.remote_auth_user_id, user?.remote_customer_id])
+
+  useEffect(() => {
+    if (!user?.nama_pengguna) return
+
+    let cancelled = false
+    let syncing = false
+
+    const sync = async () => {
+      if (syncing) return
+      syncing = true
+      try {
+        const r = await api<any>('license:syncBuyerLicense', user.nama_pengguna, collectAuthDeviceInfo())
+        if (cancelled) return
+
+        const data = r.data ?? {}
+        if (r.success) {
+          secureStorage.setItem(LICENSE_LAST_SUCCESS_KEY, String(Date.now()))
+          if (data?.subscription?.expires_at) {
+            const expires = new Date(data.subscription.expires_at).getTime()
+            setUser(prev => prev && prev.nama_pengguna === user.nama_pengguna ? {
+              ...prev,
+              access_expires_at: data.subscription.expires_at,
+              subscription_expires_at: data.subscription.expires_at,
+              access_days_remaining: Number.isFinite(expires)
+                ? Math.max(0, Math.ceil((expires - Date.now()) / 86400000))
+                : prev.access_days_remaining,
+            } : prev)
+          }
+          if (data?.popup) {
+            window.dispatchEvent(new CustomEvent('license:remote-popup', {
+              detail: { popup: data.popup, force: !!data.force_popup },
+            }))
+          }
+          return
+        }
+
+        const code = String(data?.error_code ?? '').toUpperCase()
+        if (code === 'OFFLINE') {
+          const lastSuccess = Number(secureStorage.getItem(LICENSE_LAST_SUCCESS_KEY) ?? 0)
+          const graceExceeded = lastSuccess > 0 && Date.now() - lastSuccess > LICENSE_OFFLINE_GRACE_MS
+          if (graceExceeded) {
+            window.dispatchEvent(new CustomEvent('license:remote-popup', {
+              detail: {
+                force: true,
+                popup: {
+                  code: 'OFFLINE_GRACE_EXPIRED',
+                  title: 'Validasi Lisensi Gagal',
+                  description: 'Aplikasi terlalu lama tidak terhubung ke server developer. Sambungkan internet lalu login ulang.',
+                  severity: 'danger',
+                  dismissible: false,
+                },
+              },
+            }))
+            setTimeout(() => {
+              if (!cancelled) logout()
+            }, 1200)
+          }
+          return
+        }
+        if (data?.popup) {
+          window.dispatchEvent(new CustomEvent('license:remote-popup', {
+            detail: {
+              popup: data.popup,
+              force: ['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED'].includes(code),
+            },
+          }))
+        }
+
+        if (code === 'EXPIRED' && data?.subscription?.expires_at) {
+          setUser(prev => prev && prev.nama_pengguna === user.nama_pengguna ? {
+            ...prev,
+            access_expires_at: data.subscription.expires_at,
+            subscription_expires_at: data.subscription.expires_at,
+            access_days_remaining: 0,
+          } : prev)
+          return
+        }
+
+        if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED', 'DEVICE_LIMIT'].includes(code)) {
+          setTimeout(() => {
+            if (!cancelled) logout()
+          }, 1200)
+        }
+      } finally {
+        syncing = false
+      }
+    }
+
+    void sync()
+    const interval = window.setInterval(sync, REMOTE_LICENSE_SYNC_INTERVAL_MS)
+    window.addEventListener('license:sync-now', sync)
+    window.addEventListener('focus', sync)
+    document.addEventListener('visibilitychange', sync)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      window.removeEventListener('license:sync-now', sync)
+      window.removeEventListener('focus', sync)
+      document.removeEventListener('visibilitychange', sync)
+    }
+  }, [user?.nama_pengguna, logout])
+
+  useEffect(() => {
+    if (!user?.remote_license_token || !SUPABASE_REALTIME_URL || !SUPABASE_REALTIME_ANON_KEY) return
+
+    const supabase = createClient(SUPABASE_REALTIME_URL, SUPABASE_REALTIME_ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+      realtime: {
+        params: { eventsPerSecond: 2 },
+      },
+    })
+
+    supabase.realtime.setAuth(user.remote_license_token)
+    const notifySync = () => window.dispatchEvent(new Event('license:sync-now'))
+    const customerId = user.remote_customer_id
+    const channel = supabase.channel(`license-control:${customerId || user.nama_pengguna}`)
+
+    if (customerId) {
+      channel
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'license_customers', filter: `id=eq.${customerId}` }, notifySync)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_subscriptions', filter: `customer_id=eq.${customerId}` }, notifySync)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_devices', filter: `customer_id=eq.${customerId}` }, notifySync)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: `customer_id=eq.${customerId}` }, notifySync)
+    }
+
+    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'popup_rules' }, notifySync)
+    channel.subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [user?.nama_pengguna, user?.remote_customer_id, user?.remote_license_token])
 
   // Auto-logout when session expires
   useEffect(() => {

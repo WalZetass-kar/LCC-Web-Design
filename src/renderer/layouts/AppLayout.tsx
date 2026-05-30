@@ -7,7 +7,6 @@ import QuickSearch from '../components/QuickSearch'
 import Onboarding from '../components/Onboarding'
 import UpdateNotification from '../components/UpdateNotification'
 import DemoOverlay from '../components/DemoOverlay'
-import PricingPopup from '../components/PricingPopup'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useSessionTimeout } from '../hooks/useSessionTimeout'
 import { useAuth } from '../contexts/AuthContext'
@@ -77,7 +76,6 @@ export default function AppLayout() {
       <QuickSearch isOpen={quickSearchOpen} onClose={() => setQuickSearchOpen(false)} />
       <Onboarding />
       <UpdateNotification />
-      <PricingPopup />
     </div>
   )
 }

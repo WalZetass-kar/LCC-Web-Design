@@ -5,6 +5,7 @@ import Button from '../components/Button'
 import Input from '../components/Input'
 import Modal from '../components/Modal'
 import Badge from '../components/Badge'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { SkeletonStatGrid, SkeletonSpinner } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah, formatDateTime } from '../utils/format'
@@ -50,6 +51,7 @@ export default function Kas() {
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
   const [deleteKas, setDeleteKas] = useState<KasDrawer | null>(null)
+  const [deleteTransaksi, setDeleteTransaksi] = useState<KasTransaksi | null>(null)
 
   const load = async () => {
     const [r1, r2] = await Promise.all([
@@ -155,6 +157,20 @@ export default function Kas() {
     }
   }
 
+  const handleDeleteTransaksi = async () => {
+    if (!deleteTransaksi) return
+    setLoading(true)
+    const r = await api('kas:deleteTransaksi', deleteTransaksi.kd_kas_transaksi)
+    setLoading(false)
+    if (r.success) {
+      toast('Transaksi dihapus')
+      setDeleteTransaksi(null)
+      load()
+    } else {
+      toast(r.message as string, 'error')
+    }
+  }
+
   const expectedCash = activeDrawer
     ? activeDrawer.modal_awal + activeDrawer.total_penjualan + (activeDrawer.total_pemasukan || 0) - activeDrawer.total_pengeluaran
     : 0
@@ -236,13 +252,7 @@ export default function Kas() {
                     <Badge label={t.jenis} variant={t.jenis === 'MASUK' ? 'green' : 'red'} />
                   </div>
                   <button
-                    onClick={async () => {
-                      if (confirm('Hapus transaksi ini?')) {
-                        const r = await api('kas:deleteTransaksi', t.kd_kas_transaksi)
-                        if (r.success) { toast('Transaksi dihapus'); load() }
-                        else toast(r.message as string, 'error')
-                      }
-                    }}
+                    onClick={() => setDeleteTransaksi(t)}
                     className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-all"
                     title="Hapus"
                   >
@@ -434,24 +444,36 @@ export default function Kas() {
         </div>
       </Modal>
 
-      {/* Delete Kas Modal */}
-      <Modal
+      <ConfirmDialog
+        open={!!deleteTransaksi}
+        onClose={() => setDeleteTransaksi(null)}
+        onConfirm={handleDeleteTransaksi}
+        title="Hapus Transaksi Kas"
+        message={`Transaksi "${deleteTransaksi?.keterangan ?? ''}" akan dihapus dari kas hari ini.`}
+        confirmText="Hapus"
+        variant="danger"
+        loading={loading}
+      >
+        {deleteTransaksi && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/70">
+            <div className="flex justify-between gap-3"><span className="text-slate-500">Jenis</span><span className="font-semibold text-slate-800 dark:text-slate-100">{deleteTransaksi.jenis}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-slate-500">Jumlah</span><span className="font-semibold text-slate-800 dark:text-slate-100">{formatRupiah(deleteTransaksi.jumlah)}</span></div>
+          </div>
+        )}
+      </ConfirmDialog>
+
+      <ConfirmDialog
         open={!!deleteKas}
         onClose={() => setDeleteKas(null)}
+        onConfirm={handleDeleteKas}
         title="Hapus Riwayat Kas"
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setDeleteKas(null)} className="w-full sm:w-auto">Batal</Button>
-            <Button variant="danger" loading={loading} onClick={handleDeleteKas} className="w-full sm:w-auto">Hapus</Button>
-          </>
-        }
+        message="Riwayat kas ini akan dihapus dari laporan."
+        confirmText="Hapus"
+        variant="danger"
+        loading={loading}
       >
-        <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-          Yakin ingin menghapus riwayat kas ini?
-        </p>
         {deleteKas && (
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 space-y-2 text-sm">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/70">
             <div className="flex justify-between">
               <span className="text-slate-500">Kasir:</span>
               <span className="font-medium text-slate-700 dark:text-slate-200">{deleteKas.username}</span>
@@ -466,7 +488,7 @@ export default function Kas() {
             </div>
           </div>
         )}
-      </Modal>
+      </ConfirmDialog>
         </>
       )}
     </div>

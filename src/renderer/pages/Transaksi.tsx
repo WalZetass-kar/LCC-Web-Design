@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X, Image, Settings, QrCode, Tag } from 'lucide-react'
+import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X, Image, Settings, QrCode, Tag, ScanLine, Camera } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -13,6 +13,7 @@ import { useDemoGuard } from '../hooks/useDemoGuard'
 import type { Barang, CartItem, Customer, Identitas } from '../../shared/types'
 import Struk from '../components/Struk'
 import { useReactToPrint } from 'react-to-print'
+import { ensureBluetoothPrinterPermission, ensureCameraPermission } from '../utils/nativePermissions'
 
 interface SalePayload {
   username: string
@@ -66,6 +67,12 @@ export default function Transaksi() {
   const qrisCompletingRef = useRef(false)
   const searchRef = useRef<HTMLInputElement>(null)
   const strukRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const cameraStreamRef = useRef<MediaStream | null>(null)
+  const scanIntervalRef = useRef<number | null>(null)
+  const [cameraScannerOpen, setCameraScannerOpen] = useState(false)
+  const [cameraScannerError, setCameraScannerError] = useState('')
+  const [cameraScannerStatus, setCameraScannerStatus] = useState('Menyiapkan kamera...')
 
   // Pajak PPN
   const [pajakPersen, setPajakPersen] = useState(0)
@@ -216,6 +223,87 @@ export default function Transaksi() {
     searchRef.current?.focus()
   }
 
+  const stopCameraScanner = useCallback(() => {
+    if (scanIntervalRef.current !== null) {
+      window.clearInterval(scanIntervalRef.current)
+      scanIntervalRef.current = null
+    }
+    cameraStreamRef.current?.getTracks().forEach(track => track.stop())
+    cameraStreamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setCameraScannerOpen(false)
+  }, [])
+
+  useEffect(() => stopCameraScanner, [stopCameraScanner])
+
+  const handleCameraBarcode = useCallback((barcode: string) => {
+    const product = products.find(p => p.barcode === barcode || p.kd_barang === barcode)
+    if (!product) {
+      toast(`Barcode "${barcode}" tidak ditemukan`, 'error')
+      stopCameraScanner()
+      return
+    }
+
+    addToCart(product)
+    toast(`${product.nama_barang ?? product.kd_barang} ditambahkan`)
+    stopCameraScanner()
+  }, [products, stopCameraScanner, toast])
+
+  const openCameraScanner = async () => {
+    const permission = await ensureCameraPermission()
+    if (!permission.granted) {
+      toast(permission.message ?? 'Izin kamera ditolak', 'error')
+      return
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast('Kamera tidak tersedia di perangkat ini', 'error')
+      return
+    }
+
+    setCameraScannerError('')
+    setCameraScannerStatus('Menyiapkan kamera...')
+    setCameraScannerOpen(true)
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      })
+      cameraStreamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        await videoRef.current.play()
+      }
+
+      const BarcodeDetectorCtor = (window as any).BarcodeDetector
+      if (!BarcodeDetectorCtor) {
+        setCameraScannerError('Pemindai barcode kamera belum didukung oleh WebView ini. Gunakan scanner USB/Bluetooth atau ketik barcode.')
+        return
+      }
+
+      const detector = new BarcodeDetectorCtor({
+        formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code'],
+      })
+      setCameraScannerStatus('Arahkan kamera ke barcode')
+
+      scanIntervalRef.current = window.setInterval(async () => {
+        const video = videoRef.current
+        if (!video || video.readyState < 2) return
+
+        try {
+          const codes = await detector.detect(video)
+          const rawValue = codes?.[0]?.rawValue
+          if (rawValue) handleCameraBarcode(String(rawValue).trim())
+        } catch (error) {
+          setCameraScannerError(error instanceof Error ? error.message : 'Gagal membaca barcode')
+        }
+      }, 500)
+    } catch (error) {
+      setCameraScannerError(error instanceof Error ? error.message : 'Gagal membuka kamera')
+    }
+  }
+
   const updateQty = (kd: string, delta: number) => {
     setCart(prev => prev.map(c => {
       if (c.kd_barang !== kd) return c
@@ -277,7 +365,16 @@ export default function Transaksi() {
     if (e.key === 'Enter' && filtered.length > 0) addToCart(filtered[0])
   }
 
-  const handlePrint = useReactToPrint({ content: () => strukRef.current })
+  const printReceipt = useReactToPrint({ content: () => strukRef.current })
+
+  const handlePrint = async () => {
+    const permission = await ensureBluetoothPrinterPermission()
+    if (!permission.granted) {
+      toast(permission.message ?? 'Izin Bluetooth printer ditolak', 'error')
+      return
+    }
+    printReceipt()
+  }
 
   const buildSalePayload = (paymentType: 'TUNAI' | 'TRANSFER' | 'QRIS', amount: number): SalePayload => ({
     username: user?.nama_pengguna ?? 'KASIR',
@@ -521,7 +618,12 @@ export default function Transaksi() {
             <kbd className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">Esc</kbd> Reset
           </div>
         </div>
-        <Input ref={searchRef} placeholder="Cari produk (Enter untuk tambah)..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={handleSearchKey} icon={<Search size={14} />} />
+        <div className="flex gap-2">
+          <Input ref={searchRef} placeholder="Cari produk (Enter untuk tambah)..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={handleSearchKey} icon={<Search size={14} />} className="flex-1" />
+          <Button type="button" variant="secondary" onClick={openCameraScanner} icon={<ScanLine size={16} />} className="shrink-0">
+            Scan
+          </Button>
+        </div>
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {filtered.slice(0, 50).map(p => (
@@ -800,6 +902,24 @@ export default function Transaksi() {
       >
         <div ref={strukRef}>
           <Struk cart={cart} subTotal={subTotal} pajak={pajakAmount} pajakPersen={pajakPersen} totalBayar={totalBayar} promoDiskon={promoDiskon} bayar={paidAmount} kembalian={kembalian} kdTransaksi={lastKd ?? ''} jenisBayar={jenisBayar} customerName={selectedCustomer?.nama_customer} poinEarned={poinEarned} kasirName={user?.nama_pengguna} />
+        </div>
+      </Modal>
+
+      <Modal open={cameraScannerOpen} onClose={stopCameraScanner} title="Scan Barcode" size="md"
+        footer={<Button variant="secondary" onClick={stopCameraScanner} className="w-full sm:w-auto">Tutup Kamera</Button>}
+      >
+        <div className="space-y-3">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-black dark:border-slate-700">
+            <video ref={videoRef} muted playsInline className="h-72 w-full object-cover" />
+          </div>
+          <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${
+            cameraScannerError
+              ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
+              : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+          }`}>
+            <Camera size={16} className="mt-0.5 shrink-0" />
+            <span>{cameraScannerError || cameraScannerStatus}</span>
+          </div>
         </div>
       </Modal>
 

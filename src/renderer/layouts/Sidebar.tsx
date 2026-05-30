@@ -58,6 +58,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       { to: '/kas', icon: Wallet, label: 'Kas', code: 'nav_pembelian' },
       { to: '/shifts', icon: Clock, label: 'Shift', code: 'nav_pembelian', feature: 'shift_management' },
       { to: '/debts', icon: DollarSign, label: 'Hutang/Piutang', code: 'nav_pembelian', feature: 'debt_management' },
+      { to: '/payment', icon: DollarSign, label: 'Pembayaran Lisensi', code: 'nav_plans' },
       { to: '/returns', icon: RotateCcw, label: 'Return', code: 'nav_penjualan', feature: 'return_refund' },
       { to: '/promo', icon: Gift, label: 'Promo', code: 'nav_promo' },
       { to: '/laporan', icon: BarChart2, label: 'Laporan', code: 'nav_pembelian', feature: 'reports' },
@@ -76,8 +77,7 @@ export const MENU_GROUPS: MenuGroup[] = [
     label: 'Administrasi',
     items: [
       { to: '/users', icon: Users, label: 'Pengguna', code: 'nav_pengguna', adminOnly: true },
-      { to: '/license-admin', icon: ShieldCheck, label: 'License Center', code: 'nav_license_admin', adminOnly: true },
-      { to: '/subscription-plans', icon: DollarSign, label: 'Paket Langganan', code: 'nav_plans', adminOnly: true },
+      { to: '/license-admin', icon: ShieldCheck, label: 'Developer Panel', code: 'nav_license_admin', adminOnly: true },
       { to: '/activity-log', icon: Activity, label: 'Activity Log', code: 'nav_activity_log', adminOnly: true },
       { to: '/backup', icon: Database, label: 'Backup', code: 'nav_export_db', adminOnly: true, feature: 'backup' },
       { to: '/security', icon: Shield, label: 'Keamanan', code: 'nav_security', adminOnly: true },
@@ -126,8 +126,8 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
   }
 
   const isDemo = user?.hak_akses === 'demo'
-  const isAdmin = ['developer', 'superadmin'].includes(user?.hak_akses ?? '')
-  const canShowRenewal = !isDemo && !['developer', 'superadmin'].includes(user?.hak_akses ?? '')
+  const isAdmin = user?.hak_akses === 'developer'
+  const canShowRenewal = !isDemo && user?.hak_akses !== 'developer'
   const accessDaysRemaining = user?.access_days_remaining ?? (() => {
     if (!user?.access_expires_at) return null
     const expires = new Date(user.access_expires_at)

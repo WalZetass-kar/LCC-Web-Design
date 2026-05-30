@@ -9,8 +9,10 @@ def releaseStorePassword = envOrProp('MEDIASOFT_RELEASE_STORE_PASSWORD')
 def releaseKeyAlias = envOrProp('MEDIASOFT_RELEASE_KEY_ALIAS') ?: 'mediasoft-pos-zetass'
 def releaseKeyPassword = envOrProp('MEDIASOFT_RELEASE_KEY_PASSWORD') ?: releaseStorePassword
 def hasReleaseSigning = releaseStoreFilePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
-def pinnedDomain = envOrProp('MEDIASOFT_PINNED_DOMAIN')
-def certPinSha256 = envOrProp('MEDIASOFT_CERT_PIN_SHA256')
+def defaultPinnedDomain = 'azhkvmkmimepmflzqqty.supabase.co'
+def defaultCertPinSha256 = 'p51goejPCgGH+Oog/MU2k6PObcEfTrrr73jUcuWJ7w0='
+def pinnedDomain = envOrProp('MEDIASOFT_PINNED_DOMAIN') ?: defaultPinnedDomain
+def certPinSha256 = envOrProp('MEDIASOFT_CERT_PIN_SHA256') ?: envOrProp('VITE_CERT_PIN_SHA256') ?: defaultCertPinSha256
 def isReleaseRequested = {
     gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
 }
@@ -103,6 +105,8 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation "com.google.errorprone:error_prone_annotations:2.28.0"
+    implementation "com.google.code.findbugs:jsr305:3.0.2"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

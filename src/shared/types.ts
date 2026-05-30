@@ -203,7 +203,7 @@ export interface Pengguna {
   nama_lengkap: string | null
   email: string | null
   no_telp: string | null
-  hak_akses: string | null // demo > developer > superadmin > admin > operator > kasir
+  hak_akses: string | null // demo > developer > admin > operator > kasir
   status_user: string | null
   terakhir_login: string | null
   tgl_wkt_simpan: string | null
@@ -252,6 +252,7 @@ export interface IpcResponse<T = unknown> {
 export interface UserSession {
   nama_pengguna: string
   nama_lengkap: string | null
+  email?: string | null
   hak_akses: string | null
   access_expires_at?: string | null
   access_days_remaining?: number | null
@@ -259,6 +260,10 @@ export interface UserSession {
   session_token?: string
   session_expires_at?: string
   device_id?: string | null
+  remote_license_token?: string | null
+  remote_license_refresh_token?: string | null
+  remote_customer_id?: string | null
+  remote_auth_user_id?: string | null
   subscription_plan_id?: number | null
   subscription_expires_at?: string | null
 }
@@ -302,6 +307,7 @@ declare global {
   interface Window {
     api?: {
       invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
+      onDeepLink?: (callback: (url: string) => void) => () => void
     }
   }
 }

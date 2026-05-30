@@ -21,6 +21,8 @@ const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   '/returns': { label: 'Return', parent: 'Keuangan' },
   '/laporan': { label: 'Laporan', parent: 'Keuangan' },
   '/users': { label: 'Pengguna', parent: 'Administrasi' },
+  '/license-admin': { label: 'Developer Panel', parent: 'Administrasi' },
+  '/payment': { label: 'Pembayaran Lisensi', parent: 'Keuangan' },
   '/activity-log': { label: 'Activity Log', parent: 'Administrasi' },
   '/settings': { label: 'Pengaturan', parent: 'Administrasi' },
   '/pembelian': { label: 'Pembelian', parent: 'Inventaris' },

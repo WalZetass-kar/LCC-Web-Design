@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   AlertCircle,
   Bell,
@@ -20,8 +20,10 @@ import Badge from '../components/Badge'
 import Textarea from '../components/Textarea'
 import { useToast } from '../contexts/ToastContext'
 import { api } from '../utils/api'
+import type { Customer } from '../../shared/types'
 
 interface WhatsAppSettings {
+  provider: 'fonnte'
   apiKey: string
   enabled: boolean
   notifyOnSale: boolean
@@ -29,9 +31,33 @@ interface WhatsAppSettings {
   notifyOnLowStock: boolean
   notifyOnPayment: boolean
   messageTemplate: string
+  rateLimitPerMinute: number
+}
+
+interface WhatsAppTemplate {
+  id: number
+  name: string
+  content: string
+  created_at: string
+  updated_at?: string | null
+}
+
+interface BroadcastHistory {
+  id: number
+  title: string
+  target_type: string
+  total_targets: number
+  delivered: number
+  failed: number
+  scheduled_at?: string | null
+  sent_at?: string | null
+  status: string
+  detail?: string | null
+  created_at: string
 }
 
 const DEFAULT_TEMPLATE = 'Terima kasih {customer}! Pesanan Anda sebesar {total} telah diterima. No. Transaksi: {invoice}'
+const DEFAULT_BROADCAST_TEMPLATE = 'Halo {{nama_customer}}, total belanja Anda {{total_belanja}} dan poin loyalty {{poin_loyalty}}.'
 
 const notificationItems = [
   { key: 'notifyOnSale', label: 'Transaksi Baru', desc: 'Struk ringkas dikirim ke customer setelah transaksi selesai' },
@@ -81,6 +107,7 @@ export default function WhatsApp() {
   const [testing, setTesting] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [settings, setSettings] = useState<WhatsAppSettings>({
+    provider: 'fonnte',
     apiKey: '',
     enabled: false,
     notifyOnSale: true,
@@ -88,13 +115,26 @@ export default function WhatsApp() {
     notifyOnLowStock: false,
     notifyOnPayment: true,
     messageTemplate: DEFAULT_TEMPLATE,
+    rateLimitPerMinute: 20,
   })
   const [testNumber, setTestNumber] = useState('')
   const [testModal, setTestModal] = useState(false)
   const [lastTestMessage, setLastTestMessage] = useState('')
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([])
+  const [history, setHistory] = useState<BroadcastHistory[]>([])
+  const [targetMode, setTargetMode] = useState<'all' | 'active' | 'manual'>('active')
+  const [manualTargets, setManualTargets] = useState('')
+  const [broadcastTitle, setBroadcastTitle] = useState('Broadcast Customer')
+  const [broadcastTemplate, setBroadcastTemplate] = useState(DEFAULT_BROADCAST_TEMPLATE)
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'scheduled'>('now')
+  const [scheduledAt, setScheduledAt] = useState('')
+  const [broadcastProgress, setBroadcastProgress] = useState({ running: false, total: 0, sent: 0, failed: 0 })
+  const cancelBroadcastRef = useRef(false)
 
   const syncSettings = (data: any) => {
     setSettings({
+      provider: data?.provider ?? 'fonnte',
       apiKey: data?.api_key ?? '',
       enabled: boolFromDb(data?.enabled),
       notifyOnSale: boolFromDb(data?.notify_on_sale, true),
@@ -102,12 +142,25 @@ export default function WhatsApp() {
       notifyOnLowStock: boolFromDb(data?.notify_on_low_stock),
       notifyOnPayment: boolFromDb(data?.notify_on_payment, true),
       messageTemplate: data?.message_template || DEFAULT_TEMPLATE,
+      rateLimitPerMinute: Number(data?.rate_limit_per_minute ?? 20),
     })
   }
 
   useEffect(() => {
     api<any>('whatsapp:get').then(r => {
       if (r.success && r.data) syncSettings(r.data)
+    })
+    api<Customer[]>('customer:getAll').then(r => {
+      if (r.success) setCustomers(r.data ?? [])
+    })
+    api<WhatsAppTemplate[]>('whatsapp:getTemplates').then(r => {
+      if (r.success) {
+        setTemplates(r.data ?? [])
+        if (r.data?.[0]?.content) setBroadcastTemplate(r.data[0].content)
+      }
+    })
+    api<BroadcastHistory[]>('whatsapp:getBroadcastHistory').then(r => {
+      if (r.success) setHistory(r.data ?? [])
     })
   }, [])
 
@@ -153,8 +206,114 @@ export default function WhatsApp() {
     }
   }
 
+  const renderBroadcastTemplate = (template: string, customer: Partial<Customer>) => (
+    template
+      .split('{{nama_customer}}').join(customer.nama_customer || 'Customer')
+      .split('{{total_belanja}}').join(Number(customer.total_belanja ?? 0).toLocaleString('id-ID'))
+      .split('{{poin_loyalty}}').join(Number(customer.poin ?? 0).toLocaleString('id-ID'))
+  )
+
+  const broadcastTargets = () => {
+    if (targetMode === 'manual') {
+      return manualTargets
+        .split(/\r?\n|,/)
+        .map((phone, index) => ({ kd_customer: `manual-${index}`, nama_customer: `Manual ${index + 1}`, no_telp: phone.trim(), total_belanja: 0, poin: 0 }))
+        .filter(item => item.no_telp)
+    }
+
+    return customers.filter(customer => {
+      if (!customer.no_telp) return false
+      if (targetMode === 'active') return customer.status === 'Aktif'
+      return true
+    })
+  }
+
+  const saveCurrentTemplate = async () => {
+    const r = await api<WhatsAppTemplate[]>('whatsapp:saveTemplate', {
+      name: broadcastTitle || 'Template Broadcast',
+      content: broadcastTemplate,
+    })
+    if (r.success) {
+      setTemplates(r.data ?? [])
+      toast('Template broadcast disimpan')
+    } else {
+      toast(r.message as string || 'Gagal menyimpan template', 'error')
+    }
+  }
+
+  const refreshHistory = async () => {
+    const r = await api<BroadcastHistory[]>('whatsapp:getBroadcastHistory')
+    if (r.success) setHistory(r.data ?? [])
+  }
+
+  const wait = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms))
+
+  const sendBroadcast = async () => {
+    if (!settings.apiKey.trim()) return toast('API key Fonnte belum diisi', 'error')
+    const targets = broadcastTargets()
+    if (targets.length === 0) return toast('Target broadcast kosong', 'error')
+    if (!broadcastTemplate.trim()) return toast('Template pesan wajib diisi', 'error')
+
+    if (scheduleMode === 'scheduled') {
+      if (!scheduledAt) return toast('Pilih jadwal broadcast', 'error')
+      const scheduledTime = new Date(scheduledAt).getTime()
+      if (!Number.isFinite(scheduledTime) || scheduledTime <= Date.now()) return toast('Jadwal harus setelah waktu saat ini', 'error')
+      await api('whatsapp:saveBroadcastHistory', {
+        title: broadcastTitle,
+        targetType: targetMode,
+        totalTargets: targets.length,
+        delivered: 0,
+        failed: 0,
+        scheduledAt: new Date(scheduledAt).toISOString(),
+        status: 'scheduled',
+      })
+      await refreshHistory()
+      toast('Broadcast dijadwalkan')
+      return
+    }
+
+    cancelBroadcastRef.current = false
+    setBroadcastProgress({ running: true, total: targets.length, sent: 0, failed: 0 })
+    const delayMs = Math.ceil(60000 / Math.max(1, settings.rateLimitPerMinute))
+    const detail: Array<{ phone: string; success: boolean; message?: string }> = []
+    let sent = 0
+    let failed = 0
+
+    for (const target of targets) {
+      if (cancelBroadcastRef.current) break
+      const message = renderBroadcastTemplate(broadcastTemplate, target)
+      const r = await api('whatsapp:test', {
+        phone: target.no_telp,
+        apiKey: settings.apiKey,
+        message,
+      })
+      if (r.success) sent += 1
+      else failed += 1
+      detail.push({ phone: target.no_telp ?? '', success: r.success, message: r.message as string | undefined })
+      setBroadcastProgress({ running: true, total: targets.length, sent, failed })
+      if (sent + failed < targets.length) await wait(delayMs)
+    }
+
+    setBroadcastProgress({ running: false, total: targets.length, sent, failed })
+    await api('whatsapp:saveBroadcastHistory', {
+      title: broadcastTitle,
+      targetType: targetMode,
+      totalTargets: targets.length,
+      delivered: sent,
+      failed,
+      sentAt: new Date().toISOString(),
+      status: cancelBroadcastRef.current ? 'cancelled' : failed > 0 ? 'partial' : 'completed',
+      detail,
+    })
+    await refreshHistory()
+    toast(cancelBroadcastRef.current ? 'Broadcast dibatalkan' : `Broadcast selesai: ${sent} terkirim, ${failed} gagal`, failed > 0 ? 'error' : 'success')
+  }
+
   const normalizedTestNumber = normalizePreview(testNumber)
   const activeCount = notificationItems.filter(item => settings[item.key]).length
+  const targets = broadcastTargets()
+  const previewTarget = targets[0] ?? { nama_customer: 'Customer', total_belanja: 0, poin: 0 }
+  const progressPercent = broadcastProgress.total ? Math.round(((broadcastProgress.sent + broadcastProgress.failed) / broadcastProgress.total) * 100) : 0
 
   return (
     <div className="space-y-5">
@@ -216,8 +375,28 @@ export default function WhatsApp() {
 
           <Card title="Konfigurasi API" subtitle="Token disimpan lokal di database aplikasi.">
             <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-label mb-2 block">Gateway</label>
+                  <select
+                    value={settings.provider}
+                    onChange={e => setSettings(prev => ({ ...prev, provider: e.target.value as 'fonnte' }))}
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  >
+                    <option value="fonnte">Fonnte</option>
+                  </select>
+                </div>
+                <Input
+                  label="Maksimal Pesan per Menit"
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={settings.rateLimitPerMinute}
+                  onChange={e => setSettings(prev => ({ ...prev, rateLimitPerMinute: Number(e.target.value) }))}
+                />
+              </div>
               <div>
-                <label className="text-label mb-2 block">API Key Fonnte</label>
+                <label className="text-label mb-2 block">API Key / Token Fonnte</label>
                 <div className="relative">
                   <Input
                     type={showKey ? 'text' : 'password'}
@@ -277,6 +456,112 @@ export default function WhatsApp() {
               {settings.messageTemplate || DEFAULT_TEMPLATE}
             </div>
           </Card>
+
+          <Card title="Broadcast Customer">
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <Input
+                  label="Judul"
+                  value={broadcastTitle}
+                  onChange={e => setBroadcastTitle(e.target.value)}
+                />
+                <div>
+                  <label className="text-label mb-2 block">Target</label>
+                  <select
+                    value={targetMode}
+                    onChange={e => setTargetMode(e.target.value as typeof targetMode)}
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  >
+                    <option value="active">Customer aktif</option>
+                    <option value="all">Semua customer</option>
+                    <option value="manual">Manual</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-label mb-2 block">Jadwal</label>
+                  <select
+                    value={scheduleMode}
+                    onChange={e => setScheduleMode(e.target.value as typeof scheduleMode)}
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                  >
+                    <option value="now">Kirim sekarang</option>
+                    <option value="scheduled">Jadwalkan</option>
+                  </select>
+                </div>
+              </div>
+
+              {targetMode === 'manual' && (
+                <Textarea
+                  value={manualTargets}
+                  onChange={e => setManualTargets(e.target.value)}
+                  rows={3}
+                  placeholder="08123456789, 628123456789"
+                  helperText="Pisahkan nomor dengan baris baru atau koma."
+                />
+              )}
+
+              {scheduleMode === 'scheduled' && (
+                <Input
+                  label="Waktu Kirim"
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={e => setScheduledAt(e.target.value)}
+                />
+              )}
+
+              <div>
+                <label className="text-label mb-2 block">Template Broadcast</label>
+                {templates.length > 0 && (
+                  <select
+                    className="mb-2 w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    onChange={e => {
+                      const selected = templates.find(item => String(item.id) === e.target.value)
+                      if (selected) {
+                        setBroadcastTitle(selected.name)
+                        setBroadcastTemplate(selected.content)
+                      }
+                    }}
+                  >
+                    {templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}
+                  </select>
+                )}
+                <Textarea
+                  value={broadcastTemplate}
+                  onChange={e => setBroadcastTemplate(e.target.value)}
+                  rows={5}
+                  placeholder={DEFAULT_BROADCAST_TEMPLATE}
+                  helperText="Variabel: {{nama_customer}}, {{total_belanja}}, {{poin_loyalty}}"
+                />
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                {renderBroadcastTemplate(broadcastTemplate || DEFAULT_BROADCAST_TEMPLATE, previewTarget)}
+              </div>
+
+              {broadcastProgress.running && (
+                <div className="space-y-2">
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                    <div className="h-full bg-primary-600 transition-all" style={{ width: `${progressPercent}%` }} />
+                  </div>
+                  <p className="text-xs text-slate-500">{broadcastProgress.sent + broadcastProgress.failed}/{broadcastProgress.total} diproses · {broadcastProgress.sent} terkirim · {broadcastProgress.failed} gagal</p>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button onClick={sendBroadcast} loading={broadcastProgress.running} icon={<Send size={16} />} className="w-full sm:w-auto">
+                  {scheduleMode === 'scheduled' ? 'Jadwalkan' : 'Kirim Broadcast'}
+                </Button>
+                <Button variant="secondary" onClick={saveCurrentTemplate} className="w-full sm:w-auto">
+                  Simpan Template
+                </Button>
+                {broadcastProgress.running && (
+                  <Button variant="danger" onClick={() => { cancelBroadcastRef.current = true }} className="w-full sm:w-auto">
+                    Batalkan
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Card>
         </div>
 
         <div className="space-y-4">
@@ -310,6 +595,25 @@ export default function WhatsApp() {
             <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
               <AlertCircle size={17} className="mt-0.5 shrink-0" />
               <p>Nomor di data customer boleh ditulis 08..., +628..., atau 628.... Sistem akan mengirim ke format 628....</p>
+            </div>
+          </Card>
+
+          <Card title="History Broadcast">
+            <div className="max-h-80 space-y-2 overflow-y-auto text-sm">
+              {history.length === 0 ? (
+                <p className="text-caption">Belum ada history broadcast</p>
+              ) : history.slice(0, 10).map(item => (
+                <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-slate-800 dark:text-slate-100">{item.title}</p>
+                      <p className="text-xs text-slate-500">{item.delivered}/{item.total_targets} delivered · {item.failed} failed</p>
+                    </div>
+                    <Badge label={item.status} variant={item.status === 'completed' ? 'green' : item.status === 'scheduled' ? 'blue' : item.failed > 0 ? 'red' : 'gray'} />
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-400">{new Date(item.created_at).toLocaleString('id-ID')}</p>
+                </div>
+              ))}
             </div>
           </Card>
         </div>

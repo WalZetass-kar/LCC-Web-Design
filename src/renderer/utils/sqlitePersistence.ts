@@ -40,6 +40,9 @@ async function openDb() {
 }
 
 export async function getPersistentItem(key: string): Promise<string | null> {
+  const secureValue = secureStorage.getItem(key)
+  if (secureValue) return secureValue
+
   const db = await openDb()
   if (!db) return secureStorage.getItem(key)
   const result = await db.query('SELECT value FROM app_kv WHERE key = ? LIMIT 1', [key])
@@ -51,10 +54,7 @@ export async function setPersistentItem(key: string, value: string): Promise<voi
   secureStorage.setItem(key, value)
   const db = await openDb()
   if (!db) return
-  await db.run(
-    'INSERT OR REPLACE INTO app_kv (key, value, updated_at) VALUES (?, ?, ?)',
-    [key, value, new Date().toISOString()]
-  )
+  await db.run('DELETE FROM app_kv WHERE key = ?', [key])
 }
 
 export async function removePersistentItem(key: string): Promise<void> {

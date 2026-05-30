@@ -8,7 +8,7 @@ export const pengguna = sqliteTable('mediasoft_pengguna', {
   tgl_wkt_edit: text('tgl_wkt_edit'),
   status_user: text('status_user').default('Aktif').notNull(),
   terakhir_login: text('terakhir_login'),
-  hak_akses: text('hak_akses').default('kasir').notNull(), // developer, operator, kasir, superadmin, admin
+  hak_akses: text('hak_akses').default('kasir').notNull(), // developer, admin, operator, kasir
   email: text('email'),
   no_telp: text('no_telp'),
   access_expires_at: text('access_expires_at'),

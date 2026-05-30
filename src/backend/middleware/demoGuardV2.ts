@@ -59,16 +59,35 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   // WhatsApp
   'whatsapp:save',
   'whatsapp:test',
+  'whatsapp:saveTemplate',
+  'whatsapp:saveBroadcastHistory',
 
   // Security
   'security:save',
 
   // Ecommerce API
   'ecommerce:save',
+  'ecommerce:saveIntegration',
+  'ecommerce:syncNow',
+  'ecommerce:enqueueStockUpdate',
 
   // License / device / popup administration
   'license:testAndSave',
   'license:syncFromServer',
+  'license:syncBuyerLicense',
+  'license:createPaymentInvoice',
+  'license:createManualPaymentRequest',
+  'license:deletePayment',
+  'license:getPublicPlans',
+  'license:blockDevice',
+  'license:unblockDevice',
+  'license:suspendDeviceLicense',
+  'license:activateDeviceLicense',
+  'license:extendDeviceLicense',
+  'license:saveAppUpdate',
+  'license:createAnnouncement',
+  'license:updateAnnouncement',
+  'license:deleteAnnouncement',
   'device:revoke',
   'device:revokeAll',
   'device:revokeSession',
@@ -438,7 +457,7 @@ const READ_CHANNELS: Set<string> = new Set([
   'strukSettings:get',
 ])
 
-const ADMIN_ROLES = new Set(['developer', 'superadmin'])
+const ADMIN_ROLES = new Set(['developer'])
 
 const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
   // User administration
@@ -469,6 +488,10 @@ const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
   'security:save',
   'ecommerce:get',
   'ecommerce:save',
+  'ecommerce:getIntegration',
+  'ecommerce:saveIntegration',
+  'ecommerce:syncNow',
+  'ecommerce:enqueueStockUpdate',
   'system:resetData',
 
   // Commercial/admin setup
@@ -491,6 +514,11 @@ const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
   'license:testAndSave',
   'license:validateApplication',
   'license:syncFromServer',
+  'license:syncBuyerLicense',
+  'license:createPaymentInvoice',
+  'license:createManualPaymentRequest',
+  'license:getPaymentStatus',
+  'license:getPublicPlans',
   'license:getUsers',
   'license:createUser',
   'license:updateUser',
@@ -498,7 +526,9 @@ const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
   'license:changeUserPlan',
   'license:resetUserPassword',
   'license:getPlans',
+  'license:createPlan',
   'license:updatePlan',
+  'license:deletePlan',
   'license:getPlanFeatures',
   'license:setPlanFeatures',
   'license:getFeatures',
@@ -509,6 +539,25 @@ const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
   'license:getPayments',
   'license:createPayment',
   'license:approvePayment',
+  'license:deletePayment',
+  'license:getStats',
+  'license:getRevenue',
+  'license:getDevices',
+  'license:getDeviceDetail',
+  'license:blockDevice',
+  'license:unblockDevice',
+  'license:suspendDeviceLicense',
+  'license:activateDeviceLicense',
+  'license:extendDeviceLicense',
+  'license:getAppUpdates',
+  'license:saveAppUpdate',
+  'license:getErrors',
+  'license:getAnnouncements',
+  'license:createAnnouncement',
+  'license:updateAnnouncement',
+  'license:deleteAnnouncement',
+  'license:heartbeat',
+  'license:logError',
 
   // Audit maintenance
   'audit:getAll',
@@ -580,7 +629,7 @@ export function shouldBlockChannel(channel: string): boolean {
     return isMutationChannel(channel)
   }
   
-  // Struk settings: only developer, superadmin, admin, operator allowed
+  // Struk settings: only developer, admin, operator allowed
   const strukSettingsChannels = [
     'strukSettings:update',
     'strukSettings:uploadQris',
@@ -588,7 +637,7 @@ export function shouldBlockChannel(channel: string): boolean {
   ]
   
   if (strukSettingsChannels.includes(channel)) {
-    const allowedRoles = ['developer', 'superadmin', 'admin', 'operator']
+    const allowedRoles = ['developer', 'admin', 'operator']
     // Block if role is NOT in allowed list
     return !allowedRoles.includes(role || '')
   }

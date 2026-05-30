@@ -3,9 +3,8 @@
  * SUBSCRIPTION PLANS — Admin page for managing pricing plans
  * ═══════════════════════════════════════════════════════════════════════
  *
- * Only accessible by developer/superadmin roles.
- * CRUD: Create, Edit, Deactivate (soft delete).
- * Plans feed directly into the PricingPopup component.
+ * Legacy local plans page. Runtime routing now points users to Developer Panel -> Paket.
+ * CRUD: Create, Edit, Deactivate (soft delete) for old local data only.
  */
 
 import { useState, useEffect } from 'react'

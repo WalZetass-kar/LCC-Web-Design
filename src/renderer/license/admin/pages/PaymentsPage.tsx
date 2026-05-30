@@ -1,21 +1,38 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, CheckCircle } from 'lucide-react';
+import { AlertTriangle, Plus, CheckCircle, Trash2 } from 'lucide-react';
 import {
   AdminPlanRow, AdminUserRow, PaymentRow,
-  approvePayment, createPayment, listPayments, listPlans, listUsers,
+  approvePayment, createPayment, deletePayment, listPayments, listPlans, listUsers,
 } from '../api';
 import { Alert, Badge, Button, Field, Input, Modal, PageHeader, Select, Table, Td, Th } from '../components';
 
 export const PaymentsPage: React.FC = () => {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState<PaymentRow | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try { setPayments(await listPayments()); } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+
+  async function removePayment(payment: PaymentRow) {
+    setDeletingId(payment.id);
+    setDeleteError('');
+    try {
+      await deletePayment(payment.id);
+      setConfirmingDelete(null);
+      await load();
+    } catch (error: any) {
+      setDeleteError(error?.response?.data?.message || error?.message || 'Gagal menghapus pembayaran');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div>
@@ -49,17 +66,53 @@ export const PaymentsPage: React.FC = () => {
               </Td>
               <Td><span className="text-xs text-slate-400">{new Date(p.created_at).toLocaleString('id-ID')}</span></Td>
               <Td>
-                {p.status === 'pending' && (
-                  <Button size="sm" onClick={async () => { await approvePayment(p.id); load(); }}>
-                    <CheckCircle className="w-3 h-3" />Approve
+                <div className="flex justify-end gap-1">
+                  {p.status === 'pending' && (
+                    <Button size="sm" onClick={async () => { await approvePayment(p.id); load(); }}>
+                      <CheckCircle className="w-3 h-3" />Approve
+                    </Button>
+                  )}
+                  <Button size="sm" variant="danger" onClick={() => { setConfirmingDelete(p); setDeleteError(''); }} disabled={deletingId === p.id}>
+                    <Trash2 className="w-3 h-3" />Hapus
                   </Button>
-                )}
+                </div>
               </Td>
             </tr>
           ))}
         </tbody>
       </Table>
       {showAdd && <AddPaymentModal onClose={() => setShowAdd(false)} onSaved={load} />}
+      {confirmingDelete && (
+        <Modal title="Hapus Pembayaran" onClose={() => { if (!deletingId) setConfirmingDelete(null); }}>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-800 dark:text-white">{confirmingDelete.user_name}</p>
+                <p className="mt-1 text-xs text-slate-400">{confirmingDelete.user_email}</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/70">
+              <div className="flex justify-between gap-3"><span className="text-slate-500">Paket</span><span className="font-semibold text-slate-800 dark:text-slate-100">{confirmingDelete.plan_code || '-'}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-slate-500">Jumlah</span><span className="font-semibold text-slate-800 dark:text-slate-100">Rp {Number(confirmingDelete.amount).toLocaleString('id-ID')}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-slate-500">Status</span><span className="font-semibold text-slate-800 dark:text-slate-100">{confirmingDelete.status}</span></div>
+            </div>
+            <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+              Menghapus pembayaran tidak membatalkan subscription yang sudah pernah dibuat dari pembayaran ini.
+            </div>
+            {deleteError && <Alert>{deleteError}</Alert>}
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+              <Button variant="secondary" onClick={() => setConfirmingDelete(null)} disabled={deletingId === confirmingDelete.id}>Batal</Button>
+              <Button variant="danger" onClick={() => void removePayment(confirmingDelete)} disabled={deletingId === confirmingDelete.id}>
+                <Trash2 className="w-4 h-4" />
+                {deletingId === confirmingDelete.id ? 'Menghapus...' : 'Hapus'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

@@ -9,6 +9,7 @@ import { useToast } from '../contexts/ToastContext'
 import { SkeletonPage } from '../components/Skeleton'
 import { formatDateTime } from '../utils/format'
 import { secureStorage } from '../utils/secureStorage'
+import { ensureBluetoothPrinterPermission } from '../utils/nativePermissions'
 
 interface PrintJob {
   id: number
@@ -77,6 +78,12 @@ export default function PrintQueue() {
   const processNextJob = async () => {
     const pendingJob = jobs.find(j => j.status === 'pending')
     if (!pendingJob) return
+
+    const permission = await ensureBluetoothPrinterPermission()
+    if (!permission.granted) {
+      toast(permission.message ?? 'Izin Bluetooth printer ditolak', 'error')
+      return
+    }
 
     const updatedJobs = jobs.map(j =>
       j.id === pendingJob.id ? { ...j, status: 'printing' as const } : j

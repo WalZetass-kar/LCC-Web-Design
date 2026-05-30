@@ -13,7 +13,7 @@ import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
 import { MENU_GROUPS } from '../layouts/Sidebar'
-import type { Pengguna, SubscriptionPlan } from '../../shared/types'
+import type { Pengguna } from '../../shared/types'
 import { formatDate } from '../utils/format'
 
 interface FormState {
@@ -24,13 +24,10 @@ interface FormState {
   pin: string
   confirmPin: string
   pin_enabled: boolean
-  hak_akses: 'developer' | 'superadmin' | 'admin' | 'operator' | 'kasir'
+  hak_akses: 'developer' | 'admin' | 'operator' | 'kasir'
   email: string
   no_telp: string
   access_expires_at: string
-  subscription_plan_id: string
-  subscription_expires_at: string
-  is_buyer: boolean
 }
 
 const EMPTY: FormState = {
@@ -45,9 +42,6 @@ const EMPTY: FormState = {
   email: '',
   no_telp: '',
   access_expires_at: '',
-  subscription_plan_id: '',
-  subscription_expires_at: '',
-  is_buyer: false,
 }
 
 function isDeveloperAccount(user?: Pick<Pengguna, 'hak_akses'> | null) {
@@ -55,7 +49,14 @@ function isDeveloperAccount(user?: Pick<Pengguna, 'hak_akses'> | null) {
 }
 
 function isPrivilegedRole(role?: string | null) {
-  return ['developer', 'superadmin'].includes(role ?? '')
+  return role === 'developer'
+}
+
+function normalizeLocalRole(role?: string | null): FormState['hak_akses'] {
+  if (role === 'superadmin') return 'developer'
+  return ['developer', 'admin', 'operator', 'kasir'].includes(role ?? '')
+    ? role as FormState['hak_akses']
+    : 'kasir'
 }
 
 // Password validation
@@ -114,7 +115,6 @@ export default function Users() {
   const { guardPremiumFeature } = useDemoGuard()
   const [activeTab, setActiveTab] = useState<'users' | 'devices'>('users')
   const [data, setData] = useState<Pengguna[]>([])
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [modal, setModal] = useState<'add' | 'edit' | 'delete' | 'password' | 'permissions' | 'extend' | null>(null)
   const [form, setForm] = useState<FormState>({ ...EMPTY })
   const [selected, setSelected] = useState<Pengguna | null>(null)
@@ -135,9 +135,6 @@ export default function Users() {
 
   useEffect(() => {
     load()
-    api<SubscriptionPlan[]>('plan:getActive').then(r => {
-      if (r.success) setPlans(r.data ?? [])
-    })
   }, [])
 
   const openAdd = () => {
@@ -155,13 +152,10 @@ export default function Users() {
       pin: '',
       confirmPin: '',
       pin_enabled: !!row.pin_enabled,
-      hak_akses: (row.hak_akses as FormState['hak_akses']) ?? 'kasir',
+      hak_akses: normalizeLocalRole(row.hak_akses),
       email: row.email ?? '',
       no_telp: row.no_telp ?? '',
       access_expires_at: toDateInputValue(row.access_expires_at),
-      subscription_plan_id: row.subscription_plan_id ? String(row.subscription_plan_id) : '',
-      subscription_expires_at: toDateInputValue(row.subscription_expires_at),
-      is_buyer: !!row.is_buyer,
     })
     const r = await api<Record<string, boolean>>('user:getPermissions', row.nama_pengguna)
     setPermissions(normalizePermissions(r.success ? (r.data ?? {}) : {}))
@@ -209,9 +203,6 @@ export default function Users() {
     const payload = {
       ...form,
       access_expires_at: form.access_expires_at || null,
-      subscription_plan_id: form.subscription_plan_id ? Number(form.subscription_plan_id) : null,
-      subscription_expires_at: form.subscription_expires_at || null,
-      is_buyer: form.is_buyer,
       pin: form.pin || undefined,
       permissions,
       _caller: currentUser?.nama_pengguna,
@@ -298,7 +289,7 @@ export default function Users() {
     {
       accessorKey: 'access_expires_at', header: 'Masa Akses', size: 130,
       cell: ({ getValue, row }) => {
-        if (['developer', 'superadmin'].includes(row.original.hak_akses ?? '')) {
+        if (row.original.hak_akses === 'developer') {
           return <span className="text-xs text-slate-400">Tanpa batas</span>
         }
         const value = getValue() as string | null
@@ -320,27 +311,9 @@ export default function Users() {
         const hak = getValue() as string
         const variant = 
           hak === 'developer' ? 'purple' :
-          hak === 'superadmin' ? 'red' :
           hak === 'admin' ? 'blue' :
           hak === 'operator' ? 'amber' : 'green'
         return <Badge label={hak?.toUpperCase() ?? 'KASIR'} variant={variant} />
-      },
-    },
-    {
-      accessorKey: 'plan_name',
-      header: 'Paket',
-      size: 130,
-      cell: ({ row }) => {
-        const planName = row.original.plan_name
-        if (!planName) return <span className="text-xs text-slate-400">Lokal</span>
-        return (
-          <div className="space-y-0.5">
-            <Badge label={planName} variant="blue" />
-            <p className="text-[10px] text-slate-400">
-              {row.original.subscription_expires_at ? formatDate(row.original.subscription_expires_at) : 'Tanpa masa aktif'}
-            </p>
-          </div>
-        )
       },
     },
     {
@@ -349,7 +322,7 @@ export default function Users() {
       size: 90,
       cell: ({ row }) => (
         <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-          {row.original.current_devices ?? 0}/{row.original.max_devices === -1 ? '∞' : row.original.max_devices ?? 1}
+          {row.original.current_devices ?? 0} aktif
         </span>
       ),
     },
@@ -548,44 +521,11 @@ export default function Users() {
               <option value="kasir">Kasir</option>
               <option value="operator">Operator</option>
               <option value="admin">Admin</option>
-              <option value="superadmin">Super Admin</option>
               <option value="developer">Developer</option>
             </select>
           </div>
           <Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} />
           <Input label="No. Telepon" value={form.no_telp} onChange={e => f('no_telp', e.target.value)} />
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Paket Langganan</label>
-            <select
-              value={form.subscription_plan_id}
-              onChange={e => setForm(prev => ({ ...prev, subscription_plan_id: e.target.value }))}
-              className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400"
-            >
-              <option value="">Tanpa paket / lokal</option>
-              {plans.map(plan => (
-                <option key={plan.id} value={plan.id}>{plan.name}</option>
-              ))}
-            </select>
-          </div>
-          <Input
-            label="Masa Langganan"
-            type="date"
-            value={form.subscription_expires_at}
-            onChange={e => f('subscription_expires_at', e.target.value)}
-            helperText="Kosongkan agar mengikuti durasi paket saat paket dipilih"
-          />
-          <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
-            <span>
-              <span className="block text-xs font-medium text-slate-600 dark:text-slate-400">Akun Pembeli</span>
-              <span className="block text-[11px] text-slate-400">Tandai akun customer/subscriber eksternal</span>
-            </span>
-            <input
-              type="checkbox"
-              checked={form.is_buyer}
-              onChange={e => setForm(prev => ({ ...prev, is_buyer: e.target.checked }))}
-              className="w-4 h-4 rounded accent-primary-500"
-            />
-          </label>
           <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
             <span>
               <span className="block text-xs font-medium text-slate-600 dark:text-slate-400">Login PIN Kasir</span>
@@ -619,7 +559,7 @@ export default function Users() {
             type="date"
             value={form.access_expires_at}
             onChange={e => f('access_expires_at', e.target.value)}
-            helperText={formHasUnlimitedAccess ? 'Developer dan superadmin selalu tanpa batas' : 'Kosongkan untuk akses tanpa batas'}
+            helperText={formHasUnlimitedAccess ? 'Developer selalu tanpa batas' : 'Kosongkan untuk akses tanpa batas'}
             disabled={formHasUnlimitedAccess || (modal === 'edit' && isDeveloperAccount(selected))}
           />
         </div>
@@ -749,7 +689,6 @@ interface DeviceRow {
   last_seen_at: string | null
   first_seen_at?: string | null
   status: string
-  plan_name?: string | null
 }
 
 function DevicesTab({ currentUser }: { currentUser: string }) {
@@ -801,7 +740,7 @@ function DevicesTab({ currentUser }: { currentUser: string }) {
                 <tr key={d.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                   <td className="px-3 py-2">
                     <p className="font-medium">{d.username}</p>
-                    <p className="text-[10px] text-slate-400">{d.nama_lengkap || d.plan_name || '-'}</p>
+                    <p className="text-[10px] text-slate-400">{d.nama_lengkap || '-'}</p>
                   </td>
                   <td className="text-slate-600 dark:text-slate-400">
                     <p>{d.device_name || d.device_id?.slice(0, 12) || '—'}</p>

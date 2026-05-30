@@ -14,7 +14,7 @@
  * } from './license';
  *
  * const client = initLicenseClient({
- *   baseURL: import.meta.env.VITE_LICENSE_SERVER_URL || 'http://localhost:4000/api',
+ *   baseURL: import.meta.env.VITE_LICENSE_SERVER_URL || 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license',
  *   appPlatform: 'electron-windows',
  *   appVersion: '2.0.0',
  *   onForceLogout: () => location.reload(),
@@ -51,7 +51,7 @@ export { FeatureGate } from './FeatureGate';
 export { UpgradePopup } from './UpgradePopup';
 export { LoginScreen } from './LoginScreen';
 
-// Panel admin (hanya dirender saat user adalah developer/super_admin).
+// Panel admin (hanya dirender saat user lokal adalah developer).
 export { AdminPanel, AdminGate, AdminLink, useIsAdmin, adminApi } from './admin';
 
 /** Daftar fitur yang dipakai aplikasi POS. Pakai konstanta agar typo terdeteksi. */

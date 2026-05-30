@@ -18,9 +18,18 @@ import type {
 import bcrypt from 'bcryptjs'
 import { buildAssistantPrompt, buildLocalAssistantResponse } from '../../shared/dashboardAssistant'
 import { dashboardSummaryToSheetsPayload, testGoogleSheetsPayload } from '../../shared/googleSheetsExport'
-import { DEFAULT_INDUSTRY_SETTINGS, defaultModelForProvider, normalizeIndustrySettings, type IndustrySettings } from '../../shared/industrySettings'
+import {
+  DEFAULT_INDUSTRY_SETTINGS,
+  defaultBaseUrlForProvider,
+  defaultModelForProvider,
+  normalizeIndustrySettings,
+  openAiCompatibleChatUrl,
+  openAiCompatibleModelsUrl,
+  type IndustrySettings,
+} from '../../shared/industrySettings'
+import { isLicenseSessionExpiredResult } from '../../shared/licenseSession'
 import { validatePasswordStrength } from '../../shared/passwordPolicy'
-import { normalizeSyncServerUrl } from '../../shared/endpointSecurity'
+import { assertHttpsEndpoint, normalizeSyncServerUrl } from '../../shared/endpointSecurity'
 import { collectAuthDeviceInfo } from './authDevice'
 import { secureStorage } from './secureStorage'
 import { getPersistentItem, setPersistentItem } from './sqlitePersistence'
@@ -34,12 +43,19 @@ type MobileUser = Pengguna & {
   pin_enabled?: number | boolean | null
   must_change_password?: number | boolean | null
   permissions?: Record<string, boolean>
+  remote_license_token?: string | null
+  remote_license_refresh_token?: string | null
+  remote_customer_id?: string | null
+  remote_auth_user_id?: string | null
 }
 
 interface MobileAuthDeviceInfo {
   deviceId?: string | null
   deviceName?: string | null
   userAgent?: string | null
+  platform?: string | null
+  osName?: string | null
+  appVersion?: string | null
 }
 
 interface MobileStore {
@@ -96,7 +112,11 @@ interface MobileStore {
 }
 
 const STORAGE_KEY = 'mediasoft-pos-android-store-v3'
+const AI_API_KEY_STORAGE_KEY = 'integrations.ai_api_key'
 const STORE_VERSION = 3
+const DEFAULT_LICENSE_SERVER_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
+const LICENSE_LAST_SUCCESS_KEY = 'license_last_success_at'
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 let memoryStore: MobileStore | null = null
 
@@ -108,11 +128,26 @@ interface MobileLoginAttempt {
 
 const mobileLoginAttempts = new Map<string, MobileLoginAttempt>()
 const MAX_LOGIN_ATTEMPTS = 5
-const LOGIN_LOCK_DURATION_MS = 15 * 60 * 1000
+const LOGIN_LOCK_DURATION_MS = 5 * 60 * 1000
 const LOGIN_WINDOW_MS = 5 * 60 * 1000
 
 function now() {
   return new Date().toISOString()
+}
+
+function normalizeMobileLocalRole(role?: string | null): string {
+  if (role === 'superadmin') return 'developer'
+  return ['developer', 'admin', 'operator', 'kasir', 'demo'].includes(role ?? '') ? String(role) : 'kasir'
+}
+
+function appConfigRefererUrl() {
+  const raw = import.meta.env.VITE_AI_REFERER_URL || import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_SUPABASE_URL || DEFAULT_LICENSE_SERVER_URL
+  try {
+    const parsed = new URL(raw)
+    return parsed.protocol === 'https:' ? parsed.toString().replace(/\/+$/, '') : DEFAULT_LICENSE_SERVER_URL
+  } catch {
+    return DEFAULT_LICENSE_SERVER_URL
+  }
 }
 
 function dateKey(value = new Date()) {
@@ -142,6 +177,9 @@ function authDevice(value: unknown): MobileAuthDeviceInfo {
     deviceId: typeof raw.deviceId === 'string' ? raw.deviceId : null,
     deviceName: typeof raw.deviceName === 'string' ? raw.deviceName : null,
     userAgent: typeof raw.userAgent === 'string' ? raw.userAgent : null,
+    platform: typeof raw.platform === 'string' ? raw.platform : null,
+    osName: typeof raw.osName === 'string' ? raw.osName : null,
+    appVersion: typeof raw.appVersion === 'string' ? raw.appVersion : null,
   }
 }
 
@@ -386,9 +424,9 @@ function createDefaultStore(): MobileStore {
       { id: 2, name: 'Gold', min_points: 100, discount_percent: 5, benefits: 'Diskon 5%', color: '#f59e0b' },
     ],
     audit: [],
-    whatsapp: { enabled: 0, phone_number: '', message_template: '' },
+    whatsapp: { enabled: 0, provider: 'fonnte', api_key: '', rate_limit_per_minute: 20, phone_number: '', message_template: '' },
     security: { id: 1, pin_enabled: 0, pin_code: '', lock_after_minutes: 15 },
-    ecommerce: { enabled: 0, api_key: '', base_url: '' },
+    ecommerce: { enabled: 0, api_key: '', base_url: '', platform: 'woocommerce', autoSync: false, intervalMinutes: 30, logs: [], queue: [] },
     counters: {
       barang: 4,
       customer: 2,
@@ -426,13 +464,23 @@ function createDefaultStore(): MobileStore {
 function normalizeStore(value: Partial<MobileStore> | null): MobileStore {
   const base = createDefaultStore()
   if (!value || typeof value !== 'object') return base
+  const industrySettings = normalizeIndustrySettings(value.industrySettings ?? DEFAULT_INDUSTRY_SETTINGS)
+  if (industrySettings.aiApiKey) {
+    secureStorage.setItem(AI_API_KEY_STORAGE_KEY, industrySettings.aiApiKey)
+    industrySettings.aiApiKey = ''
+  }
+  const users = (value.users ?? base.users).map(user => ({
+    ...user,
+    hak_akses: normalizeMobileLocalRole(user.hak_akses),
+  }))
 
   return {
     ...base,
     ...value,
     version: STORE_VERSION,
     syncClient: { ...base.syncClient, ...(value.syncClient ?? {}) },
-    industrySettings: normalizeIndustrySettings(value.industrySettings ?? DEFAULT_INDUSTRY_SETTINGS),
+    industrySettings,
+    users,
     identitas: { ...base.identitas, ...(value.identitas ?? {}) },
     strukSettings: { ...base.strukSettings, ...(value.strukSettings ?? {}) },
     settings: undefined,
@@ -579,12 +627,17 @@ function toSession(user: MobileStore['users'][number]): UserSession {
   return {
     nama_pengguna: user.nama_pengguna,
     nama_lengkap: user.nama_lengkap,
+    email: user.email ?? null,
     hak_akses: user.hak_akses,
     access_expires_at: expiresAt,
     access_days_remaining: accessDaysRemaining(expiresAt),
     must_change_password: !!user.must_change_password,
     subscription_plan_id: user.subscription_plan_id ?? null,
     subscription_expires_at: user.subscription_expires_at ?? null,
+    remote_license_token: user.remote_license_token ?? null,
+    remote_license_refresh_token: user.remote_license_refresh_token ?? null,
+    remote_customer_id: user.remote_customer_id ?? null,
+    remote_auth_user_id: user.remote_auth_user_id ?? null,
   }
 }
 
@@ -875,11 +928,397 @@ function normalizeBaseUrl(value: string) {
   return result.valid ? result.url ?? '' : ''
 }
 
+function normalizeLicenseBaseUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+
+  let parsed: URL
+  try { parsed = new URL(trimmed) }
+  catch { return trimmed }
+
+  const path = parsed.pathname.replace(/\/+$/, '')
+  const isSupabaseProjectRoot = parsed.hostname.endsWith('.supabase.co') && (path === '' || path === '/')
+  if (isSupabaseProjectRoot) {
+    return `${parsed.origin}/functions/v1/mediasoft-license`
+  }
+
+  if (path.includes('/functions/v1/')) return trimmed
+  if (path.endsWith('/api')) return trimmed
+
+  return `${trimmed}/api`
+}
+
+function getMobileLicenseEndpoint(): string {
+  const envUrl = (
+    import.meta.env.VITE_LICENSE_SERVER_URL ||
+    import.meta.env.VITE_SUPABASE_LICENSE_SERVER_URL ||
+    DEFAULT_LICENSE_SERVER_URL
+  ).trim()
+  return normalizeLicenseBaseUrl(envUrl)
+}
+
+function mobileLicenseError(message: string, errorCode = 'OFFLINE'): IpcResponse<any> {
+  return {
+    success: false,
+    message,
+    data: { error_code: errorCode },
+  }
+}
+
+function getMobileAdminSession(): UserSession | null {
+  try {
+    const raw = secureStorage.getItem('pos_session')
+    if (!raw) return null
+    const session = JSON.parse(raw) as UserSession
+    if (normalizeMobileLocalRole(session.hak_akses) !== 'developer') return null
+    session.hak_akses = 'developer'
+    return session
+  } catch {
+    return null
+  }
+}
+
+async function refreshMobileAdminToken(session: UserSession): Promise<string | null> {
+  const refreshToken = session.remote_license_refresh_token
+  if (!refreshToken) return null
+
+  const refresh = await mobileLicenseRequest<AnyRecord>('POST', '/auth/refresh', { refresh_token: refreshToken })
+  if (!refresh.success || !refresh.data?.access_token) return null
+
+  const nextSession = {
+    ...session,
+    remote_license_token: String(refresh.data.access_token),
+    remote_license_refresh_token: String(refresh.data.refresh_token ?? refreshToken),
+  }
+  secureStorage.setJSON('pos_session', nextSession)
+  return nextSession.remote_license_token
+}
+
+async function mobileLicenseRequest<T = unknown>(method: string, path: string, body?: unknown, bearerToken?: string | null): Promise<IpcResponse<T>> {
+  const endpoint = getMobileLicenseEndpoint()
+  if (!endpoint) return mobileLicenseError('License server publik belum dikonfigurasi', 'NO_ENDPOINT')
+
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 10000)
+
+  try {
+    const response = await fetch(`${endpoint}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    })
+    const result = await response.json().catch(() => null) as IpcResponse<T> | null
+    if (!result) {
+      return mobileLicenseError(`License server tidak merespons JSON. HTTP ${response.status}`, `HTTP_${response.status}`)
+    }
+    if (!response.ok && result.success !== false) {
+      return {
+        ...result,
+        success: false,
+        message: result.message || `License server gagal. HTTP ${response.status}`,
+      }
+    }
+    return result
+  } catch (error) {
+    const message = error instanceof Error && error.name === 'AbortError'
+      ? 'Koneksi ke license server timeout. Periksa internet lalu coba lagi.'
+      : error instanceof Error
+        ? `Gagal menghubungi license server: ${error.message}`
+        : 'Gagal menghubungi license server'
+    return mobileLicenseError(message)
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+async function mobileAdminLicenseRequest<T = unknown>(method: string, path: string, body?: unknown): Promise<IpcResponse<T>> {
+  const session = getMobileAdminSession()
+  const token = session?.remote_license_token ?? null
+  if (!session || !token) return fail('Session developer/admin Supabase tidak ditemukan. Login ulang dengan akun developer.')
+  const result = await mobileLicenseRequest<T>(method, path, body, token)
+  if (!result.success && isLicenseSessionExpiredResult(result)) {
+    const refreshedToken = await refreshMobileAdminToken(session)
+    if (refreshedToken) return mobileLicenseRequest<T>(method, path, body, refreshedToken)
+  }
+  return result
+}
+
+function mobileLicenseErrorCode(result: IpcResponse<any>): string {
+  return String(
+    result.error_code ||
+    result.data?.error_code ||
+    result.data?.status ||
+    ''
+  ).toUpperCase()
+}
+
+function dispatchMobileLicensePopup(result: IpcResponse<any>, force = false) {
+  const popup = result.data?.popup
+  if (!popup?.title) return
+  window.dispatchEvent(new CustomEvent('license:remote-popup', {
+    detail: {
+      popup,
+      force: force || ['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED', 'DEVICE_LIMIT'].includes(mobileLicenseErrorCode(result)),
+    },
+  }))
+}
+
+function planIdFromMobileRemote(store: MobileStore, plan: AnyRecord | null | undefined): number | null {
+  if (!plan) return null
+  const code = String(plan.code ?? '').trim()
+  const name = String(plan.name ?? (code || 'Paket')).trim()
+  if (!name) return null
+
+  const existing = store.plans.find(item => (
+    (code && String(item.code ?? '') === code) ||
+    String(item.name ?? '').toLowerCase() === name.toLowerCase()
+  ))
+  const row = existing ?? {
+    id: nextCounter(store, 'plan'),
+    created_at: now(),
+  }
+
+  Object.assign(row, {
+    name,
+    code: code || row.code,
+    price: Math.round(toNumber(plan.price)),
+    duration_days: Math.max(1, Math.trunc(toNumber(plan.duration_days, 30))),
+    features: Array.isArray(plan.features)
+      ? plan.features
+      : (plan.description ? [String(plan.description)] : []),
+    is_active: plan.is_active === false || plan.is_active === 0 ? false : true,
+    is_recommended: plan.is_recommended === true || plan.is_recommended === 1,
+    updated_at: now(),
+    max_devices: Number.isFinite(Number(plan.max_devices)) ? Math.trunc(Number(plan.max_devices)) : 1,
+    max_transactions_per_day: Number.isFinite(Number(plan.max_transactions_per_day)) ? Math.trunc(Number(plan.max_transactions_per_day)) : -1,
+    max_products: Number.isFinite(Number(plan.max_products)) ? Math.trunc(Number(plan.max_products)) : -1,
+    max_users: Number.isFinite(Number(plan.max_users)) ? Math.trunc(Number(plan.max_users)) : 1,
+    feature_flags: typeof plan.feature_flags === 'object' && plan.feature_flags ? plan.feature_flags : {},
+  })
+
+  if (!existing) store.plans.push(row)
+  return Number(row.id)
+}
+
+function syncMobileBuyerFromLicensePayload(store: MobileStore, username: string, payload: AnyRecord | null | undefined) {
+  const user = store.users.find(item => item.nama_pengguna === username)
+  if (!user || !payload) return
+
+  const planId = planIdFromMobileRemote(store, payload.plan)
+  const expiresAt = typeof payload.subscription?.expires_at === 'string'
+    ? payload.subscription.expires_at
+    : null
+  const customerStatus = String(payload.customer?.status ?? 'active').toLowerCase()
+
+  if (planId) user.subscription_plan_id = planId
+  if (expiresAt) {
+    user.subscription_expires_at = expiresAt
+    user.access_expires_at = expiresAt
+  }
+  if (customerStatus === 'active') user.status_user = 'Aktif'
+  if (['blocked', 'suspended', 'inactive'].includes(customerStatus)) user.status_user = 'Nonaktif'
+  user.remote_license_token = payload.access_token ?? user.remote_license_token ?? null
+  user.remote_license_refresh_token = payload.refresh_token ?? user.remote_license_refresh_token ?? null
+  user.remote_customer_id = payload.customer?.id ?? user.remote_customer_id ?? null
+  user.remote_auth_user_id = payload.customer?.auth_user_id ?? user.remote_auth_user_id ?? null
+}
+
+async function upsertMobileRemoteBuyer(store: MobileStore, input: {
+  loginName: string
+  password: string
+  remote: AnyRecord
+}) {
+  const customer = input.remote?.customer ?? {}
+  const email = String(customer.email ?? input.loginName).trim().toLowerCase()
+  const username = store.users.find(item => String(item.email ?? '').toLowerCase() === email)?.nama_pengguna
+    ?? (EMAIL_PATTERN.test(input.loginName) ? input.loginName.trim().toLowerCase() : email)
+
+  if (!username || !EMAIL_PATTERN.test(email)) {
+    throw new Error('Email pembeli dari license server tidak valid')
+  }
+
+  const planId = planIdFromMobileRemote(store, input.remote?.plan)
+  const expiresAt = typeof input.remote?.subscription?.expires_at === 'string'
+    ? input.remote.subscription.expires_at
+    : null
+  const existing = store.users.find(item => item.nama_pengguna === username)
+  const base = {
+    nama_pengguna: username,
+    nama_lengkap: String(customer.name ?? customer.email ?? username),
+    email,
+    no_telp: typeof customer.phone === 'string' ? customer.phone : null,
+    hak_akses: 'admin',
+    status_user: 'Aktif',
+    terakhir_login: now(),
+    tgl_wkt_simpan: existing?.tgl_wkt_simpan ?? now(),
+    access_expires_at: expiresAt,
+    subscription_plan_id: planId,
+    subscription_expires_at: expiresAt,
+    is_buyer: 1,
+    password_hash: await hashMobilePassword(input.password),
+    password_hash_type: 'bcrypt' as const,
+    must_change_password: 0,
+    permissions: existing?.permissions ?? {},
+    remote_license_token: input.remote?.access_token ?? null,
+    remote_license_refresh_token: input.remote?.refresh_token ?? null,
+    remote_customer_id: input.remote?.customer?.id ?? null,
+    remote_auth_user_id: input.remote?.customer?.auth_user_id ?? null,
+  }
+
+  if (existing) {
+    Object.assign(existing, base)
+    return existing
+  }
+
+  const row: MobileUser = base
+  store.users.push(row)
+  return row
+}
+
+function mapMobileRemoteAdminRole(_role: string | null | undefined): 'developer' {
+  return 'developer'
+}
+
+async function upsertMobileRemoteAdmin(store: MobileStore, input: {
+  loginName: string
+  password: string
+  remote: AnyRecord
+}) {
+  const admin = input.remote?.user ?? {}
+  const email = String(admin.email ?? input.loginName).trim().toLowerCase()
+  if (!EMAIL_PATTERN.test(email)) {
+    throw new Error('Email admin dari license server tidak valid')
+  }
+
+  const username = store.users.find(item => String(item.email ?? '').toLowerCase() === email)?.nama_pengguna
+    ?? email
+  const existing = store.users.find(item => item.nama_pengguna === username)
+  const base = {
+    nama_pengguna: username,
+    nama_lengkap: String(admin.name ?? admin.email ?? username),
+    email,
+    no_telp: existing?.no_telp ?? null,
+    hak_akses: mapMobileRemoteAdminRole(String(admin.role ?? 'developer')),
+    status_user: 'Aktif',
+    terakhir_login: now(),
+    tgl_wkt_simpan: existing?.tgl_wkt_simpan ?? now(),
+    access_expires_at: null,
+    subscription_plan_id: null,
+    subscription_expires_at: null,
+    is_buyer: 0,
+    password_hash: await hashMobilePassword(input.password),
+    password_hash_type: 'bcrypt' as const,
+    must_change_password: 0,
+    permissions: existing?.permissions ?? {},
+    remote_license_token: input.remote?.access_token ?? null,
+    remote_license_refresh_token: input.remote?.refresh_token ?? null,
+    remote_customer_id: null,
+    remote_auth_user_id: input.remote?.user?.id ?? null,
+  }
+
+  if (existing) {
+    Object.assign(existing, base)
+    return existing
+  }
+
+  const row: MobileUser = base
+  store.users.push(row)
+  return row
+}
+
+async function mobileLoginAdmin(emailOrUsername: string, password: string, device: MobileAuthDeviceInfo) {
+  const email = EMAIL_PATTERN.test(emailOrUsername)
+    ? emailOrUsername.trim().toLowerCase()
+    : ''
+  if (!email) return null
+  return mobileLicenseRequest<AnyRecord>('POST', '/auth/login', {
+    email,
+    password,
+    device_id: device.deviceId ?? 'mobile-admin',
+    device_name: device.deviceName ?? 'Mobile Admin',
+    platform: device.platform ?? device.osName ?? 'Android',
+    app_version: device.appVersion ?? undefined,
+  })
+}
+
+async function mobileLoginBuyer(emailOrUsername: string, password: string, device: MobileAuthDeviceInfo) {
+  const email = EMAIL_PATTERN.test(emailOrUsername)
+    ? emailOrUsername.trim().toLowerCase()
+    : ''
+  if (!email) return null
+  return mobileLicenseRequest<AnyRecord>('POST', '/customer/login', {
+    email,
+    password,
+    device,
+  })
+}
+
+async function mobileRegisterTrialCustomer(data: {
+  email: string
+  password: string
+  nama_lengkap: string
+  no_telp?: string | null
+}, device: MobileAuthDeviceInfo) {
+  return mobileLicenseRequest<AnyRecord>('POST', '/register-trial', {
+    email: data.email,
+    password: data.password,
+    name: data.nama_lengkap,
+    phone: data.no_telp ?? null,
+    device,
+  })
+}
+
+async function mobileCheckBuyerLicense(store: MobileStore, username: string, deviceInfo?: unknown): Promise<IpcResponse<any>> {
+  const user = store.users.find(item => item.nama_pengguna === username)
+  if (!user?.is_buyer || !user.email) {
+    return ok({ skipped: true, reason: 'not_remote_buyer' })
+  }
+
+  const result = await mobileLicenseRequest<AnyRecord>('POST', '/check-license', {
+    email: user.email,
+    device: authDevice(deviceInfo ?? collectAuthDeviceInfo()),
+  })
+
+  if (result.success) {
+    syncMobileBuyerFromLicensePayload(store, username, result.data)
+    secureStorage.setItem(LICENSE_LAST_SUCCESS_KEY, String(Date.now()))
+    saveStore(store)
+    return ok({
+      ...(result.data ?? {}),
+      synced_at: now(),
+    })
+  }
+
+  const code = mobileLicenseErrorCode(result)
+  if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED'].includes(code)) {
+    user.status_user = 'Nonaktif'
+  }
+  if (code === 'EXPIRED' && result.data) {
+    syncMobileBuyerFromLicensePayload(store, username, result.data)
+  }
+  saveStore(store)
+  dispatchMobileLicensePopup(result)
+  return {
+    ...result,
+    data: {
+      ...(result.data ?? {}),
+      error_code: code || result.data?.error_code,
+    },
+  }
+}
+
 function shouldUseRemote(store: MobileStore, channel: string) {
   return (
     store.syncClient.enabled &&
     Boolean(store.syncClient.baseUrl && store.syncClient.token) &&
     !channel.startsWith('sync:') &&
+    !channel.startsWith('license:') &&
+    !channel.startsWith('subscription:') &&
+    channel !== 'app:openExternal' &&
     channel !== 'print:execute'
   )
 }
@@ -987,13 +1426,75 @@ async function postJsonText(url: string, payload: unknown) {
   }
 }
 
+async function listMobileAiModels(store: MobileStore, input?: Partial<IndustrySettings>) {
+  const settings = normalizeIndustrySettings({ ...store.industrySettings, ...(input ?? {}) })
+  const apiKey = settings.aiApiKey || secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || ''
+  if (!settings.aiEnabled || settings.aiProvider === 'local') return fail('Aktifkan AI online dan pilih provider terlebih dahulu')
+  if (settings.aiProvider === 'gemini') return fail('Daftar model otomatis saat ini hanya untuk provider OpenAI-compatible')
+  if (!apiKey) return fail('API key AI belum diisi')
+
+  const baseUrl = settings.aiBaseUrl || defaultBaseUrlForProvider(settings.aiProvider)
+  if (!baseUrl) return fail('Base URL AI belum diisi')
+  const endpoint = assertHttpsEndpoint(baseUrl, 'Base URL AI')
+  if (!endpoint.valid || !endpoint.url) return fail(endpoint.message || 'Base URL AI tidak valid')
+
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 30000)
+  try {
+    const response = await fetch(openAiCompatibleModelsUrl(endpoint.url), {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': appConfigRefererUrl(),
+        'X-Title': 'MediaSoft POS Zetass v2.0',
+      },
+      signal: controller.signal,
+    }).finally(() => window.clearTimeout(timeout))
+
+    const data = await response.json().catch(() => null) as any
+    if (!response.ok || data?.error) return fail(data?.error?.message || `AI models HTTP ${response.status}`)
+    const rows = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : []
+    const models = rows
+      .map((row: any) => String(row?.id || row?.name || '').trim())
+      .filter(Boolean)
+      .sort((a: string, b: string) => a.localeCompare(b))
+    if (!models.length) return fail('Provider tidak mengembalikan daftar model')
+    return ok(models, `${models.length} model tersedia`)
+  } catch (error) {
+    return fail(formatMobileAiError(error, settings))
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+function formatMobileAiError(error: unknown, settings: IndustrySettings) {
+  const message = error instanceof Error ? error.message : String(error || '')
+  if (/abort|timeout/i.test(message)) return 'Koneksi AI timeout. Periksa koneksi internet atau coba lagi beberapa saat.'
+  if (/fetch failed|failed to fetch|networkerror|enotfound|eai_again|econnrefused|econnreset|etimedout|cert|certificate/i.test(message)) {
+    const baseUrl = settings.aiBaseUrl || defaultBaseUrlForProvider(settings.aiProvider)
+    let host = baseUrl
+    try {
+      host = baseUrl ? new URL(baseUrl).host : ''
+    } catch {
+      host = baseUrl
+    }
+    const bluesmindsHint = settings.aiProvider === 'bluesminds'
+      ? ' Untuk BluesMinds, gunakan Base URL https://api.bluesminds.com/v1 dan API key yang aktif.'
+      : ''
+    return `Tidak bisa menghubungi server AI${host ? ` (${host})` : ''}. Periksa koneksi internet, DNS/VPN/firewall, dan Base URL.${bluesmindsHint}`
+  }
+  return message || 'Gagal memuat model AI'
+}
+
 async function askMobileAi(store: MobileStore, input: { question?: string; summary?: DashboardSummary }) {
   const question = String(input?.question ?? '').trim()
   if (!question || !input?.summary) return fail('Pertanyaan dan data dashboard wajib tersedia')
 
   const settings = normalizeIndustrySettings(store.industrySettings)
+  const apiKey = settings.aiApiKey || secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || ''
   const localAnswer = buildLocalAssistantResponse(question, input.summary)
-  if (!settings.aiEnabled || settings.aiProvider === 'local' || !settings.aiApiKey) {
+  if (!settings.aiEnabled || settings.aiProvider === 'local' || !apiKey) {
     return ok({ answer: localAnswer, provider: 'local', online: false })
   }
 
@@ -1001,12 +1502,17 @@ async function askMobileAi(store: MobileStore, input: { question?: string; summa
     const prompt = buildAssistantPrompt(question, input.summary)
     if (settings.aiProvider === 'gemini') {
       const model = settings.aiModel || defaultModelForProvider('gemini')
-      const baseUrl = settings.aiBaseUrl || 'https://generativelanguage.googleapis.com/v1beta'
-      const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(settings.aiApiKey)}`, {
+      const baseUrl = settings.aiBaseUrl || defaultBaseUrlForProvider('gemini')
+      const endpoint = assertHttpsEndpoint(baseUrl, 'Base URL Gemini')
+      if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL Gemini tidak valid')
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), 30000)
+      const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 600 } }),
-      })
+      }).finally(() => window.clearTimeout(timeout))
       const data = await response.json().catch(() => null) as any
       if (!response.ok || data?.error) throw new Error(data?.error?.message || `Gemini HTTP ${response.status}`)
       const answer = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text).filter(Boolean).join('\n').trim()
@@ -1015,21 +1521,24 @@ async function askMobileAi(store: MobileStore, input: { question?: string; summa
     }
 
     const model = settings.aiModel || defaultModelForProvider(settings.aiProvider)
-    const url = settings.aiProvider === 'deepseek'
-      ? 'https://api.deepseek.com/chat/completions'
-      : settings.aiProvider === 'openrouter'
-        ? 'https://openrouter.ai/api/v1/chat/completions'
-        : settings.aiBaseUrl
+    const url = settings.aiProvider === 'custom'
+      ? settings.aiBaseUrl
+      : settings.aiBaseUrl || defaultBaseUrlForProvider(settings.aiProvider)
 
     if (!url || !model) throw new Error('URL atau model AI belum diisi')
-    const response = await fetch(url, {
+    const endpoint = assertHttpsEndpoint(url, 'Base URL AI')
+    if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL AI tidak valid')
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 30000)
+    const response = await fetch(openAiCompatibleChatUrl(endpoint.url), {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${settings.aiApiKey}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://mediasoft-pos-zetass.local',
+        'HTTP-Referer': appConfigRefererUrl(),
         'X-Title': 'MediaSoft POS Zetass v2.0',
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model,
         temperature: 0.2,
@@ -1039,7 +1548,7 @@ async function askMobileAi(store: MobileStore, input: { question?: string; summa
           { role: 'user', content: prompt },
         ],
       }),
-    })
+    }).finally(() => window.clearTimeout(timeout))
     const data = await response.json().catch(() => null) as any
     if (!response.ok || data?.error) throw new Error(data?.error?.message || `AI HTTP ${response.status}`)
     const answer = data?.choices?.[0]?.message?.content?.trim()
@@ -1063,6 +1572,13 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
   }
 
   switch (channel) {
+    case 'app:openExternal': {
+      const url = String(args[0] ?? '')
+      if (!/^https?:\/\//i.test(url)) return fail('URL eksternal tidak valid')
+      window.open(url, '_blank', 'noopener,noreferrer')
+      return ok(undefined as T)
+    }
+
     case 'sync:getStatus':
       return ok({
         mode: 'android-client',
@@ -1101,13 +1617,238 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       return ok(undefined as T, 'Data Android berhasil direset')
     }
 
-    case 'integrations:get':
-      return ok(store.industrySettings as T)
+    case 'license:getConfig':
+      return ok({
+        url: getMobileLicenseEndpoint(),
+        connected: Boolean(getMobileLicenseEndpoint()),
+        hasRefreshToken: Boolean(getMobileAdminSession()?.remote_license_refresh_token),
+      } as T)
 
-    case 'integrations:save':
-      store.industrySettings = normalizeIndustrySettings(args[0] as Partial<IndustrySettings>)
+    case 'license:testConnection':
+    case 'license:validateApplication': {
+      const result = await mobileLicenseRequest<{ time?: string }>('GET', '/health')
+      return (result.success
+        ? ok({ ...(result.data ?? {}), url: getMobileLicenseEndpoint(), checked_at: now() } as T, 'License server dapat dijangkau')
+        : result) as IpcResponse<T>
+    }
+
+    case 'license:testAndSave': {
+      const email = String(args[1] ?? '').trim()
+      const password = String(args[2] ?? '')
+      const result = await mobileLicenseRequest<AnyRecord>('POST', '/auth/login', {
+        email,
+        password,
+        device_id: 'mobile-admin-config',
+        device_name: 'Mobile Admin Config',
+        platform: collectAuthDeviceInfo().platform,
+        app_version: collectAuthDeviceInfo().appVersion,
+      })
+      if (!result.success) return result as IpcResponse<T>
+      const role = String(result.data?.user?.role ?? '')
+      if (!['admin', 'super_admin', 'developer'].includes(role)) return fail('Akun ini bukan admin di license server')
+      return ok({ connected: true, url: getMobileLicenseEndpoint() } as T, 'Berhasil terhubung ke license server')
+    }
+
+    case 'license:syncFromServer':
+      return ok({ mode: 'supabase-live' } as T, 'Android/iOS membaca data lisensi langsung dari Supabase')
+
+    case 'license:syncBuyerLicense':
+      return mobileCheckBuyerLicense(store, String(args[0] ?? ''), args[1]) as Promise<IpcResponse<T>>
+
+    case 'license:getPublicPlans':
+      return mobileLicenseRequest<T>('GET', '/plans')
+
+    case 'license:getUsers': {
+      const search = String(args[0] ?? '').trim()
+      return mobileAdminLicenseRequest<T>('GET', `/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`)
+    }
+
+    case 'license:createUser':
+      return mobileAdminLicenseRequest<T>('POST', '/admin/users', args[0])
+
+    case 'license:updateUser':
+      return mobileAdminLicenseRequest<T>('PATCH', `/admin/users/${encodeURIComponent(String(args[0] ?? ''))}`, args[1])
+
+    case 'license:deleteUser':
+      return mobileAdminLicenseRequest<T>('DELETE', `/admin/users/${encodeURIComponent(String(args[0] ?? ''))}`)
+
+    case 'license:changeUserPlan':
+      return mobileAdminLicenseRequest<T>('PUT', `/admin/users/${encodeURIComponent(String(args[0] ?? ''))}/plan`, args[1])
+
+    case 'license:resetUserPassword':
+      return mobileAdminLicenseRequest<T>('POST', `/admin/users/${encodeURIComponent(String(args[0] ?? ''))}/reset-password`, args[1] ?? {})
+
+    case 'license:getPlans':
+      return mobileAdminLicenseRequest<T>('GET', '/admin/plans')
+
+    case 'license:createPlan':
+      return mobileAdminLicenseRequest<T>('POST', '/admin/plans', args[0])
+
+    case 'license:updatePlan':
+      return mobileAdminLicenseRequest<T>('PATCH', `/admin/plans/${encodeURIComponent(String(args[0] ?? ''))}`, args[1])
+
+    case 'license:deletePlan':
+      return mobileAdminLicenseRequest<T>('DELETE', `/admin/plans/${encodeURIComponent(String(args[0] ?? ''))}`)
+
+    case 'license:getPlanFeatures':
+      return mobileAdminLicenseRequest<T>('GET', `/admin/plans/${encodeURIComponent(String(args[0] ?? ''))}/features`)
+
+    case 'license:setPlanFeatures':
+      return mobileAdminLicenseRequest<T>('PUT', `/admin/plans/${encodeURIComponent(String(args[0] ?? ''))}/features`, args[1])
+
+    case 'license:getFeatures':
+      return mobileAdminLicenseRequest<T>('GET', '/admin/features')
+
+    case 'license:createFeature':
+      return mobileAdminLicenseRequest<T>('POST', '/admin/features', args[0])
+
+    case 'license:updateFeature':
+      return mobileAdminLicenseRequest<T>('PATCH', `/admin/features/${encodeURIComponent(String(args[0] ?? ''))}`, args[1])
+
+    case 'license:getPopups':
+      return mobileAdminLicenseRequest<T>('GET', '/admin/popups')
+
+    case 'license:updatePopup':
+      return mobileAdminLicenseRequest<T>('PATCH', `/admin/popups/${encodeURIComponent(String(args[0] ?? ''))}`, args[1])
+
+    case 'license:getPayments':
+      return mobileAdminLicenseRequest<T>('GET', '/admin/payments')
+
+    case 'license:createPayment':
+      return mobileAdminLicenseRequest<T>('POST', '/admin/payments', args[0])
+
+    case 'license:approvePayment':
+      return mobileAdminLicenseRequest<T>('POST', `/admin/payments/${encodeURIComponent(String(args[0] ?? ''))}/approve`)
+
+    case 'license:deletePayment':
+      return mobileAdminLicenseRequest<T>('DELETE', `/admin/payments/${encodeURIComponent(String(args[0] ?? ''))}`)
+
+    case 'license:getStats':
+      return mobileAdminLicenseRequest<T>('GET', '/admin/stats')
+
+    case 'license:getRevenue':
+      return mobileAdminLicenseRequest<T>('GET', '/admin/revenue')
+
+    case 'license:getDevices': {
+      const query = args[0] as AnyRecord | undefined
+      const params = new URLSearchParams()
+      if (query?.search) params.set('search', String(query.search))
+      if (query?.status) params.set('status', String(query.status))
+      if (query?.platform) params.set('platform', String(query.platform))
+      return mobileAdminLicenseRequest<T>('GET', `/admin/devices${params.toString() ? `?${params.toString()}` : ''}`)
+    }
+
+    case 'license:getDeviceDetail':
+      return mobileAdminLicenseRequest<T>('GET', `/admin/devices/${encodeURIComponent(String(args[0] ?? ''))}`)
+
+    case 'license:blockDevice':
+      return mobileAdminLicenseRequest<T>('POST', `/admin/devices/${encodeURIComponent(String(args[0] ?? ''))}/block`)
+
+    case 'license:unblockDevice':
+      return mobileAdminLicenseRequest<T>('POST', `/admin/devices/${encodeURIComponent(String(args[0] ?? ''))}/unblock`)
+
+    case 'license:suspendDeviceLicense':
+      return mobileAdminLicenseRequest<T>('POST', `/admin/devices/${encodeURIComponent(String(args[0] ?? ''))}/suspend-license`)
+
+    case 'license:activateDeviceLicense':
+      return mobileAdminLicenseRequest<T>('POST', `/admin/devices/${encodeURIComponent(String(args[0] ?? ''))}/activate-license`)
+
+    case 'license:extendDeviceLicense':
+      return mobileAdminLicenseRequest<T>('POST', `/admin/devices/${encodeURIComponent(String(args[0] ?? ''))}/extend-license`, args[1])
+
+    case 'license:getAppUpdates':
+      return mobileAdminLicenseRequest<T>('GET', '/admin/app-update')
+
+    case 'license:saveAppUpdate':
+      return mobileAdminLicenseRequest<T>('PATCH', '/admin/app-update', args[0])
+
+    case 'license:getErrors': {
+      const query = args[0] as AnyRecord | undefined
+      const params = new URLSearchParams()
+      if (query?.type) params.set('type', String(query.type))
+      return mobileAdminLicenseRequest<T>('GET', `/admin/errors${params.toString() ? `?${params.toString()}` : ''}`)
+    }
+
+    case 'license:getAnnouncements':
+      return mobileAdminLicenseRequest<T>('GET', '/admin/announcements')
+
+    case 'license:createAnnouncement':
+      return mobileAdminLicenseRequest<T>('POST', '/admin/announcements', args[0])
+
+    case 'license:updateAnnouncement':
+      return mobileAdminLicenseRequest<T>('PATCH', `/admin/announcements/${encodeURIComponent(String(args[0] ?? ''))}`, args[1])
+
+    case 'license:deleteAnnouncement':
+      return mobileAdminLicenseRequest<T>('DELETE', `/admin/announcements/${encodeURIComponent(String(args[0] ?? ''))}`)
+
+    case 'license:heartbeat': {
+      const session = getMobileAdminSession()
+      return mobileLicenseRequest<T>('POST', '/heartbeat', args[0], session?.remote_license_token ?? null)
+    }
+
+    case 'license:logError':
+      return mobileLicenseRequest<T>('POST', '/errors', args[0])
+
+    case 'license:createManualPaymentRequest':
+      return mobileLicenseRequest<T>('POST', '/payments/manual-request', args[0])
+
+    case 'license:createPaymentInvoice':
+      return mobileLicenseRequest<T>('POST', '/payments/create', args[0])
+
+    case 'license:getPaymentStatus': {
+      const externalRef = String(args[0] ?? '').trim()
+      if (!externalRef) return fail('Nomor invoice tidak valid')
+      return mobileLicenseRequest<T>('GET', `/payments/status?external_ref=${encodeURIComponent(externalRef)}`)
+    }
+
+    case 'subscription:getStatus': {
+      const username = String(args[0] ?? '')
+      const current = store.users.find(item => item.nama_pengguna === username)
+      const plan = store.plans.find(item => Number(item.id) === Number(current?.subscription_plan_id))
+      const expiresAt = current?.subscription_expires_at ?? current?.access_expires_at ?? null
+      const expiresTime = expiresAt ? new Date(expiresAt).getTime() : Number.NaN
+      return ok({
+        plan,
+        feature_flags: plan?.feature_flags ?? {},
+        subscription_expires_at: expiresAt,
+        is_expired: Number.isFinite(expiresTime) ? expiresTime < Date.now() : false,
+      } as T)
+    }
+
+    case 'integrations:get':
+      return ok({
+        ...store.industrySettings,
+        aiApiKey: secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || '',
+      } as T)
+
+    case 'integrations:save': {
+      const settings = normalizeIndustrySettings(args[0] as Partial<IndustrySettings>)
+      if (settings.aiApiKey) secureStorage.setItem(AI_API_KEY_STORAGE_KEY, settings.aiApiKey)
+      store.industrySettings = { ...settings, aiApiKey: '' }
       saveStore(store)
-      return ok(store.industrySettings as T, 'Pengaturan industri disimpan')
+      return ok({ ...store.industrySettings, aiApiKey: secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || '' } as T, 'Pengaturan industri disimpan')
+    }
+
+    case 'integrations:testAi': {
+      const settings = normalizeIndustrySettings({
+        ...store.industrySettings,
+        ...(args[0] as Partial<IndustrySettings>),
+      })
+      if (settings.aiApiKey) secureStorage.setItem(AI_API_KEY_STORAGE_KEY, settings.aiApiKey)
+      const result = await askMobileAi(
+        { ...store, industrySettings: { ...settings, aiApiKey: '' } },
+        {
+          question: 'Tes koneksi AI',
+          summary: dashboardSummary(store),
+        }
+      )
+      return result.success
+        ? ok(result.data as T, 'Koneksi AI berhasil')
+        : result as IpcResponse<T>
+    }
+
+    case 'integrations:listAiModels':
+      return await listMobileAiModels(store, args[0] as Partial<IndustrySettings> | undefined) as IpcResponse<T>
 
     case 'integrations:testGoogleSheets': {
       const settings = normalizeIndustrySettings(store.industrySettings)
@@ -1155,7 +1896,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         nama_lengkap: namaLengkap,
         email: null,
         no_telp: null,
-        hak_akses: 'superadmin',
+        hak_akses: 'developer',
         status_user: 'Aktif',
         terakhir_login: null,
         tgl_wkt_simpan: now(),
@@ -1167,7 +1908,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       }
       store.users.push(row)
       saveStore(store)
-      return ok(publicUser(row) as T, 'Akun admin pertama berhasil dibuat')
+      return ok(publicUser(row) as T, 'Akun developer pertama berhasil dibuat')
     }
 
     case 'auth:registerTrial': {
@@ -1187,7 +1928,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       if (store.users.some(item => item.nama_pengguna === username)) {
         return fail('Username sudah digunakan. Pilih username lain.')
       }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (!EMAIL_PATTERN.test(email)) {
         return fail('Email valid wajib diisi untuk daftar akun trial')
       }
       if (!namaLengkap) return fail('Nama lengkap wajib diisi')
@@ -1195,8 +1936,23 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const validation = validatePasswordStrength(password)
       if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
 
+      const remoteRegistration = await mobileRegisterTrialCustomer({
+        email,
+        password,
+        nama_lengkap: namaLengkap,
+        no_telp: String(data?.no_telp ?? '').trim() || null,
+      }, device)
+      if (!remoteRegistration.success) {
+        dispatchMobileLicensePopup(remoteRegistration, true)
+        return {
+          ...remoteRegistration,
+          message: remoteRegistration.message || 'Gagal daftar akun trial ke license server pusat',
+        } as IpcResponse<T>
+      }
+
       let trialPlan = store.plans.find(plan => plan.name === 'Trial 3 Hari')
-      if (!trialPlan) {
+      let planId = planIdFromMobileRemote(store, remoteRegistration.data?.plan)
+      if (!trialPlan && !planId) {
         trialPlan = {
           id: nextCounter(store, 'plan'),
           name: 'Trial 3 Hari',
@@ -1227,9 +1983,13 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
           },
         }
         store.plans.push(trialPlan)
+        planId = Number(trialPlan.id)
       }
 
-      const expiresAt = new Date(Date.now() + 3 * 86400000).toISOString()
+      const remoteExpiresAt = remoteRegistration.data?.subscription?.expires_at
+      const expiresAt = typeof remoteExpiresAt === 'string'
+        ? remoteExpiresAt
+        : new Date(Date.now() + 3 * 86400000).toISOString()
       const row: MobileUser = {
         nama_pengguna: username,
         nama_lengkap: namaLengkap,
@@ -1240,13 +2000,17 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         terakhir_login: now(),
         tgl_wkt_simpan: now(),
         access_expires_at: expiresAt,
-        subscription_plan_id: Number(trialPlan.id),
+        subscription_plan_id: planId ?? Number(trialPlan?.id ?? 0),
         subscription_expires_at: expiresAt,
         is_buyer: 1,
         password_hash: await hashMobilePassword(password),
         password_hash_type: 'bcrypt',
         must_change_password: 0,
         permissions: {},
+        remote_license_token: remoteRegistration.data?.access_token ?? null,
+        remote_license_refresh_token: remoteRegistration.data?.refresh_token ?? null,
+        remote_customer_id: remoteRegistration.data?.customer?.id ?? null,
+        remote_auth_user_id: remoteRegistration.data?.customer?.auth_user_id ?? null,
       }
       store.users.push(row)
       auditAuth(store, username, 'TRIAL_REGISTERED', `Akun pembeli trial 3 hari dibuat; expires_at=${expiresAt}`, device)
@@ -1268,20 +2032,65 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       }
 
       const user = store.users.find(item => item.nama_pengguna === username)
+      const shouldTryAdmin = EMAIL_PATTERN.test(username) || normalizeMobileLocalRole(user?.hak_akses) === 'developer'
+      if (shouldTryAdmin) {
+        const adminEmail = EMAIL_PATTERN.test(username) ? username : String(user?.email ?? '').trim().toLowerCase()
+        const remoteAdmin = await mobileLoginAdmin(adminEmail, password, device)
+        if (remoteAdmin?.success && remoteAdmin.data) {
+          const adminUser = await upsertMobileRemoteAdmin(store, { loginName: adminEmail, password, remote: remoteAdmin.data })
+          clearLoginAttempts(limiterKey)
+          auditAuth(store, adminUser.nama_pengguna, 'REMOTE_ADMIN_LOGIN', 'Login developer/admin divalidasi melalui Supabase license server', device)
+          saveStore(store)
+          return ok(createMobileSession(adminUser, device) as T, 'Login developer berhasil')
+        }
+      }
+
       if (!user || user.status_user !== 'Aktif') {
+        const remoteLogin = await mobileLoginBuyer(username, password, device)
+        if (remoteLogin?.success && remoteLogin.data) {
+          const remoteUser = await upsertMobileRemoteBuyer(store, { loginName: username, password, remote: remoteLogin.data })
+          clearLoginAttempts(limiterKey)
+          auditAuth(store, remoteUser.nama_pengguna, 'REMOTE_BUYER_LOGIN', 'Login pembeli divalidasi melalui license server pusat', device)
+          secureStorage.setItem(LICENSE_LAST_SUCCESS_KEY, String(Date.now()))
+          saveStore(store)
+          return ok(createMobileSession(remoteUser, device) as T, 'Login berhasil')
+        }
+        if (remoteLogin && !remoteLogin.success && mobileLicenseErrorCode(remoteLogin) !== 'OFFLINE') {
+          dispatchMobileLicensePopup(remoteLogin, true)
+          return remoteLogin as IpcResponse<T>
+        }
         const attempt = recordFailedLoginAttempt(limiterKey)
         auditAuth(store, username, 'LOGIN_FAILED', `Username tidak ditemukan atau akun tidak aktif. Sisa percobaan: ${attempt.remainingAttempts}`, device)
         saveStore(store)
-        return fail(attempt.locked ? 'Terlalu banyak percobaan login gagal. Akun diblokir selama 15 menit.' : `Username atau Password Salah! Sisa percobaan: ${attempt.remainingAttempts}`)
+        return fail(attempt.locked ? 'Terlalu banyak percobaan login gagal. Akun diblokir selama 5 menit.' : `Username atau Password Salah! Sisa percobaan: ${attempt.remainingAttempts}`)
       }
       const passwordValid = await verifyMobilePassword(password, user)
       if (!passwordValid) {
         const attempt = recordFailedLoginAttempt(limiterKey)
         auditAuth(store, username, 'LOGIN_FAILED', `Password salah. Sisa percobaan: ${attempt.remainingAttempts}`, device)
         saveStore(store)
-        return fail(attempt.locked ? 'Terlalu banyak percobaan login gagal. Akun diblokir selama 15 menit.' : `Username atau Password Salah! Sisa percobaan: ${attempt.remainingAttempts}`)
+        return fail(attempt.locked ? 'Terlalu banyak percobaan login gagal. Akun diblokir selama 5 menit.' : `Username atau Password Salah! Sisa percobaan: ${attempt.remainingAttempts}`)
       }
       clearLoginAttempts(limiterKey)
+
+      if (user.is_buyer) {
+        const remoteLogin = await mobileLoginBuyer(user.email ?? username, password, device)
+        if (remoteLogin?.success && remoteLogin.data) {
+          const remoteUser = await upsertMobileRemoteBuyer(store, { loginName: user.email ?? username, password, remote: remoteLogin.data })
+          auditAuth(store, remoteUser.nama_pengguna, 'REMOTE_BUYER_LOGIN', 'Login pembeli divalidasi melalui license server pusat', device)
+          secureStorage.setItem(LICENSE_LAST_SUCCESS_KEY, String(Date.now()))
+          saveStore(store)
+          return ok(createMobileSession(remoteUser, device) as T, 'Login berhasil')
+        }
+        if (remoteLogin && !remoteLogin.success && mobileLicenseErrorCode(remoteLogin) !== 'OFFLINE') {
+          const code = mobileLicenseErrorCode(remoteLogin)
+          if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED'].includes(code)) user.status_user = 'Nonaktif'
+          saveStore(store)
+          dispatchMobileLicensePopup(remoteLogin, true)
+          return remoteLogin as IpcResponse<T>
+        }
+      }
+
       user.terakhir_login = now()
       auditAuth(store, username, 'LOGIN', 'Login berhasil dengan bcrypt', device)
       saveStore(store)
@@ -1308,7 +2117,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         const attempt = recordFailedLoginAttempt(limiterKey)
         auditAuth(store, username, 'PIN_LOGIN_FAILED', `PIN tidak aktif untuk user atau user bukan kasir. Sisa percobaan: ${attempt.remainingAttempts}`, device)
         saveStore(store)
-        return fail(attempt.locked ? 'Terlalu banyak percobaan PIN gagal. Akun diblokir selama 15 menit.' : `Username atau PIN salah. Sisa percobaan: ${attempt.remainingAttempts}`)
+        return fail(attempt.locked ? 'Terlalu banyak percobaan PIN gagal. Akun diblokir selama 5 menit.' : `Username atau PIN salah. Sisa percobaan: ${attempt.remainingAttempts}`)
       }
 
       const validPin = await bcrypt.compare(pin, user.pin_hash)
@@ -1316,7 +2125,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         const attempt = recordFailedLoginAttempt(limiterKey)
         auditAuth(store, username, 'PIN_LOGIN_FAILED', `PIN salah. Sisa percobaan: ${attempt.remainingAttempts}`, device)
         saveStore(store)
-        return fail(attempt.locked ? 'Terlalu banyak percobaan PIN gagal. Akun diblokir selama 15 menit.' : `Username atau PIN salah. Sisa percobaan: ${attempt.remainingAttempts}`)
+        return fail(attempt.locked ? 'Terlalu banyak percobaan PIN gagal. Akun diblokir selama 5 menit.' : `Username atau PIN salah. Sisa percobaan: ${attempt.remainingAttempts}`)
       }
 
       clearLoginAttempts(limiterKey)
@@ -1796,7 +2605,8 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
       const pin = String(data.pin ?? '')
       const pinEnabled = Boolean(data.pin_enabled)
-      if (pinEnabled && data.hak_akses !== 'kasir') return fail('PIN login hanya boleh diaktifkan untuk role kasir')
+      const role = normalizeMobileLocalRole(data.hak_akses ?? 'kasir')
+      if (pinEnabled && role !== 'kasir') return fail('PIN login hanya boleh diaktifkan untuk role kasir')
       if ((pin || pinEnabled) && !/^\d{4,8}$/.test(pin)) return fail('PIN kasir harus 4-8 digit angka')
 
       const row: MobileStore['users'][number] = {
@@ -1804,7 +2614,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         nama_lengkap: String(data.nama_lengkap ?? data.nama_pengguna),
         email: data.email ?? null,
         no_telp: data.no_telp ?? null,
-        hak_akses: data.hak_akses ?? 'kasir',
+        hak_akses: role,
         status_user: 'Aktif',
         terakhir_login: null,
         tgl_wkt_simpan: now(),
@@ -1827,7 +2637,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const data = args[1] as AnyRecord
       const pin = String(data.pin ?? '')
       const pinEnabled = Boolean(data.pin_enabled)
-      const nextRole = data.hak_akses ?? row.hak_akses
+      const nextRole = normalizeMobileLocalRole(data.hak_akses ?? row.hak_akses)
       if (pinEnabled && nextRole !== 'kasir') return fail('PIN login hanya boleh diaktifkan untuk role kasir')
       if ((pin || pinEnabled) && !pin && !row.pin_hash) return fail('Isi PIN kasir sebelum mengaktifkan login PIN')
       if (pin && !/^\d{4,8}$/.test(pin)) return fail('PIN kasir harus 4-8 digit angka')
@@ -1835,7 +2645,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         nama_lengkap: data.nama_lengkap ?? row.nama_lengkap,
         email: data.email ?? row.email,
         no_telp: data.no_telp ?? row.no_telp,
-        hak_akses: data.hak_akses ?? row.hak_akses,
+        hak_akses: data.hak_akses === undefined ? row.hak_akses : nextRole,
         access_expires_at: data.access_expires_at ?? row.access_expires_at,
         pin_enabled: pinEnabled && nextRole === 'kasir' ? 1 : 0,
         permissions: data.permissions ?? row.permissions,
@@ -2374,12 +3184,53 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       return ok(store.whatsapp as T)
 
     case 'whatsapp:save':
-      store.whatsapp = { ...store.whatsapp, ...(args[0] as AnyRecord) }
+      {
+        const data = args[0] as AnyRecord
+        store.whatsapp = {
+          ...store.whatsapp,
+          ...data,
+          api_key: data.apiKey ?? data.api_key ?? store.whatsapp.api_key ?? '',
+          provider: data.provider ?? store.whatsapp.provider ?? 'fonnte',
+          rate_limit_per_minute: data.rateLimitPerMinute ?? data.rate_limit_per_minute ?? store.whatsapp.rate_limit_per_minute ?? 20,
+          message_template: data.messageTemplate ?? data.message_template ?? store.whatsapp.message_template ?? '',
+          notify_on_sale: data.notifyOnSale ?? data.notify_on_sale ?? store.whatsapp.notify_on_sale ?? 1,
+          notify_on_return: data.notifyOnReturn ?? data.notify_on_return ?? store.whatsapp.notify_on_return ?? 1,
+          notify_on_low_stock: data.notifyOnLowStock ?? data.notify_on_low_stock ?? store.whatsapp.notify_on_low_stock ?? 0,
+          notify_on_payment: data.notifyOnPayment ?? data.notify_on_payment ?? store.whatsapp.notify_on_payment ?? 1,
+        }
+      }
       saveStore(store)
       return ok(store.whatsapp as T, 'Pengaturan WhatsApp disimpan')
 
     case 'whatsapp:test':
       return ok(undefined as T, 'Tes WhatsApp Android offline berhasil')
+
+    case 'whatsapp:getTemplates':
+      return ok((store.whatsapp.templates ?? [
+        { id: 1, name: 'Promo Customer', content: 'Halo {{nama_customer}}, total belanja Anda {{total_belanja}} dan poin loyalty {{poin_loyalty}}.', created_at: now() },
+      ]) as T)
+
+    case 'whatsapp:saveTemplate': {
+      const templates = store.whatsapp.templates ?? []
+      const data = args[0] as AnyRecord
+      if (data.id) {
+        store.whatsapp.templates = templates.map((item: AnyRecord) => String(item.id) === String(data.id) ? { ...item, ...data, updated_at: now() } : item)
+      } else {
+        store.whatsapp.templates = [{ id: Date.now(), ...data, created_at: now() }, ...templates]
+      }
+      saveStore(store)
+      return ok(store.whatsapp.templates as T, 'Template WhatsApp disimpan')
+    }
+
+    case 'whatsapp:getBroadcastHistory':
+      return ok((store.whatsapp.broadcastHistory ?? []) as T)
+
+    case 'whatsapp:saveBroadcastHistory': {
+      const row = { id: Date.now(), ...(args[0] as AnyRecord), created_at: now() }
+      store.whatsapp.broadcastHistory = [row, ...(store.whatsapp.broadcastHistory ?? [])].slice(0, 100)
+      saveStore(store)
+      return ok(store.whatsapp.broadcastHistory as T, 'History broadcast disimpan')
+    }
 
     case 'security:get':
       return ok(store.security as T)
@@ -2396,6 +3247,43 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       store.ecommerce = { ...store.ecommerce, ...(args[0] as AnyRecord) }
       saveStore(store)
       return ok(store.ecommerce as T, 'Pengaturan ecommerce disimpan')
+
+    case 'ecommerce:getIntegration':
+      return ok({
+        platform: store.ecommerce.platform ?? 'woocommerce',
+        storeUrl: store.ecommerce.storeUrl ?? '',
+        consumerKey: store.ecommerce.consumerKey ?? '',
+        consumerSecret: store.ecommerce.consumerSecret ?? '',
+        enabled: Boolean(store.ecommerce.enabled),
+        autoSync: Boolean(store.ecommerce.autoSync),
+        intervalMinutes: store.ecommerce.intervalMinutes ?? 30,
+        lastSyncAt: store.ecommerce.lastSyncAt ?? null,
+        lastStatus: store.ecommerce.lastStatus ?? 'Belum pernah sync',
+        lastError: store.ecommerce.lastError ?? '',
+        logs: store.ecommerce.logs ?? [],
+        queue: store.ecommerce.queue ?? [],
+      } as T)
+
+    case 'ecommerce:saveIntegration':
+      store.ecommerce = { ...store.ecommerce, ...(args[0] as AnyRecord), updatedAt: now() }
+      saveStore(store)
+      return ok(store.ecommerce as T, 'Integrasi e-commerce disimpan')
+
+    case 'ecommerce:syncNow': {
+      const log = { id: Date.now(), status: 'info', message: 'Sync Android offline dicatat. Koneksi WooCommerce aktif saat mode desktop/server.', created_at: now() }
+      store.ecommerce.logs = [log, ...(store.ecommerce.logs ?? [])].slice(0, 20)
+      store.ecommerce.lastSyncAt = now()
+      store.ecommerce.lastStatus = log.message
+      saveStore(store)
+      return ok({ products: { created: 0, updated: 0 }, orders: 0, retried: 0 } as T, log.message)
+    }
+
+    case 'ecommerce:enqueueStockUpdate': {
+      const item = { id: Date.now(), action: 'updateStock', payload: JSON.stringify({ productId: args[0], qty: args[1] }), attempts: 0, status: 'pending', created_at: now() }
+      store.ecommerce.queue = [item, ...(store.ecommerce.queue ?? [])].slice(0, 50)
+      saveStore(store)
+      return ok(item as T, 'Update stok masuk queue retry')
+    }
 
     case 'dialog:showSaveDialog':
       return ok({ canceled: false, filePath: 'Android Download' } as T)

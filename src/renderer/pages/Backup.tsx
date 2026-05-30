@@ -19,6 +19,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useDemoGuard } from "../hooks/useDemoGuard";
 import type { Backup } from "../../shared/types";
 import { estimateStorageUsage } from "../utils/sqlitePersistence";
+import { ensureStoragePermission } from "../utils/nativePermissions";
 
 const fmt = (bytes: number | null) => {
   if (!bytes) return "0 B";
@@ -64,6 +65,8 @@ export default function BackupPage() {
 
   const handleCreate = async () => {
     if (guardPremiumFeature('backup_restore', 'Backup Database')) return;
+    const permission = await ensureStoragePermission();
+    if (!permission.granted) return toast(permission.message ?? "Izin penyimpanan ditolak", "error");
     setCreating(true);
     const r = await api(
       "backup:create",
@@ -103,6 +106,8 @@ export default function BackupPage() {
   };
 
   const handleDownload = async (b: Backup) => {
+    const permission = await ensureStoragePermission();
+    if (!permission.granted) return toast(permission.message ?? "Izin penyimpanan ditolak", "error");
     const r = await api<{ path: string }>("backup:download", b.kd_backup);
     if (r.success) toast(`File tersimpan di: ${r.data?.path}`);
     else toast(r.message as string, "error");
@@ -111,6 +116,8 @@ export default function BackupPage() {
   const handleImport = async () => {
     if (!importFile) return toast("Pilih file backup", "error");
     if (guardPremiumFeature('backup_restore', 'Import Database')) return;
+    const permission = await ensureStoragePermission();
+    if (!permission.granted) return toast(permission.message ?? "Izin penyimpanan ditolak", "error");
 
     // Read file as base64
     const reader = new FileReader();

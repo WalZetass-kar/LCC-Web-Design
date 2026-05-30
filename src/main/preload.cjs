@@ -180,6 +180,8 @@ const ALLOWED_CHANNELS = new Set([
   // Industry Integrations
   'integrations:get',
   'integrations:save',
+  'integrations:testAi',
+  'integrations:listAiModels',
   'integrations:testGoogleSheets',
   'integrations:exportDashboardToSheets',
 
@@ -356,12 +358,20 @@ const ALLOWED_CHANNELS = new Set([
   'whatsapp:get',
   'whatsapp:save',
   'whatsapp:test',
+  'whatsapp:getTemplates',
+  'whatsapp:saveTemplate',
+  'whatsapp:getBroadcastHistory',
+  'whatsapp:saveBroadcastHistory',
   // Security Settings
   'security:get',
   'security:save',
   // Ecommerce API Settings
   'ecommerce:get',
   'ecommerce:save',
+  'ecommerce:getIntegration',
+  'ecommerce:saveIntegration',
+  'ecommerce:syncNow',
+  'ecommerce:enqueueStockUpdate',
   // Device Tracking
   'device:getAll',
   'device:getByUser',
@@ -386,6 +396,11 @@ const ALLOWED_CHANNELS = new Set([
   'license:testAndSave',
   'license:validateApplication',
   'license:syncFromServer',
+  'license:syncBuyerLicense',
+  'license:createPaymentInvoice',
+  'license:createManualPaymentRequest',
+  'license:getPaymentStatus',
+  'license:getPublicPlans',
   'license:getUsers',
   'license:createUser',
   'license:updateUser',
@@ -393,7 +408,9 @@ const ALLOWED_CHANNELS = new Set([
   'license:changeUserPlan',
   'license:resetUserPassword',
   'license:getPlans',
+  'license:createPlan',
   'license:updatePlan',
+  'license:deletePlan',
   'license:getPlanFeatures',
   'license:setPlanFeatures',
   'license:getFeatures',
@@ -404,6 +421,25 @@ const ALLOWED_CHANNELS = new Set([
   'license:getPayments',
   'license:createPayment',
   'license:approvePayment',
+  'license:deletePayment',
+  'license:getStats',
+  'license:getRevenue',
+  'license:getDevices',
+  'license:getDeviceDetail',
+  'license:blockDevice',
+  'license:unblockDevice',
+  'license:suspendDeviceLicense',
+  'license:activateDeviceLicense',
+  'license:extendDeviceLicense',
+  'license:getAppUpdates',
+  'license:saveAppUpdate',
+  'license:getErrors',
+  'license:getAnnouncements',
+  'license:createAnnouncement',
+  'license:updateAnnouncement',
+  'license:deleteAnnouncement',
+  'license:heartbeat',
+  'license:logError',
   // Print
   'print:getPrinters',
   'print:execute',
@@ -425,6 +461,12 @@ contextBridge.exposeInMainWorld('api', {
     // Only log IPC calls in development — prevents channel name leak in production
     if (isDev) console.log('📡 IPC invoke:', channel)
     return ipcRenderer.invoke(channel, ...args)
+  },
+  onDeepLink: (callback) => {
+    if (typeof callback !== 'function') return () => {}
+    const listener = (_event, url) => callback(url)
+    ipcRenderer.on('app:deepLink', listener)
+    return () => ipcRenderer.removeListener('app:deepLink', listener)
   },
 })
 

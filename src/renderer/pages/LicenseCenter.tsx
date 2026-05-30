@@ -1,13 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   BadgeDollarSign,
+  Bell,
   CreditCard,
+  FileWarning,
   LayoutDashboard,
   ListChecks,
   Megaphone,
+  Menu,
+  MonitorSmartphone,
   ServerCog,
   ShieldCheck,
+  TrendingUp,
   Users,
+  Wrench,
+  X,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import LicenseServerConfig from './license/LicenseServerConfig'
@@ -16,8 +23,15 @@ import LicensePlansPage from './license/LicensePlans'
 import LicenseFeaturesPage from './license/LicenseFeatures'
 import LicensePopupsPage from './license/LicensePopups'
 import LicensePaymentsPage from './license/LicensePayments'
+import LicenseDashboardPage from './license/LicenseDashboard'
+import LicenseDevicesPage from './license/LicenseDevices'
+import LicenseUpdatesPage from './license/LicenseUpdates'
+import LicenseErrorsPage from './license/LicenseErrors'
+import LicenseAnnouncementsPage from './license/LicenseAnnouncements'
+import LicenseRevenuePage from './license/LicenseRevenue'
+import { api } from '../utils/api'
 
-type LicenseTab = 'connection' | 'users' | 'plans' | 'features' | 'popups' | 'payments'
+type LicenseTab = 'dashboard' | 'connection' | 'users' | 'devices' | 'updates' | 'errors' | 'announcements' | 'revenue' | 'plans' | 'features' | 'popups' | 'payments'
 
 const TABS: Array<{
   id: LicenseTab
@@ -25,26 +39,58 @@ const TABS: Array<{
   hint: string
   icon: typeof ServerCog
 }> = [
+  { id: 'dashboard', label: 'Dashboard', hint: 'Statistik dan revenue', icon: LayoutDashboard },
   { id: 'connection', label: 'Koneksi', hint: 'Server, validasi, sync', icon: ServerCog },
   { id: 'users', label: 'Pembeli', hint: 'Akun, password, paket', icon: Users },
+  { id: 'devices', label: 'Device', hint: 'Online, block, unblock', icon: MonitorSmartphone },
+  { id: 'updates', label: 'Update', hint: 'Optional dan force update', icon: Wrench },
+  { id: 'errors', label: 'Error', hint: 'Crash dan app error', icon: FileWarning },
+  { id: 'announcements', label: 'Broadcast', hint: 'Maintenance, promo, warning', icon: Bell },
+  { id: 'revenue', label: 'Revenue', hint: 'Pendapatan dan growth', icon: TrendingUp },
   { id: 'plans', label: 'Paket', hint: 'Harga dan fitur paket', icon: BadgeDollarSign },
   { id: 'features', label: 'Fitur', hint: 'Master fitur premium', icon: ListChecks },
   { id: 'popups', label: 'Popup', hint: 'Pesan upgrade POS', icon: Megaphone },
   { id: 'payments', label: 'Pembayaran', hint: 'Manual dan approve', icon: CreditCard },
 ]
 
+const TAB_GROUPS: Array<{ label: string; tabs: LicenseTab[] }> = [
+  { label: 'Kontrol', tabs: ['dashboard', 'connection'] },
+  { label: 'Pembeli', tabs: ['users', 'devices', 'payments'] },
+  { label: 'Produk Lisensi', tabs: ['plans', 'features', 'popups'] },
+  { label: 'Operasional', tabs: ['updates', 'announcements', 'errors', 'revenue'] },
+]
+
+const TAB_BY_ID = Object.fromEntries(TABS.map(tab => [tab.id, tab])) as Record<LicenseTab, typeof TABS[number]>
+
 export default function LicenseCenter() {
   const { user } = useAuth()
   const [tab, setTab] = useState<LicenseTab>('connection')
-  const activeTab = useMemo(() => TABS.find(item => item.id === tab) ?? TABS[0], [tab])
+  const [panelNavOpen, setPanelNavOpen] = useState(false)
+  const activeTab = useMemo(() => TAB_BY_ID[tab] ?? TABS[0], [tab])
 
-  if (!user || (user.hak_akses !== 'developer' && user.hak_akses !== 'superadmin')) {
+  const selectTab = (nextTab: LicenseTab) => {
+    setTab(nextTab)
+    setPanelNavOpen(false)
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    api<{ connected: boolean; hasRefreshToken?: boolean }>('license:getConfig').then(result => {
+      if (cancelled) return
+      if (result.success && result.data?.connected && result.data.hasRefreshToken) {
+        setTab('dashboard')
+      }
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  if (!user || user.hak_akses !== 'developer') {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="glass-card rounded-2xl p-10 text-center max-w-sm">
           <div className="text-4xl mb-3">!</div>
           <h2 className="heading-2 mb-1">Akses Ditolak</h2>
-          <p className="text-body">Halaman ini hanya untuk akun developer / super admin.</p>
+          <p className="text-body">Halaman ini hanya untuk akun developer.</p>
         </div>
       </div>
     )
@@ -60,47 +106,93 @@ export default function LicenseCenter() {
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="heading-1">License Center</h1>
+            <h1 className="heading-1">Developer Panel</h1>
             <p className="text-caption">Pusat akun pembeli, lisensi, paket, popup, dan pembayaran Supabase.</p>
           </div>
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-          <LayoutDashboard className="w-4 h-4 text-primary-500" />
-          <span>Mode developer</span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPanelNavOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 xl:hidden"
+          >
+            <Menu className="w-4 h-4 text-primary-500" />
+            <span>Menu Panel</span>
+          </button>
+          <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+            <LayoutDashboard className="w-4 h-4 text-primary-500" />
+            <span>Mode developer</span>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-900">
-          <div className="space-y-1">
-            {TABS.map(item => {
-              const Icon = item.icon
-              const active = item.id === tab
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setTab(item.id)}
-                  className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
-                    active
-                      ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-300'
-                      : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold">{item.label}</span>
-                    <span className="block truncate text-[11px] opacity-70">{item.hint}</span>
-                  </span>
-                </button>
-              )
-            })}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+        {panelNavOpen && (
+          <div
+            className="fixed inset-0 z-[65] bg-slate-950/50 backdrop-blur-sm xl:hidden"
+            onClick={() => setPanelNavOpen(false)}
+          />
+        )}
+        <aside className={`fixed inset-y-0 left-0 z-[70] w-72 transform overflow-y-auto border-r border-slate-200 bg-white p-3 shadow-2xl transition-transform duration-300 dark:border-slate-800 dark:bg-slate-900 xl:sticky xl:top-0 xl:z-auto xl:w-auto xl:translate-x-0 xl:self-start xl:rounded-xl xl:border xl:p-2 xl:shadow-none xl:max-h-[calc(100vh-7rem)] scrollbar-thin ${panelNavOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800 xl:hidden">
+            <div>
+              <p className="text-sm font-bold text-slate-800 dark:text-white">Developer Panel</p>
+              <p className="text-xs text-slate-400">Menu administrasi lisensi</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPanelNavOpen(false)}
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="space-y-4">
+            {TAB_GROUPS.map(group => (
+              <div key={group.label}>
+                <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                  {group.label}
+                </p>
+                <div className="space-y-1">
+                  {group.tabs.map(id => {
+                    const item = TAB_BY_ID[id]
+                    const Icon = item.icon
+                    const active = item.id === tab
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => selectTab(item.id)}
+                        className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                          active
+                            ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-300'
+                            : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold">{item.label}</span>
+                          <span className="block truncate text-[11px] opacity-70">{item.hint}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </aside>
 
         <section className="min-w-0 space-y-4">
           <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+            <button
+              type="button"
+              onClick={() => setPanelNavOpen(true)}
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-primary-600 dark:text-slate-300 dark:hover:bg-slate-800 xl:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-primary-600 dark:bg-slate-800 dark:text-primary-300">
               <ActiveIcon className="h-4 w-4" />
             </div>
@@ -110,8 +202,14 @@ export default function LicenseCenter() {
             </div>
           </div>
 
+          {tab === 'dashboard' && <LicenseDashboardPage />}
           {tab === 'connection' && <LicenseServerConfig />}
           {tab === 'users' && <LicenseUsersPage />}
+          {tab === 'devices' && <LicenseDevicesPage />}
+          {tab === 'updates' && <LicenseUpdatesPage />}
+          {tab === 'errors' && <LicenseErrorsPage />}
+          {tab === 'announcements' && <LicenseAnnouncementsPage />}
+          {tab === 'revenue' && <LicenseRevenuePage />}
           {tab === 'plans' && <LicensePlansPage />}
           {tab === 'features' && <LicenseFeaturesPage />}
           {tab === 'popups' && <LicensePopupsPage />}

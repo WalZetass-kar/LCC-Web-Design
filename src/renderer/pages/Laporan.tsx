@@ -24,6 +24,7 @@ import { formatRupiah } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
 import type { Penjualan } from '../../shared/types'
+import { ensureStoragePermission } from '../utils/nativePermissions'
 
 interface LabaRugi {
   total_transaksi: number
@@ -137,6 +138,12 @@ export default function Laporan() {
     // Block demo users from exporting — trigger pricing popup
     const featureKey = format === 'excel' ? 'export_excel' : 'export_pdf'
     if (guardPremiumFeature(featureKey, `Export ${format.toUpperCase()}`)) return
+
+    const permission = await ensureStoragePermission()
+    if (!permission.granted) {
+      toast(permission.message ?? 'Izin penyimpanan ditolak', 'error')
+      return
+    }
 
     // Show save dialog
     const ext = format === 'excel' ? 'xlsx' : 'pdf'

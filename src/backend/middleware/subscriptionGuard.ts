@@ -17,7 +17,7 @@ export interface SubscriptionStatus {
   feature_flags: Record<string, boolean>
 }
 
-const UNLIMITED_ACCESS_ROLES = new Set(['developer', 'superadmin'])
+const UNLIMITED_ACCESS_ROLES = new Set(['developer'])
 
 function parseFlags(value: unknown): Record<string, boolean> {
   if (!value || typeof value !== 'string') return {}

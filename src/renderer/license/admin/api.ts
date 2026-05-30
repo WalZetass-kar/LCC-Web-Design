@@ -154,6 +154,10 @@ export async function updatePlan(
   await http().patch(`/admin/plans/${id}`, payload);
 }
 
+export async function deletePlan(id: number) {
+  await http().delete(`/admin/plans/${id}`);
+}
+
 export async function getPlanFeatures(planId: number): Promise<PlanFeatureRow[]> {
   const r = await http().get(`/admin/plans/${planId}/features`);
   return r.data.data;
@@ -217,6 +221,10 @@ export async function createPayment(payload: {
 
 export async function approvePayment(id: number) {
   await http().post(`/admin/payments/${id}/approve`);
+}
+
+export async function deletePayment(id: number) {
+  await http().delete(`/admin/payments/${id}`);
 }
 
 // ===== Devices =====

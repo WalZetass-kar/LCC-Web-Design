@@ -22,6 +22,13 @@ import { initDatabase } from '../backend/utils/dbInit.js'
 import { SyncServerService } from './syncServer.js'
 import { SyncClientService } from './syncClient.js'
 import { registerSecureStorageHandlers } from './secureStorage.js'
+import {
+  attachWindowSecurity,
+  configureElectronSecurity,
+  flushPendingDeepLink,
+  loadDesktopEnv,
+  registerDesktopDeepLinks,
+} from './platformSecurity.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -29,6 +36,9 @@ const __dirname = path.dirname(__filename)
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
+
+loadDesktopEnv()
+registerDesktopDeepLinks(isDev)
 
 function getAppIconPath() {
   return isDev
@@ -57,6 +67,7 @@ function createWindow() {
       nodeIntegration: false,       // SECURITY: No Node.js in renderer
       sandbox: false,
       webSecurity: true,                   // SECURITY: Always enforce web security
+      devTools: isDev,
     },
     titleBarStyle: 'default',
     show: false,
@@ -65,6 +76,7 @@ function createWindow() {
   })
 
   mainWindow = win
+  attachWindowSecurity(win, isDev)
 
   if (isDev) {
     win.loadURL('http://localhost:5173')
@@ -91,28 +103,29 @@ function createWindow() {
           console.error('❌ window.api is NOT available! Preload failed!')
         }
       })
+    flushPendingDeepLink(win)
   })
 
   // ═══════════════════════════════════════════════════════════════════
   // DEMO MODE HARDENING: Disable DevTools for demo users
   // ═══════════════════════════════════════════════════════════════════
   win.webContents.on('devtools-opened', () => {
-    if (demoSession.isDemoMode()) {
-      console.warn('🚫 DevTools blocked for demo user')
+    if (!isDev || demoSession.isDemoMode()) {
+      console.warn('🚫 DevTools blocked')
       win.webContents.closeDevTools()
     }
   })
 
-  // Block keyboard shortcut for DevTools in demo mode
+  // Block keyboard shortcut for DevTools in packaged builds and demo mode.
   win.webContents.on('before-input-event', (event, input) => {
-    if (demoSession.isDemoMode()) {
+    if (!isDev || demoSession.isDemoMode()) {
       // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C
       if (
         input.key === 'F12' ||
         (input.control && input.shift && ['I', 'i', 'J', 'j', 'C', 'c'].includes(input.key))
       ) {
         event.preventDefault()
-        console.warn('🚫 DevTools shortcut blocked for demo user')
+        console.warn('🚫 DevTools shortcut blocked')
       }
     }
   })
@@ -121,6 +134,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  configureElectronSecurity(isDev)
+
   // Initialize database tables first
   initDatabase()
   

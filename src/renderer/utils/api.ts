@@ -27,7 +27,8 @@ const READ_PATTERNS: readonly string[] = [
   'getSettings', 'getPermissions', 'getBirthdayToday',
   'getTransaksi', 'getKasById', 'getAllKas', 'getActiveKas',
   'getUnreadCount', 'getHistory', 'getDetails', 'getUsageCount',
-  'calculate', 'ask', 'testGoogleSheets', 'exportDashboardToSheets',
+  'calculate', 'ask', 'testAi', 'listAiModels', 'testGoogleSheets', 'exportDashboardToSheets',
+  'syncBuyerLicense',
 ] as const
 
 /**
@@ -77,11 +78,17 @@ export async function api<T>(channel: string, ...args: unknown[]): Promise<IpcRe
 
     return await window.api.invoke(channel, ...args) as IpcResponse<T>
   } catch (error: any) {
-    // Handle errors from preload whitelist or main process
+    // During development, Vite can hot-reload the renderer while the Electron
+    // main process still runs the old IPC registry.
+    const message = error?.message || 'Terjadi kesalahan pada sistem'
+    const missingHandler = /No handler registered/i.test(message)
+
     console.error(`❌ API Error [${channel}]:`, error)
     return {
       success: false,
-      message: error.message || 'Terjadi kesalahan pada sistem',
+      message: missingHandler
+        ? 'Handler Electron belum aktif. Restart aplikasi agar channel IPC terbaru dimuat.'
+        : message,
     } as IpcResponse<T>
   }
 }

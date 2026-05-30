@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 // Gunakan useAuth (POS auth) bukan useLicense untuk cek role developer
 export function useIsAdmin(): boolean {
   const { user } = useAuth();
-  return !!user && (user.hak_akses === 'developer' || user.hak_akses === 'superadmin');
+  return !!user && user.hak_akses === 'developer';
 }
 
 interface AdminGateProps {
@@ -13,7 +13,7 @@ interface AdminGateProps {
 }
 
 /**
- * Gate yang hanya mengizinkan akun developer/superadmin POS masuk.
+ * Gate yang hanya mengizinkan akun developer POS masuk.
  * Tidak bergantung pada LicenseProvider — aman dipasang di mana saja.
  */
 export const AdminGate: React.FC<AdminGateProps> = ({ children, fallback }) => {
@@ -27,7 +27,7 @@ export const AdminGate: React.FC<AdminGateProps> = ({ children, fallback }) => {
     );
   }
 
-  if (user.hak_akses !== 'developer' && user.hak_akses !== 'superadmin') {
+  if (user.hak_akses !== 'developer') {
     return (
       <>
         {fallback ?? (
@@ -35,7 +35,7 @@ export const AdminGate: React.FC<AdminGateProps> = ({ children, fallback }) => {
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 max-w-sm text-center border border-slate-200 dark:border-slate-800">
               <div className="text-4xl mb-3">🚫</div>
               <h2 className="text-lg font-bold mb-1">Akses Ditolak</h2>
-              <p className="text-sm text-slate-500">Halaman ini hanya untuk akun developer / super admin.</p>
+              <p className="text-sm text-slate-500">Halaman ini hanya untuk akun developer.</p>
             </div>
           </div>
         )}

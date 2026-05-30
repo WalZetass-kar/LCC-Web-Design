@@ -17,9 +17,17 @@ POST /validate-device
 GET  /active-features?email=user@example.com
 GET  /popup/EXPIRED
 GET  /admin/plans
+POST /admin/plans
+PATCH /admin/plans/:id
+DELETE /admin/plans/:id
+GET  /admin/plans/:id/features
+PUT  /admin/plans/:id/features
 GET  /admin/popups
 GET  /admin/users
 GET  /admin/payments
+POST /admin/payments
+POST /admin/payments/:id/approve
+DELETE /admin/payments/:id
 ```
 
 Deployment ringkas:

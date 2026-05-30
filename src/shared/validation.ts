@@ -41,7 +41,7 @@ export const userSchema = z.object({
   nama_lengkap: z.string().min(1, 'Nama lengkap wajib diisi').max(200),
   email: z.string().email('Format email tidak valid').optional().or(z.literal('')),
   no_telp: z.string().regex(/^[0-9+\-\s()]*$/, 'Format nomor telepon tidak valid').max(20).optional(),
-  hak_akses: z.enum(['developer', 'superadmin', 'admin', 'operator', 'kasir']),
+  hak_akses: z.enum(['developer', 'admin', 'operator', 'kasir']),
 })
 
 // Transaction validation

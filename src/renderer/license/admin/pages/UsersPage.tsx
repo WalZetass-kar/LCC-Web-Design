@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, RefreshCw, RotateCcw, Trash2, UserX } from 'lucide-react';
+import { AlertTriangle, Plus, RefreshCw, RotateCcw, Trash2, UserX } from 'lucide-react';
 import {
   AdminUserRow, AdminPlanRow,
   changeUserPlan, createUser, deleteUser, listPlans, listUsers, resetUserPassword, updateUser,
@@ -11,6 +11,8 @@ export const UsersPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editPlan, setEditPlan] = useState<AdminUserRow | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'suspended' | 'delete'; user: AdminUserRow } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -28,6 +30,21 @@ export const UsersPage: React.FC = () => {
     if (s === 'expired') return 'orange';
     if (s === 'suspended') return 'red';
     return 'gray';
+  }
+
+  async function runConfirmAction() {
+    if (!confirmAction) return;
+    setConfirmLoading(true);
+    try {
+      if (confirmAction.type === 'delete') await deleteUser(confirmAction.user.id);
+      else await updateUser(confirmAction.user.id, { status: 'suspended' });
+      setConfirmAction(null);
+      await load();
+    } catch (e: any) {
+      setErr(e?.response?.data?.message || e?.message || 'Aksi gagal diproses');
+    } finally {
+      setConfirmLoading(false);
+    }
   }
 
   return (
@@ -71,14 +88,8 @@ export const UsersPage: React.FC = () => {
                     const r = await resetUserPassword(u.id);
                     alert(`Password baru: ${r.new_password}`);
                   }}><RotateCcw className="w-3 h-3" /></Button>
-                  <Button size="sm" variant="secondary" onClick={async () => {
-                    if (!confirm(`Suspend ${u.email}?`)) return;
-                    await updateUser(u.id, { status: 'suspended' }); load();
-                  }}><UserX className="w-3 h-3" /></Button>
-                  <Button size="sm" variant="danger" onClick={async () => {
-                    if (!confirm(`HAPUS ${u.email}? Permanen.`)) return;
-                    await deleteUser(u.id); load();
-                  }}><Trash2 className="w-3 h-3" /></Button>
+                  <Button size="sm" variant="secondary" onClick={() => setConfirmAction({ type: 'suspended', user: u })}><UserX className="w-3 h-3" /></Button>
+                  <Button size="sm" variant="danger" onClick={() => setConfirmAction({ type: 'delete', user: u })}><Trash2 className="w-3 h-3" /></Button>
                 </div>
               </Td>
             </tr>
@@ -88,6 +99,36 @@ export const UsersPage: React.FC = () => {
 
       {showCreate && <CreateUserModal onClose={() => setShowCreate(false)} onSaved={load} />}
       {editPlan && <ChangePlanModal user={editPlan} onClose={() => setEditPlan(null)} onSaved={load} />}
+      {confirmAction && (
+        <Modal title={confirmAction.type === 'delete' ? 'Hapus User' : 'Suspend User'} onClose={() => { if (!confirmLoading) setConfirmAction(null); }}>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${confirmAction.type === 'delete' ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'}`}>
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-800 dark:text-white">{confirmAction.user.name}</p>
+                <p className="mt-1 text-xs text-slate-400">{confirmAction.user.email}</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/70">
+              <div className="flex justify-between gap-3"><span className="text-slate-500">Paket</span><span className="font-semibold text-slate-800 dark:text-slate-100">{confirmAction.user.plan_code || '-'}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-slate-500">Device</span><span className="font-semibold text-slate-800 dark:text-slate-100">{confirmAction.user.active_devices || 0}</span></div>
+            </div>
+            <div className={`rounded-xl border px-3 py-2 text-sm ${confirmAction.type === 'delete' ? 'border-red-100 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300' : 'border-amber-100 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300'}`}>
+              {confirmAction.type === 'delete'
+                ? 'User akan dihapus permanen dari license server.'
+                : 'User akan disuspend dan device aktif tidak bisa dipakai sampai diaktifkan lagi.'}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+              <Button variant="secondary" onClick={() => setConfirmAction(null)} disabled={confirmLoading}>Batal</Button>
+              <Button variant={confirmAction.type === 'delete' ? 'danger' : 'primary'} onClick={() => void runConfirmAction()} disabled={confirmLoading}>
+                {confirmLoading ? 'Memproses...' : confirmAction.type === 'delete' ? 'Hapus' : 'Suspend'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

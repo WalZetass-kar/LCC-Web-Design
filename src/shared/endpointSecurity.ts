@@ -4,14 +4,22 @@ export interface UrlValidationResult {
   message?: string
 }
 
-const PLACEHOLDER_HOSTS = new Set([
-  `your${'pos'}.com`,
-  `api.your${'pos'}.com`,
-  `your-${'site'}.com`,
-  'example.com',
-  'localhost',
-  '127.0.0.1',
-])
+const PLACEHOLDER_HOSTS = new Set<string>()
+
+function addPlaceholderHost(...parts: string[]) {
+  PLACEHOLDER_HOSTS.add(parts.join(''))
+}
+
+addPlaceholderHost('api-', 'domain', '-', 'anda', '.', 'com')
+addPlaceholderHost('domain', '-', 'anda', '.', 'com')
+addPlaceholderHost('provider', '.', 'com')
+addPlaceholderHost('media', 'soft', '-pos-', 'zetass', '.', 'local')
+addPlaceholderHost('your', 'pos', '.', 'com')
+addPlaceholderHost('api.your', 'pos', '.', 'com')
+addPlaceholderHost('your-', 'site', '.', 'com')
+addPlaceholderHost('example', '.', 'com')
+addPlaceholderHost('localhost')
+addPlaceholderHost('127.0.0.1')
 
 function isPrivateIpv4(hostname: string) {
   const parts = hostname.split('.').map(part => Number(part))
@@ -86,6 +94,14 @@ export function normalizeSyncServerUrl(value: string): UrlValidationResult {
 }
 
 export function assertProductionEndpoint(value: string, label = 'Endpoint'): UrlValidationResult {
+  const result = normalizeHttpsUrl(value)
+  if (!result.valid) {
+    return { ...result, message: `${label}: ${result.message}` }
+  }
+  return result
+}
+
+export function assertHttpsEndpoint(value: string, label = 'Endpoint'): UrlValidationResult {
   const result = normalizeHttpsUrl(value)
   if (!result.valid) {
     return { ...result, message: `${label}: ${result.message}` }

@@ -285,8 +285,22 @@ router.patch('/plans/:id', (req, res) => {
 });
 
 router.delete('/plans/:id', (req, res) => {
-  db.prepare(`DELETE FROM plans WHERE id = ?`).run(Number(req.params.id));
-  res.json({ success: true });
+  const id = Number(req.params.id);
+  const plan = db.prepare(`SELECT id, code FROM plans WHERE id = ?`).get(id) as { id: number; code: string } | undefined;
+  if (!plan) return res.status(404).json({ success: false, message: 'Paket tidak ditemukan' });
+
+  const subscription = db.prepare(`SELECT id FROM user_subscriptions WHERE plan_id = ? LIMIT 1`).get(id);
+  const payment = db.prepare(`SELECT id FROM payments WHERE plan_id = ? LIMIT 1`).get(id);
+  if (subscription || payment) {
+    return res.status(409).json({
+      success: false,
+      message: 'Paket sudah dipakai pembeli atau pembayaran. Nonaktifkan paket kalau tidak ingin dijual lagi.',
+      data: { has_subscriptions: Boolean(subscription), has_payments: Boolean(payment) },
+    });
+  }
+
+  db.prepare(`DELETE FROM plans WHERE id = ?`).run(id);
+  res.json({ success: true, data: { id }, message: 'Paket berhasil dihapus' });
 });
 
 router.get('/plans/:id/features', (req, res) => {
@@ -539,6 +553,19 @@ router.post('/payments/:id/approve', (req: AuthedRequest, res) => {
     ).run(payment.user_id, payment.plan_id, expired, `Auto from payment #${id}`, req.user!.id);
   }
   res.json({ success: true });
+});
+
+router.delete('/payments/:id', (req: AuthedRequest, res) => {
+  const id = Number(req.params.id);
+  const payment = db.prepare(`SELECT id, user_id, plan_id, status FROM payments WHERE id = ?`).get(id) as any;
+  if (!payment) return res.status(404).json({ success: false, message: 'Pembayaran tidak ditemukan' });
+
+  db.prepare(
+    `INSERT INTO activity_logs (user_id, action, metadata)
+     VALUES (?, 'PAYMENT_DELETED', ?)`,
+  ).run(req.user!.id, JSON.stringify({ payment_id: id, status: payment.status, plan_id: payment.plan_id }));
+  db.prepare(`DELETE FROM payments WHERE id = ?`).run(id);
+  res.json({ success: true, data: { id }, message: 'Pembayaran berhasil dihapus' });
 });
 
 // =====================================================================

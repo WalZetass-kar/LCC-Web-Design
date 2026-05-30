@@ -16,7 +16,7 @@ function isAccessExpired(expiresAt?: string | null): boolean {
 }
 
 function hasUnlimitedAccessRole(role?: string | null): boolean {
-  return role === 'developer' || role === 'superadmin'
+  return role === 'developer'
 }
 
 function getAccessDaysRemaining(expiresAt?: string | null): number | null {
@@ -37,6 +37,8 @@ interface RestoreSessionInput {
   username?: string
   sessionToken?: string
   deviceInfo?: AuthDeviceInfo
+  remoteLicenseToken?: string | null
+  remoteLicenseRefreshToken?: string | null
 }
 
 const PIN_PATTERN = /^\d{4,8}$/
@@ -98,11 +100,20 @@ function validatePin(pin: string): string | null {
   return null
 }
 
-function toSession(user: AuthUserRecord, auth?: { token: string; expires_at: string; device_id?: string | null }) {
+function toSession(user: AuthUserRecord, auth?: {
+  token?: string
+  expires_at?: string
+  device_id?: string | null
+  remote_license_token?: string | null
+  remote_license_refresh_token?: string | null
+  remote_customer_id?: string | null
+  remote_auth_user_id?: string | null
+}) {
   const expiresAt = getEffectiveAccessExpiresAt(user)
   return {
     nama_pengguna: user.nama_pengguna,
     nama_lengkap: user.nama_lengkap,
+    email: user.email ?? null,
     hak_akses: user.hak_akses || 'kasir',
     access_expires_at: expiresAt,
     access_days_remaining: getAccessDaysRemaining(expiresAt),
@@ -112,6 +123,10 @@ function toSession(user: AuthUserRecord, auth?: { token: string; expires_at: str
     session_token: auth?.token,
     session_expires_at: auth?.expires_at,
     device_id: auth?.device_id ?? null,
+    remote_license_token: auth?.remote_license_token ?? null,
+    remote_license_refresh_token: auth?.remote_license_refresh_token ?? null,
+    remote_customer_id: auth?.remote_customer_id ?? null,
+    remote_auth_user_id: auth?.remote_auth_user_id ?? null,
   }
 }
 
@@ -224,6 +239,96 @@ function findLocalUserByEmail(email: string) {
     .get(email) as { nama_pengguna?: string } | undefined
 }
 
+function mapRemoteAdminRole(_role: string | null | undefined): 'developer' {
+  return 'developer'
+}
+
+async function upsertRemoteAdminCache(input: {
+  loginName: string
+  password: string
+  remote: any
+  existingUser?: AuthUserRecord | null
+}) {
+  const admin = input.remote?.user ?? {}
+  const email = String(admin.email ?? input.loginName).trim().toLowerCase()
+  if (!EMAIL_PATTERN.test(email)) {
+    throw new Error('Email admin dari license server tidak valid')
+  }
+
+  const localByEmail = findLocalUserByEmail(email)
+  const username = input.existingUser?.nama_pengguna
+    ?? localByEmail?.nama_pengguna
+    ?? email
+  const role = mapRemoteAdminRole(String(admin.role ?? 'developer'))
+  const name = String(admin.name ?? admin.email ?? username)
+  const existing = PenggunaModel.findByUsername(username)
+
+  if (existing) {
+    PenggunaModel.update(username, {
+      nama_lengkap: name,
+      email,
+      status_user: 'Aktif',
+      hak_akses: role,
+      access_expires_at: null,
+      subscription_plan_id: null,
+      subscription_expires_at: null,
+      is_buyer: 0,
+      must_change_password: 0,
+    } as any)
+    await PenggunaModel.updatePassword(username, input.password, false)
+  } else {
+    await PenggunaModel.create({
+      nama_pengguna: username,
+      nama_lengkap: name,
+      email,
+      kata_sandi: input.password,
+      hak_akses: role,
+      access_expires_at: null,
+      subscription_plan_id: null,
+      subscription_expires_at: null,
+      is_buyer: 0,
+      must_change_password: 0,
+    })
+  }
+
+  return PenggunaModel.findActiveByUsername(username)
+}
+
+async function loginRemoteAdmin(input: {
+  loginName: string
+  password: string
+  device: AuthDeviceInfo
+  existingUser?: AuthUserRecord | null
+}) {
+  const email = EMAIL_PATTERN.test(input.loginName)
+    ? input.loginName.trim().toLowerCase()
+    : (input.existingUser?.email ?? '').trim().toLowerCase()
+  if (!EMAIL_PATTERN.test(email)) return null
+
+  const remote = await LicenseController.loginAdmin({ email, password: input.password }, input.device)
+  if (!remote) return null
+  if (!remote.success) {
+    return {
+      success: false,
+      message: remote.message || 'Login admin ke license server pusat gagal',
+      data: remote.data,
+    }
+  }
+
+  const user = await upsertRemoteAdminCache({
+    loginName: input.loginName,
+    password: input.password,
+    remote: remote.data,
+    existingUser: input.existingUser,
+  })
+
+  if (!user) {
+    return { success: false, message: 'Akun admin lokal gagal dibuat dari license server' }
+  }
+
+  return { success: true, user, remote: remote.data }
+}
+
 async function upsertRemoteBuyerCache(input: {
   loginName: string
   password: string
@@ -311,10 +416,10 @@ async function loginRemoteBuyer(input: {
   })
   if (!user) return { success: false, message: 'Akun pembeli gagal disimpan di device ini' }
 
-  return { success: true, user }
+  return { success: true, user, remote: remote.data }
 }
 
-function completeRemoteBuyerLogin(user: AuthUserRecord, device: AuthDeviceInfo) {
+function completeRemoteBuyerLogin(user: AuthUserRecord, device: AuthDeviceInfo, remote?: any) {
   rateLimiter.resetAttempts(user.nama_pengguna)
   PenggunaModel.updateLastLogin(user.nama_pengguna)
 
@@ -351,6 +456,55 @@ function completeRemoteBuyerLogin(user: AuthUserRecord, device: AuthDeviceInfo) 
       token: authSession.token,
       expires_at: authSession.expires_at,
       device_id: device.deviceId ?? null,
+      remote_license_token: remote?.access_token ?? null,
+      remote_license_refresh_token: remote?.refresh_token ?? null,
+      remote_customer_id: remote?.customer?.id ?? null,
+      remote_auth_user_id: remote?.customer?.auth_user_id ?? null,
+    }),
+  }
+}
+
+function completeRemoteAdminLogin(user: AuthUserRecord, device: AuthDeviceInfo, remote?: any) {
+  rateLimiter.resetAttempts(user.nama_pengguna)
+  PenggunaModel.updateLastLogin(user.nama_pengguna)
+  LicenseController.saveAdminSessionFromRemote(remote)
+
+  if (device.deviceId) {
+    DeviceController.upsert({
+      username: user.nama_pengguna,
+      device_id: device.deviceId,
+      device_name: device.deviceName ?? undefined,
+      platform: device.platform ?? undefined,
+      os_name: device.osName ?? undefined,
+      app_version: device.appVersion ?? undefined,
+      ip_address: device.ipAddress ?? undefined,
+    })
+  }
+
+  const authSession = AuthSessionModel.create(user.nama_pengguna, device)
+
+  ActivityLogModel.create({
+    username: user.nama_pengguna,
+    aktivitas: 'REMOTE_ADMIN_LOGIN',
+    modul: 'AUTH',
+    tgl_aktivitas: new Date().toISOString(),
+    ip_address: device.ipAddress ?? null,
+    device_id: device.deviceId ?? null,
+    user_agent: device.userAgent ?? null,
+    event_type: 'login',
+    detail: `Login developer/admin divalidasi melalui Supabase license server. role=${remote?.user?.role ?? '-'}. ${deviceDetail(device)}`,
+  })
+
+  return {
+    success: true,
+    message: 'Login developer berhasil',
+    data: toSession(user, {
+      token: authSession.token,
+      expires_at: authSession.expires_at,
+      device_id: device.deviceId ?? null,
+      remote_license_token: remote?.access_token ?? null,
+      remote_license_refresh_token: remote?.refresh_token ?? null,
+      remote_auth_user_id: remote?.user?.id ?? null,
     }),
   }
 }
@@ -393,7 +547,7 @@ export class AuthController {
       nama_pengguna: username,
       nama_lengkap: namaLengkap,
       kata_sandi: password,
-      hak_akses: 'superadmin',
+      hak_akses: 'developer',
       access_expires_at: null,
       must_change_password: 0,
     })
@@ -403,10 +557,10 @@ export class AuthController {
       aktivitas: 'INITIAL_ADMIN_CREATED',
       modul: 'AUTH',
       tgl_aktivitas: new Date().toISOString(),
-      detail: 'Akun superadmin pertama dibuat melalui setup awal',
+      detail: 'Akun developer pertama dibuat melalui setup awal',
     })
 
-    return { success: true, message: 'Akun admin pertama berhasil dibuat' }
+    return { success: true, message: 'Akun developer pertama berhasil dibuat' }
   }
 
   static async registerTrial(data: {
@@ -469,6 +623,7 @@ export class AuthController {
     }
 
     const remoteExpiresAt = (remoteRegistration?.data as any)?.subscription?.expires_at
+    const remotePayload = remoteRegistration?.data as any
     const expiresAt = typeof remoteExpiresAt === 'string'
       ? remoteExpiresAt
       : new Date(Date.now() + TRIAL_DAYS * 86400000).toISOString()
@@ -527,6 +682,10 @@ export class AuthController {
         token: authSession.token,
         expires_at: authSession.expires_at,
         device_id: device.deviceId ?? null,
+        remote_license_token: remotePayload?.access_token ?? null,
+        remote_license_refresh_token: remotePayload?.refresh_token ?? null,
+        remote_customer_id: remotePayload?.customer?.id ?? null,
+        remote_auth_user_id: remotePayload?.customer?.auth_user_id ?? null,
       }),
     }
   }
@@ -572,11 +731,18 @@ export class AuthController {
 
     // Find active user
     const user = PenggunaModel.findActiveByUsername(username)
+    const shouldTryRemoteAdmin = EMAIL_PATTERN.test(username) || user?.hak_akses === 'developer'
+    if (shouldTryRemoteAdmin) {
+      const remoteAdmin = await loginRemoteAdmin({ loginName: username, password, device, existingUser: user ?? null })
+      if (remoteAdmin?.success && remoteAdmin.user) {
+        return completeRemoteAdminLogin(remoteAdmin.user, device, remoteAdmin.remote)
+      }
+    }
 
     if (!user) {
       const remoteLogin = await loginRemoteBuyer({ loginName: username, password, device })
       if (remoteLogin?.success && remoteLogin.user) {
-        return completeRemoteBuyerLogin(remoteLogin.user, device)
+        return completeRemoteBuyerLogin(remoteLogin.user, device, remoteLogin.remote)
       }
 
       // Record failed attempt
@@ -596,7 +762,7 @@ export class AuthController {
       if (attemptResult.locked) {
         return {
           success: false,
-          message: 'Terlalu banyak percobaan login gagal. Akun diblokir selama 15 menit.',
+          message: 'Terlalu banyak percobaan login gagal. Akun diblokir selama 5 menit.',
         }
       }
       
@@ -645,7 +811,7 @@ export class AuthController {
     if (!passwordValid) {
       const remoteLogin = await loginRemoteBuyer({ loginName: username, password, device, existingUser: user })
       if (remoteLogin?.success && remoteLogin.user) {
-        return completeRemoteBuyerLogin(remoteLogin.user, device)
+        return completeRemoteBuyerLogin(remoteLogin.user, device, remoteLogin.remote)
       }
 
       // Record failed attempt
@@ -665,7 +831,7 @@ export class AuthController {
       if (attemptResult.locked) {
         return {
           success: false,
-          message: 'Terlalu banyak percobaan login gagal. Akun diblokir selama 15 menit.',
+          message: 'Terlalu banyak percobaan login gagal. Akun diblokir selama 5 menit.',
         }
       }
       
@@ -678,13 +844,28 @@ export class AuthController {
     if (user.is_buyer) {
       const remoteLogin = await loginRemoteBuyer({ loginName: username, password, device, existingUser: user })
       if (remoteLogin?.success && remoteLogin.user) {
-        return completeRemoteBuyerLogin(remoteLogin.user, device)
+        return completeRemoteBuyerLogin(remoteLogin.user, device, remoteLogin.remote)
       }
       if (remoteLogin && !remoteLogin.success) {
-        return {
-          success: false,
-          message: remoteLogin.message || 'Akun pembeli belum aktif di license server pusat',
-          data: remoteLogin.data,
+        const code = String((remoteLogin.data as any)?.error_code ?? '').toUpperCase()
+        if (code === 'OFFLINE') {
+          ActivityLogModel.create({
+            username,
+            aktivitas: 'REMOTE_LICENSE_OFFLINE_FALLBACK',
+            modul: 'AUTH',
+            tgl_aktivitas: new Date().toISOString(),
+            ip_address: device.ipAddress ?? null,
+            device_id: device.deviceId ?? null,
+            user_agent: device.userAgent ?? null,
+            event_type: 'subscription',
+            detail: `License server tidak dapat dijangkau. Login memakai cache lokal sampai sync berikutnya. ${deviceDetail(device)}`,
+          })
+        } else {
+          return {
+            success: false,
+            message: remoteLogin.message || 'Akun pembeli belum aktif di license server pusat',
+            data: remoteLogin.data,
+          }
         }
       }
     }
@@ -693,7 +874,7 @@ export class AuthController {
     if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(expiresAt)) {
       const remoteLogin = await loginRemoteBuyer({ loginName: username, password, device, existingUser: user })
       if (remoteLogin?.success && remoteLogin.user) {
-        return completeRemoteBuyerLogin(remoteLogin.user, device)
+        return completeRemoteBuyerLogin(remoteLogin.user, device, remoteLogin.remote)
       }
 
       ActivityLogModel.create({
@@ -836,7 +1017,7 @@ export class AuthController {
       return {
         success: false,
         message: attemptResult.locked
-          ? 'Terlalu banyak percobaan PIN gagal. Akun diblokir selama 15 menit.'
+          ? 'Terlalu banyak percobaan PIN gagal. Akun diblokir selama 5 menit.'
           : `Username atau PIN salah. Sisa percobaan: ${attemptResult.remainingAttempts}`,
       }
     }
@@ -960,7 +1141,7 @@ export class AuthController {
    * Restore renderer session into the main-process session guard.
    * The renderer only sends username; role/status are reloaded from database.
    */
-  static restoreSession(input: string | RestoreSessionInput) {
+  static async restoreSession(input: string | RestoreSessionInput) {
     const username = (typeof input === 'string' ? input : input.username)?.trim() || ''
     const sessionToken = typeof input === 'string' ? '' : (input.sessionToken ?? '')
     const device = typeof input === 'string' ? {} : withDetectedDeviceInfo(normalizeDeviceInfo(input.deviceInfo))
@@ -982,13 +1163,40 @@ export class AuthController {
       return { success: false, message: 'Session tidak valid atau sudah kedaluwarsa' }
     }
 
-    const user = PenggunaModel.findActiveByUsername(username)
+    let user = PenggunaModel.findActiveByUsername(username)
     if (!user) {
       return { success: false, message: 'User tidak ditemukan atau tidak aktif' }
     }
 
+    if (user.is_buyer) {
+      const remote = await LicenseController.syncBuyerLicense(username, device)
+      const code = String((remote.data as any)?.error_code ?? '').toUpperCase()
+      if (!remote.success && ['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED', 'DEVICE_LIMIT'].includes(code)) {
+        ActivityLogModel.create({
+          username,
+          aktivitas: 'SESSION_RESTORE_REMOTE_BLOCKED',
+          modul: 'AUTH',
+          tgl_aktivitas: new Date().toISOString(),
+          ip_address: device.ipAddress ?? null,
+          device_id: device.deviceId ?? null,
+          user_agent: device.userAgent ?? null,
+          event_type: 'subscription',
+          detail: `Session restore ditolak oleh license server pusat. code=${code}. ${deviceDetail(device)}`,
+        })
+        return {
+          success: false,
+          message: remote.message || 'Akun atau device diblokir dari server developer',
+          error_code: code || 'BLOCKED',
+          data: remote.data,
+        }
+      }
+
+      const refreshed = PenggunaModel.findActiveByUsername(username)
+      if (refreshed) user = refreshed
+    }
+
     const expiresAt = getEffectiveAccessExpiresAt(user)
-    if (!hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(expiresAt)) {
+    if (!user.is_buyer && !hasUnlimitedAccessRole(user.hak_akses) && isAccessExpired(expiresAt)) {
       return { success: false, message: 'Masa akses akun sudah berakhir' }
     }
 
@@ -1009,6 +1217,17 @@ export class AuthController {
 
     if (user.must_change_password) {
       return { success: false, message: 'Password wajib diganti sebelum session dipulihkan' }
+    }
+
+    if (
+      hasUnlimitedAccessRole(user.hak_akses)
+      && typeof input !== 'string'
+      && input.remoteLicenseToken
+    ) {
+      LicenseController.saveAdminSessionFromRemote({
+        access_token: input.remoteLicenseToken,
+        refresh_token: input.remoteLicenseRefreshToken ?? null,
+      })
     }
 
     return {

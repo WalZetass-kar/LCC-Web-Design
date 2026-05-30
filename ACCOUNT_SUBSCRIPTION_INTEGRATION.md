@@ -7,7 +7,7 @@ Dokumen ini memetakan integrasi ke aplikasi POS yang sudah ada. Tidak ada aplika
 - Frontend POS: `src/renderer/pages/*`, layout sidebar di `src/renderer/layouts/Sidebar.tsx`.
 - Backend lokal: controller/model di `src/backend`, IPC di `src/main/ipcHandlers.ts`.
 - Database SQLite lokal: schema Drizzle di `src/database/schema.ts`, migrasi runtime idempotent di `src/database/connection.ts`.
-- Menu yang sudah tersedia dan dipakai: Pengguna, License Center, Paket Langganan, E-commerce API, Keamanan, Activity Log, Backup.
+- Menu yang dipakai untuk lisensi pusat: Developer Panel, Pembayaran Lisensi, Pengguna lokal, E-commerce API, Keamanan, Activity Log, Backup.
 - Tabel lama yang direuse: `mediasoft_pengguna`, `mediasoft_grup_pengguna_hak_akses`, `mediasoft_subscription_plans`, `mediasoft_activity_log`, `mediasoft_identitas`, `mediasoft_auth_sessions`, `mediasoft_ecommerce_api`.
 - Tabel baru yang memang diperlukan: `mediasoft_user_devices` untuk device per user dan `mediasoft_popup_rules` untuk aturan popup upgrade.
 
@@ -15,23 +15,22 @@ Dokumen ini memetakan integrasi ke aplikasi POS yang sudah ada. Tidak ada aplika
 
 | Fungsi final | Menu/file existing | Catatan |
 |---|---|---|
-| Akun pembeli, role, status, masa akses, hak akses | `src/renderer/pages/Users.tsx` | Reuse `mediasoft_pengguna` dan permission lama. |
+| User POS lokal, role, status, masa akses, hak akses | `src/renderer/pages/Users.tsx` | Khusus akun lokal POS. Akun pembeli dikelola dari Developer Panel -> Pembeli. |
 | Device user, OS, platform, IP, revoke | `Users.tsx`, `DeviceController.ts`, `Security.tsx` | Pengguna menampilkan riwayat device, Keamanan untuk session/remote logout. |
 | Koneksi dan validasi API lisensi | `LicenseCenter.tsx`, `LicenseServerConfig.tsx`, `LicenseController.ts` | Hanya config, test, sync, validasi aplikasi. |
-| Paket, harga, masa aktif, limit, fitur premium | `SubscriptionPlans.tsx`, `PlanController.ts` | Reuse `mediasoft_subscription_plans`. |
+| Paket, harga, masa aktif, limit, fitur premium | `LicenseCenter.tsx` -> Paket | Sumber utama Supabase untuk Android, pembeli, dan popup lisensi. |
 | Payment gateway, webhook, link pembayaran, auto aktivasi | `EcommerceApi.tsx`, `EcommerceApiController.ts` | Popup upgrade mengambil CTA dari konfigurasi ini. |
 | Session control, revoke, remote logout, token | `Security.tsx`, `AuthSessionModel.ts`, `DeviceController.ts` | IPC device dibuat admin-only. |
 | Log login/device/subscription/payment/API | `ActivityLog.tsx`, `ActivityLogModel.ts` | `event_type` dipakai untuk filter audit. |
 | Backup/restore/import/export | `Backup.tsx`, `BackupController.ts` | Tidak dipindahkan ke License Center. |
-| Popup upgrade | `PricingPopup.tsx` | Dikontrol paket, ecommerce payment link, popup rules, dan frontend POS. |
+| Popup upgrade | `RemoteLicensePopup.tsx` | Mengambil paket, popup rule, dan pembayaran dari license server/Supabase. |
 
 ## 3. Struktur sidebar final tanpa menu duplicate
 
 Administrasi tetap berisi:
 
-- `Pengguna`: user, akun pembeli, role, status, hak akses, masa akses, device.
-- `License Center`: koneksi API lisensi, endpoint, token/API key, test, sync, validasi.
-- `Paket Langganan`: paket, harga, durasi, limit, fitur premium.
+- `Pengguna`: user lokal POS, role, status, hak akses, masa akses, device.
+- `Developer Panel`: koneksi API lisensi, pembeli, paket, fitur, popup, pembayaran, device.
 - `Activity Log`: semua audit event.
 - `Backup`: backup/restore/import/export lokal.
 - `Keamanan`: session, token, revoke device/session, remote logout.
@@ -250,26 +249,27 @@ Di TypeScript:
 getActiveFeatures(username)
 ```
 
-## 14. Contoh dashboard admin untuk mengatur akun pembeli
+## 14. Dashboard akun lokal dan pembeli
 
-Dashboard berada di `Menu Pengguna`:
+User lokal berada di `Menu Pengguna`:
 
-- tab `Pengguna`: username, nama, email, telepon, role, status, masa akses, paket, device count, PIN, last login.
-- modal add/edit: akun pembeli, paket langganan, masa langganan, masa akses, role, izin menu.
+- tab `Pengguna`: username, nama, email, telepon, role, status, masa akses, device count, PIN, last login.
+- modal add/edit: role lokal, masa akses, PIN kasir, izin menu.
 - tab `Riwayat Device User`: username, device id/name, desktop/mobile, OS, app version, IP, last seen, status active/revoked/blocked, tombol revoke.
+
+Akun pembeli, paket, popup, pembayaran, limit, dan fitur premium berada di `Developer Panel`.
 
 ## 15. Checklist anti duplicate
 
 - Tidak membuat aplikasi baru.
 - Tidak membuat menu popup upgrade.
 - Tidak membuat menu device management baru.
-- Tidak memindahkan user/paket/payment/popup/device ke License Center.
-- License Center hanya koneksi, test, sync, validasi API lisensi.
-- Paket Langganan tetap mengatur paket, harga, durasi, limit, fitur.
+- User POS lokal tetap di Pengguna.
+- Developer Panel menjadi pusat pembeli, paket, payment, popup, limit, dan fitur lisensi.
+- Menu Paket Langganan lokal lama tidak ditampilkan di sidebar utama.
 - E-commerce API tetap mengatur payment gateway, webhook, link payment, auto aktivasi.
 - Keamanan tetap mengatur session, token, revoke/remote logout.
 - Activity Log tetap menjadi tempat audit.
 - Backup tetap menjadi tempat backup/restore.
 - Reuse tabel lama sebelum membuat tabel baru.
 - Backend tetap menjadi enforcement utama, frontend hanya UX.
-

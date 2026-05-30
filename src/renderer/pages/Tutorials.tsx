@@ -6,6 +6,7 @@ import {
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
+import ConfirmDialog from '../components/ConfirmDialog'
 import type { Tutorial } from '../../shared/types'
 
 // Simple markdown-like renderer (bold, headings, lists, code)
@@ -155,8 +156,10 @@ export default function Tutorials() {
   const [selected, setSelected] = useState<Tutorial | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editTarget, setEditTarget] = useState<Tutorial | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Tutorial | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  const isAdmin = ['developer', 'superadmin', 'admin'].includes(user?.hak_akses ?? '')
+  const isAdmin = ['developer', 'admin'].includes(user?.hak_akses ?? '')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -197,12 +200,15 @@ export default function Tutorials() {
     t.title.toLowerCase().includes(search.toLowerCase())
   )
 
-  const handleDelete = async (t: Tutorial) => {
-    if (!confirm(`Hapus tutorial "${t.title}"?`)) return
-    const r = await api('tutorial:delete', t.id)
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    const r = await api('tutorial:delete', deleteTarget.id)
+    setDeleting(false)
     if (r.success) {
       toast('Tutorial dihapus')
-      if (selected?.id === t.id) setSelected(null)
+      if (selected?.id === deleteTarget.id) setSelected(null)
+      setDeleteTarget(null)
       load()
     } else {
       toast(r.message as string || 'Gagal menghapus', 'error')
@@ -301,7 +307,7 @@ export default function Tutorials() {
                     <Edit2 size={15} />
                   </button>
                   <button
-                    onClick={() => handleDelete(selected)}
+                    onClick={() => setDeleteTarget(selected)}
                     className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors"
                     title="Hapus"
                   >
@@ -339,6 +345,16 @@ export default function Tutorials() {
           }}
         />
       )}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Hapus Tutorial"
+        message={`Tutorial "${deleteTarget?.title ?? ''}" akan dihapus.`}
+        confirmText="Hapus"
+        variant="danger"
+        loading={deleting}
+      />
     </div>
   )
 }

@@ -88,7 +88,7 @@ export class DeviceController {
       return { allowed: false, reason: 'revoked', current, max: 0 }
     }
 
-    if (['developer', 'superadmin'].includes(user?.hak_akses ?? '')) {
+    if (user?.hak_akses === 'developer') {
       return { allowed: true, current, max: -1 }
     }
 
@@ -109,7 +109,7 @@ export class DeviceController {
       .prepare(`SELECT hak_akses, subscription_plan_id FROM mediasoft_pengguna WHERE nama_pengguna = ?`)
       .get(username) as { hak_akses?: string | null; subscription_plan_id: number | null } | undefined
 
-    if (['developer', 'superadmin'].includes(user?.hak_akses ?? '')) {
+    if (user?.hak_akses === 'developer') {
       const current = (sqlite
         .prepare(`SELECT COUNT(*) AS c FROM mediasoft_user_devices WHERE username = ? AND status = 'active'`)
         .get(username) as { c: number }).c

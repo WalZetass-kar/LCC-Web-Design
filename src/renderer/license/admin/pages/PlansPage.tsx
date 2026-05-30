@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, X } from 'lucide-react';
-import { AdminPlanRow, PlanFeatureRow, getPlanFeatures, listPlans, setPlanFeatures, updatePlan } from '../api';
+import { AlertTriangle, Check, Trash2 } from 'lucide-react';
+import { AdminPlanRow, PlanFeatureRow, deletePlan, getPlanFeatures, listPlans, setPlanFeatures, updatePlan } from '../api';
 import { Button, Modal, PageHeader } from '../components';
 
 export const PlansPage: React.FC = () => {
   const [plans, setPlans] = useState<AdminPlanRow[]>([]);
   const [editing, setEditing] = useState<AdminPlanRow | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState<AdminPlanRow | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -20,6 +23,20 @@ export const PlansPage: React.FC = () => {
     PRO: 'from-primary-600 to-primary-400',
     ENTERPRISE: 'from-violet-600 to-purple-400',
   };
+
+  async function removePlan(plan: AdminPlanRow) {
+    setDeletingId(plan.id);
+    setDeleteError('');
+    try {
+      await deletePlan(plan.id);
+      setConfirmingDelete(null);
+      await load();
+    } catch (error: any) {
+      setDeleteError(error?.response?.data?.message || error?.message || 'Gagal menghapus paket');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div>
@@ -52,12 +69,48 @@ export const PlansPage: React.FC = () => {
                 </div>
                 <div className="p-4 flex-1 flex flex-col">
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 flex-1">{p.description || '—'}</p>
-                  <Button onClick={() => setEditing(p)} className="w-full">Atur Fitur</Button>
+	                  <div className="grid grid-cols-2 gap-2">
+	                    <Button onClick={() => setEditing(p)} className="w-full">Atur Fitur</Button>
+	                    <Button variant="danger" onClick={() => { setConfirmingDelete(p); setDeleteError(''); }} disabled={deletingId === p.id} className="w-full">
+	                      <Trash2 className="w-4 h-4" />
+	                      {deletingId === p.id ? '...' : 'Hapus'}
+	                    </Button>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
+      )}
+      {confirmingDelete && (
+        <Modal title="Hapus Paket" onClose={() => { if (!deletingId) setConfirmingDelete(null); }}>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-800 dark:text-white">{confirmingDelete.name}</p>
+                <p className="mt-1 font-mono text-xs text-slate-400">{confirmingDelete.code}</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+              Paket yang sudah dipakai pembeli, subscription, atau pembayaran tidak bisa dihapus. Nonaktifkan paket kalau hanya ingin disembunyikan dari pembelian baru.
+            </div>
+            {deleteError && (
+              <div className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-slate-900 dark:text-red-300">
+                {deleteError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+              <Button variant="secondary" onClick={() => setConfirmingDelete(null)} disabled={deletingId === confirmingDelete.id}>Batal</Button>
+              <Button variant="danger" onClick={() => void removePlan(confirmingDelete)} disabled={deletingId === confirmingDelete.id}>
+                <Trash2 className="w-4 h-4" />
+                {deletingId === confirmingDelete.id ? 'Menghapus...' : 'Hapus'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
       {editing && <PlanFeaturesModal plan={editing} onClose={() => setEditing(null)} onSaved={load} />}
     </div>

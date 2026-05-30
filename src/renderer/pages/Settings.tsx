@@ -10,10 +10,11 @@ import { useTheme, type ThemeColor } from '../contexts/ThemeContext'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { playDangerSound, playWarningSound } from '../utils/sound'
-import { DEFAULT_INDUSTRY_SETTINGS, defaultModelForProvider, normalizeIndustrySettings, type AiProvider, type IndustrySettings } from '../../shared/industrySettings'
+import { DEFAULT_INDUSTRY_SETTINGS, defaultBaseUrlForProvider, defaultModelForProvider, normalizeIndustrySettings, type AiProvider, type IndustrySettings } from '../../shared/industrySettings'
 import type { Identitas } from '../../shared/types'
 import { normalizeSyncServerUrl } from '../../shared/endpointSecurity'
 import { GOOGLE_SHEETS_APPS_SCRIPT } from '../../shared/googleSheetsAppsScript'
+import { appConfig } from '../utils/productionConfig'
 
 const COLORS: { key: ThemeColor; label: string; hex: string }[] = [
   { key: 'indigo', label: 'Indigo', hex: '#6366f1' },
@@ -37,6 +38,9 @@ export default function Settings() {
   const [industrySettings, setIndustrySettings] = useState<IndustrySettings>(DEFAULT_INDUSTRY_SETTINGS)
   const [industryLoading, setIndustryLoading] = useState(false)
   const [testingSheets, setTestingSheets] = useState(false)
+  const [testingAi, setTestingAi] = useState(false)
+  const [loadingAiModels, setLoadingAiModels] = useState(false)
+  const [aiModels, setAiModels] = useState<string[]>([])
   const [syncLoading, setSyncLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -134,6 +138,16 @@ export default function Settings() {
   }
 
   const saveIndustrySettings = async () => {
+    if (industrySettings.aiEnabled && industrySettings.aiProvider !== 'local') {
+      setTestingAi(true)
+      const test = await api('integrations:testAi', industrySettings)
+      setTestingAi(false)
+      if (!test.success) {
+        toast(test.message as string || 'Koneksi AI gagal. Periksa provider, base URL, model, dan API key.', 'error')
+        return
+      }
+    }
+
     setIndustryLoading(true)
     const r = await api<IndustrySettings>('integrations:save', industrySettings)
     setIndustryLoading(false)
@@ -150,11 +164,50 @@ export default function Settings() {
   }
 
   const changeAiProvider = (provider: AiProvider) => {
+    setAiModels([])
     setIndustrySettings(prev => ({
       ...prev,
       aiProvider: provider,
-      aiModel: prev.aiModel || defaultModelForProvider(provider),
+      aiModel: defaultModelForProvider(provider) || prev.aiModel,
+      aiBaseUrl: provider === 'openai'
+        ? (appConfig.aiProviderUrl || defaultBaseUrlForProvider(provider))
+        : defaultBaseUrlForProvider(provider),
     }))
+  }
+
+  const loadAiModels = async () => {
+    if (!industrySettings.aiEnabled || industrySettings.aiProvider === 'local') {
+      toast('Aktifkan AI online dan pilih provider terlebih dahulu', 'error')
+      return
+    }
+    if (industrySettings.aiProvider === 'gemini') {
+      toast('Daftar model otomatis saat ini hanya untuk provider OpenAI-compatible', 'error')
+      return
+    }
+
+    setLoadingAiModels(true)
+    const r = await api<string[]>('integrations:listAiModels', industrySettings)
+    setLoadingAiModels(false)
+    if (r.success) {
+      const models = r.data ?? []
+      setAiModels(models)
+      if (!industrySettings.aiModel && models[0]) changeIndustrySetting('aiModel', models[0])
+      toast(r.message as string || 'Daftar model dimuat', 'success')
+    } else {
+      toast(r.message as string || 'Gagal memuat daftar model', 'error')
+    }
+  }
+
+  const testAiConnection = async () => {
+    if (!industrySettings.aiEnabled || industrySettings.aiProvider === 'local') {
+      toast('Aktifkan AI online dan pilih provider terlebih dahulu', 'error')
+      return
+    }
+
+    setTestingAi(true)
+    const r = await api('integrations:testAi', industrySettings)
+    setTestingAi(false)
+    toast(r.message as string || (r.success ? 'Koneksi AI berhasil' : 'Koneksi AI gagal'), r.success ? 'success' : 'error')
   }
 
   const testGoogleSheets = async () => {
@@ -400,18 +453,40 @@ export default function Settings() {
                   className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
                 >
                   <option value="local">Lokal gratis</option>
-                  <option value="deepseek">DeepSeek</option>
-                  <option value="openrouter">OpenRouter</option>
+                  <option value="openai">OpenAI</option>
                   <option value="gemini">Gemini</option>
                   <option value="custom">Custom OpenAI-Compatible</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="bluesminds">BluesMinds</option>
                 </select>
               </div>
-              <Input
-                label="Model"
-                value={industrySettings.aiModel}
-                onChange={e => changeIndustrySetting('aiModel', e.target.value)}
-                placeholder={defaultModelForProvider(industrySettings.aiProvider) || 'nama-model'}
-              />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Model</label>
+                <div className="flex gap-2">
+                  {aiModels.length > 0 ? (
+                    <select
+                      value={industrySettings.aiModel}
+                      onChange={e => changeIndustrySetting('aiModel', e.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 transition-all duration-200 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    >
+                      {aiModels.map(model => <option key={model} value={model}>{model}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      value={industrySettings.aiModel}
+                      onChange={e => changeIndustrySetting('aiModel', e.target.value)}
+                      placeholder={defaultModelForProvider(industrySettings.aiProvider) || 'nama-model'}
+                      className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 transition-all duration-200 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    />
+                  )}
+                  {industrySettings.aiProvider !== 'local' && industrySettings.aiProvider !== 'gemini' && (
+                    <Button type="button" variant="secondary" loading={loadingAiModels} onClick={loadAiModels} icon={<RefreshCw size={14} />} className="shrink-0">
+                      Model
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
 
             {industrySettings.aiProvider !== 'local' && (
@@ -424,14 +499,13 @@ export default function Settings() {
                   placeholder="Masukkan API key provider"
                   icon={<KeyRound size={16} />}
                 />
-                {industrySettings.aiProvider === 'custom' && (
-                  <Input
-                    label="Base URL Custom"
-                    value={industrySettings.aiBaseUrl}
-                    onChange={e => changeIndustrySetting('aiBaseUrl', e.target.value)}
-                    placeholder="https://provider.com/v1/chat/completions"
-                  />
-                )}
+                <Input
+                  label="Base URL"
+                  value={industrySettings.aiBaseUrl}
+                  onChange={e => changeIndustrySetting('aiBaseUrl', e.target.value)}
+                  placeholder={industrySettings.aiProvider === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : appConfig.aiProviderUrl || defaultBaseUrlForProvider(industrySettings.aiProvider)}
+                  helperText={industrySettings.aiProvider === 'bluesminds' ? 'Gunakan https://api.bluesminds.com/v1. Chat memakai /v1/chat/completions dan model memakai /v1beta/models.' : undefined}
+                />
               </>
             )}
 
@@ -498,6 +572,9 @@ export default function Settings() {
             <div className="flex flex-col sm:flex-row gap-2 justify-end">
               <Button variant="secondary" loading={testingSheets} onClick={testGoogleSheets} icon={<CheckCircle2 size={14} />} className="w-full sm:w-auto">
                 Tes Google Sheets
+              </Button>
+              <Button variant="secondary" loading={testingAi} onClick={testAiConnection} icon={<Bot size={14} />} className="w-full sm:w-auto">
+                Tes AI
               </Button>
               <Button loading={industryLoading} onClick={saveIndustrySettings} className="w-full sm:w-auto">
                 Simpan Integrasi

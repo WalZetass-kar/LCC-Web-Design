@@ -38,8 +38,8 @@ export const UserSchema = z.object({
   nama_lengkap: z.string().min(1, 'Nama lengkap wajib diisi').max(100, 'Nama maksimal 100 karakter'),
   email: z.string().email('Email tidak valid').max(100, 'Email maksimal 100 karakter').optional().or(z.literal('')),
   no_telp: z.string().max(20, 'Nomor telepon maksimal 20 karakter').optional(),
-  hak_akses: z.enum(['developer', 'operator', 'kasir', 'superadmin', 'admin'], {
-    errorMap: () => ({ message: 'Hak akses harus developer, operator, kasir, superadmin, atau admin' }),
+  hak_akses: z.enum(['developer', 'operator', 'kasir', 'admin'], {
+    errorMap: () => ({ message: 'Hak akses harus developer, operator, kasir, atau admin' }),
   }),
 })
 

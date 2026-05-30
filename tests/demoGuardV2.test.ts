@@ -53,7 +53,7 @@ describe('demoGuardV2 role checks', () => {
   })
 
   it('allows privileged users to access administration channels', () => {
-    demoSession.setSession('owner', 'superadmin')
+    demoSession.setSession('owner', 'developer')
 
     expect(shouldBlockChannel('user:getAll')).toBe(false)
     expect(shouldBlockChannel('backup:create')).toBe(false)
