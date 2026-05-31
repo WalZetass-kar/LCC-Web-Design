@@ -855,7 +855,7 @@ export default function Settings() {
         </Card>
 
         {/* Reset Data - Danger Zone */}
-        <Card title="⚠️ Zona Berbahaya" action={<AlertTriangle size={16} className="text-red-500" />}>
+        <Card title="Zona Berbahaya" action={<AlertTriangle size={16} className="text-red-500" />}>
           <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800">
             <div className="flex items-start gap-3 mb-3">
               <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/40">
@@ -1011,7 +1011,7 @@ export default function Settings() {
 
           {/* Final Warning */}
           <div className="text-center text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700">
-            ⚠️ Pastikan Anda sudah backup data sebelum melanjutkan
+            Pastikan Anda sudah backup data sebelum melanjutkan
           </div>
         </div>
       </Modal>

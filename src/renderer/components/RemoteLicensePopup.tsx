@@ -96,7 +96,7 @@ export default function RemoteLicensePopup() {
 
   const requestPayment = async (plan: PublicPlan) => {
     if (!canRequestPayment) {
-      setPaymentMessage('Login dengan akun pembeli dulu untuk membuat request pembayaran.')
+      setPaymentMessage('Login dengan akun pembeli dulu untuk membuat request persetujuan lisensi.')
       return
     }
     setCreatingPlan(plan.code)
@@ -108,11 +108,11 @@ export default function RemoteLicensePopup() {
     })
     setCreatingPlan(null)
     if (!result.success || !result.data) {
-      setPaymentMessage(result.message || 'Gagal membuat request pembayaran.')
+      setPaymentMessage(result.message || 'Gagal membuat request persetujuan lisensi.')
       return
     }
     setInvoice(result.data)
-    setPaymentMessage(result.message || 'Request pembayaran dibuat.')
+    setPaymentMessage(result.message || 'Request persetujuan lisensi dibuat.')
     if (result.data.payment_url) void api('app:openExternal', result.data.payment_url)
   }
 
@@ -192,7 +192,7 @@ export default function RemoteLicensePopup() {
                         className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
                       >
                         {creatingPlan === plan.code ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageCircle className="h-3.5 w-3.5" />}
-                        Ajukan Paket
+                        Beli Paket
                       </button>
                     </div>
                   ))}

@@ -34,7 +34,7 @@ export const DashboardPage: React.FC = () => {
         <StatCard label="Aktif" value={stats.active} icon={TrendingUp} color="text-green-600 dark:text-green-400" loading={loading} />
         <StatCard label="Expired" value={stats.expired} icon={Activity} color="text-orange-600 dark:text-orange-400" loading={loading} />
         <StatCard label="Total Plan" value={stats.plans} icon={CreditCard} color="text-primary-600 dark:text-primary-400" loading={loading} />
-        <StatCard label="Pembayaran" value={stats.payments} icon={DollarSign} color="text-pink-600 dark:text-pink-400" loading={loading} />
+        <StatCard label="Persetujuan Lisensi" value={stats.payments} icon={DollarSign} color="text-pink-600 dark:text-pink-400" loading={loading} />
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
@@ -47,7 +47,7 @@ export const DashboardPage: React.FC = () => {
             ['Plans', 'Atur fitur tiap paket (FREE / BASIC / PRO / ENTERPRISE).'],
             ['Users', 'Buat akun pembeli setelah mereka membayar, atau ubah paket kapan saja.'],
             ['Popup', 'Atur isi popup upgrade yang muncul di aplikasi user.'],
-            ['Pembayaran', 'Catat pembayaran manual; status success auto perpanjang langganan.'],
+            ['Persetujuan Lisensi', 'Setujui request dari popup langganan; status success auto perpanjang langganan.'],
             ['Fitur', 'Kelola master daftar fitur yang dipakai di aplikasi.'],
           ].map(([tab, desc], i) => (
             <li key={i} className="flex items-start gap-3 text-sm">

@@ -1,33 +1,47 @@
 import { useState, useEffect } from 'react'
-import { ChevronRight, ChevronLeft, X } from 'lucide-react'
-import Button from './Button'
-import Modal from './Modal'
+import {
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  CreditCard,
+  Keyboard,
+  LayoutDashboard,
+  ScanLine,
+  X,
+} from 'lucide-react'
 import { secureStorage } from '../utils/secureStorage'
 
 const TOUR_STEPS = [
   {
-    title: 'Selamat Datang di MediaSoft POS! 🎉',
-    content: 'Aplikasi kasir modern untuk mengelola toko Anda dengan mudah dan efisien.',
+    title: 'Mulai Dari Dashboard',
+    content: 'Pantau ringkasan penjualan, stok menipis, dan akses cepat ke transaksi.',
+    icon: LayoutDashboard,
   },
   {
-    title: 'Keyboard Shortcuts ⌨️',
-    content: 'Gunakan F1-F10 untuk navigasi cepat:\n• F1: Transaksi\n• F2: Produk\n• F3: Riwayat\n• F4: Customer\n• Ctrl+K: Quick Search',
+    title: 'Keyboard Shortcuts',
+    content: 'Gunakan F1-F10 untuk navigasi cepat:\nF1: Transaksi\nF2: Produk\nF3: Riwayat\nCtrl+K: Quick Search',
+    icon: Keyboard,
   },
   {
-    title: 'Barcode Scanner 📷',
-    content: 'Scan barcode produk langsung di halaman transaksi untuk menambahkan ke keranjang dengan cepat.',
+    title: 'Barcode Scanner',
+    content: 'Scan barcode produk langsung di halaman transaksi untuk menambahkan item ke keranjang.',
+    icon: ScanLine,
   },
   {
-    title: 'Multi-Payment 💳',
-    content: 'Terima pembayaran dengan berbagai metode: Tunai, Transfer, Kartu, E-Wallet, dan QRIS.',
+    title: 'Multi-Payment',
+    content: 'Terima pembayaran Tunai, Transfer, dan QRIS dari panel pembayaran kasir.',
+    icon: CreditCard,
   },
   {
-    title: 'Shift Management ⏰',
-    content: 'Kelola shift kasir dengan mudah. Buka shift di awal, tutup di akhir, dan lihat laporan per shift.',
+    title: 'Shift Management',
+    content: 'Buka shift sebelum mulai transaksi, lalu tutup shift untuk rekonsiliasi kas.',
+    icon: Clock,
   },
   {
-    title: 'Siap Memulai! 🚀',
-    content: 'Anda siap menggunakan MediaSoft POS. Jika butuh bantuan, tekan Ctrl+K untuk quick search.',
+    title: 'Siap Digunakan',
+    content: 'Panel ini tidak mengunci layar kerja. Tutup kapan saja, atau lanjutkan sambil memakai aplikasi.',
+    icon: CheckCircle,
   },
 ]
 
@@ -46,7 +60,7 @@ export default function Onboarding() {
   const handleClose = () => {
     secureStorage.setItem('hasSeenTour', 'true')
     setIsOpen(false)
-    setStep(0) // Reset step for next time
+    setStep(0)
   }
 
   const handleNext = () => {
@@ -61,42 +75,69 @@ export default function Onboarding() {
     if (step > 0) setStep(step - 1)
   }
 
+  if (!isOpen) return null
+
+  const StepIcon = TOUR_STEPS[step].icon
+
   return (
-    <Modal open={isOpen} onClose={handleClose} title="">
-      <div className="text-center space-y-6 py-4">
-        <div className="text-6xl">{step === 0 ? '👋' : step === TOUR_STEPS.length - 1 ? '🎉' : '💡'}</div>
-        
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">{TOUR_STEPS[step].title}</h2>
-          <p className="text-gray-600 whitespace-pre-line">{TOUR_STEPS[step].content}</p>
+    <section
+      role="dialog"
+      aria-label="Panduan singkat aplikasi"
+      className="fixed bottom-10 right-4 z-40 w-[calc(100vw-2rem)] max-w-sm rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900"
+    >
+      <div className="flex items-start gap-3 p-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300">
+          <StepIcon size={20} />
         </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Panduan Singkat</p>
+              <h2 className="mt-0.5 text-base font-bold text-slate-900 dark:text-white">{TOUR_STEPS[step].title}</h2>
+            </div>
+            <button
+              onClick={handleClose}
+              className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              aria-label="Tutup panduan"
+            >
+              <X size={16} />
+            </button>
+          </div>
 
-        <div className="flex items-center justify-center gap-2">
-          {TOUR_STEPS.map((_, i) => (
-            <div
-              key={i}
-              className={`h-2 rounded-full transition-all ${
-                i === step ? 'w-8 bg-pink-500' : 'w-2 bg-gray-300'
-              }`}
-            />
-          ))}
-        </div>
+          <p className="mt-2 whitespace-pre-line text-sm leading-5 text-slate-600 dark:text-slate-300">
+            {TOUR_STEPS[step].content}
+          </p>
 
-        <div className="flex gap-2">
-          {step > 0 && (
-            <Button variant="secondary" onClick={handlePrev} icon={<ChevronLeft />} className="flex-1">
+          <div className="mt-4 flex items-center gap-1.5">
+            {TOUR_STEPS.map((_, i) => (
+              <div
+                key={i}
+                className={`h-2 rounded-full transition-all ${
+                  i === step ? 'w-7 bg-primary-500' : 'w-2 bg-slate-200 dark:bg-slate-700'
+                }`}
+              />
+            ))}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-2">
+            <button
+              onClick={handlePrev}
+              disabled={step === 0}
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800"
+            >
+              <ChevronLeft size={15} />
               Kembali
-            </Button>
-          )}
-          <Button onClick={handleNext} icon={step < TOUR_STEPS.length - 1 ? <ChevronRight /> : undefined} className="flex-1">
-            {step < TOUR_STEPS.length - 1 ? 'Lanjut' : 'Mulai'}
-          </Button>
+            </button>
+            <button
+              onClick={handleNext}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-700"
+            >
+              {step < TOUR_STEPS.length - 1 ? 'Lanjut' : 'Selesai'}
+              {step < TOUR_STEPS.length - 1 && <ChevronRight size={15} />}
+            </button>
+          </div>
         </div>
-
-        <button onClick={handleClose} className="text-sm text-gray-500 hover:text-gray-700">
-          Lewati tutorial
-        </button>
       </div>
-    </Modal>
+    </section>
   )
 }

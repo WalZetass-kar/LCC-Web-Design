@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import {
-  LayoutDashboard, Package, Tag, ShoppingCart, History, Settings, Store, LogOut, Truck, X,
+  LayoutDashboard, Package, Tag, ShoppingCart, History, Settings, LogOut, Truck, X,
   Users, UserCircle, Wallet, FileText, BarChart2, Database, ShoppingBag, Activity,
   RotateCcw, Clock, DollarSign, ClipboardCheck, Rocket, BookOpen, Calculator, Ruler, Gift, Building2, Shield, Award, MessageCircle, Printer, Globe, ChevronLeft, ChevronRight, ShieldCheck
 } from 'lucide-react'
@@ -9,6 +9,7 @@ import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
 import { api } from '../utils/api'
+import appLogo from '../assets/app-logo.png'
 
 export interface MenuItem {
   to: string
@@ -88,6 +89,7 @@ export const MENU_GROUPS: MenuGroup[] = [
 ]
 
 const QUICK_MENU_PATHS = ['/', '/transaksi', '/produk', '/laporan', '/settings']
+const SIMPLE_MENU_PATHS = new Set(['/', '/transaksi', '/riwayat', '/produk', '/customer', '/kas', '/shifts', '/settings'])
 
 interface SidebarProps {
   isOpen: boolean
@@ -126,6 +128,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
   }
 
   const isDemo = user?.hak_akses === 'demo'
+  const isSimpleMode = user?.hak_akses === 'kasir'
   const isAdmin = user?.hak_akses === 'developer'
   const canShowRenewal = !isDemo && user?.hak_akses !== 'developer'
   const accessDaysRemaining = user?.access_days_remaining ?? (() => {
@@ -136,6 +139,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
   })()
   const canShowItem = (item: MenuItem) => {
     if (item.adminOnly && !isAdmin) return false
+    if (isSimpleMode && !SIMPLE_MENU_PATHS.has(item.to)) return false
     if (permissions && !isAdmin && item.code && permissions[item.code] === false) return false
     if ('feature' in item && item.feature && featureFlags[item.feature] === false) return false
     return true
@@ -157,9 +161,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
       {/* Logo */}
       <div className={`flex items-center justify-between gap-3 border-b border-white/30 dark:border-slate-700/30 ${isCollapsed ? 'lg:px-3 px-5' : 'px-5'} py-5`}>
         <div className={`flex items-center min-w-0 ${isCollapsed ? 'lg:justify-center lg:flex-1 gap-0' : 'gap-3'}`}>
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center shadow-lg shadow-primary-500/30">
-            <Store size={18} className="text-white" />
-          </div>
+          <img src={appLogo} alt="MediaSoft POS Zetass" className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-sm" />
           <div className={`${isCollapsed ? 'lg:hidden' : ''}`}>
             <p className="font-bold text-sm text-slate-800 dark:text-white leading-tight">MediaSoft POS</p>
             <p className="text-xs text-slate-500 dark:text-slate-400">by Zetass</p>
@@ -199,7 +201,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
                     `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
                     ${isCollapsed ? 'lg:justify-center lg:px-0' : ''}
                     ${isActive
-                      ? 'bg-primary-600 text-white shadow-sm'
+                      ? 'bg-primary-600 text-white'
                       : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary-600 dark:hover:text-primary-400'
                     }`
                   }
@@ -231,7 +233,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
                       `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
                       ${isCollapsed ? 'lg:justify-center lg:px-0' : ''}
                       ${isActive
-                        ? 'bg-primary-600 text-white shadow-sm'
+                        ? 'bg-primary-600 text-white'
                         : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary-600 dark:hover:text-primary-400'
                       }`
                     }
@@ -253,11 +255,9 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
             <button
               onClick={showPricing}
               className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl
-                bg-gradient-to-r from-violet-600 to-purple-500
-                hover:from-violet-700 hover:to-purple-600
+                bg-primary-600 hover:bg-primary-700
                 text-white text-xs font-bold
-                shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40
-                transition-all duration-300 active:scale-[0.97]
+                transition-colors active:scale-[0.98]
                 demo-upgrade-badge mb-1"
             >
               <Rocket size={14} />
@@ -267,7 +267,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
               </span>
             </button>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/15">
-              <span className="text-[10px]">🔒</span>
+              <Shield size={12} className="text-red-500" />
               <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">Demo Mode</span>
             </div>
           </div>
@@ -277,11 +277,9 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
             <button
               onClick={showPricing}
               className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl
-                bg-gradient-to-r from-emerald-600 to-teal-500
-                hover:from-emerald-700 hover:to-teal-600
+                bg-emerald-600 hover:bg-emerald-700
                 text-white text-xs font-bold
-                shadow-lg shadow-emerald-500/25
-                transition-all duration-300 active:scale-[0.97] mb-1"
+                transition-colors active:scale-[0.98] mb-1"
             >
               <Rocket size={14} />
               <span className="flex-1 text-left">Upgrade / Perpanjang</span>
@@ -301,7 +299,7 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
           </div>
         )}
         <div className={`flex items-center gap-2 px-2 ${isCollapsed ? 'lg:justify-center' : ''}`}>
-          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${isDemo ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-primary-500'}`}>
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${isDemo ? 'bg-red-500' : 'bg-primary-600'}`}>
             {user?.nama_pengguna?.[0]?.toUpperCase() ?? 'U'}
           </div>
           <div className={`min-w-0 flex-1 ${isCollapsed ? 'lg:hidden' : ''}`}>

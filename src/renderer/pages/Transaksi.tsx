@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X, Image, Settings, QrCode, Tag, ScanLine, Camera } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -47,6 +48,7 @@ interface QrisStatus {
 export default function Transaksi() {
   const toast = useToast()
   const { user } = useAuth()
+  const navigate = useNavigate()
   const { trackUsage, isOverLimit, remainingUsage, isDemo, showPricing } = useDemoGuard()
   const [products, setProducts] = useState<Barang[]>([])
   const [search, setSearch] = useState('')
@@ -348,7 +350,7 @@ export default function Transaksi() {
     setPromoLoading(false)
     if (r.success && r.data?.valid) {
       setPromoDiskon(r.data.discount)
-      setPromoMsg(`✅ ${r.data.promo?.name} — hemat ${formatRupiah(r.data.discount)}`)
+      setPromoMsg(`${r.data.promo?.name} - hemat ${formatRupiah(r.data.discount)}`)
     } else {
       setPromoDiskon(0)
       setPromoMsg(r.data?.message ?? r.message ?? 'Kode promo tidak valid')
@@ -400,7 +402,7 @@ export default function Transaksi() {
       // Track usage for demo limit system
       trackUsage()
       if (isDemo && remainingUsage <= 3 && remainingUsage > 0) {
-        toast(`⚠️ Sisa ${remainingUsage - 1} transaksi demo`, 'error')
+        toast(`Sisa ${remainingUsage - 1} transaksi demo`, 'error')
       }
       return true
     } else {
@@ -555,6 +557,10 @@ export default function Transaksi() {
 
   const handleBayar = async () => {
     if (!cart.length) return toast('Keranjang kosong', 'error')
+    if (!activeShiftId) {
+      toast('Shift kasir belum dibuka. Buka shift terlebih dahulu.', 'error')
+      return
+    }
     if (jenisBayar !== 'QRIS' && (parseFloat(bayar) || 0) < totalBayar) return toast('Jumlah bayar kurang', 'error')
     // Warn demo users approaching limit
     if (isDemo && isOverLimit) {
@@ -606,6 +612,18 @@ export default function Transaksi() {
     <div className="flex min-h-[calc(100vh-7rem)] flex-col gap-4 lg:h-[calc(100vh-7rem)] lg:min-h-[620px] lg:flex-row">
       {/* Left: Product Search */}
       <div className="flex min-w-0 flex-1 flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        {!activeShiftId && (
+          <div className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
+            <span>Shift kasir belum dibuka. Transaksi baru wajib memakai shift aktif.</span>
+            <button
+              type="button"
+              onClick={() => navigate('/shifts')}
+              className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-700"
+            >
+              Buka Shift
+            </button>
+          </div>
+        )}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-base font-bold text-slate-800 dark:text-slate-100">Produk</h1>

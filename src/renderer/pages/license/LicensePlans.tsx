@@ -70,7 +70,68 @@ const PLAN_COLORS: Record<string, string> = {
   BASIC_MONTHLY: 'from-blue-500 to-blue-400',
   PRO: 'from-primary-600 to-primary-400',
   PRO_MONTHLY: 'from-primary-600 to-primary-400',
+  PRO_ANNUAL: 'from-emerald-600 to-teal-400',
+  TAHUNAN: 'from-emerald-600 to-teal-400',
   ENTERPRISE: 'from-violet-600 to-purple-400',
+}
+
+const ALL_FEATURE_CODES = [
+  'reports',
+  'export_excel',
+  'export_pdf',
+  'multi_user',
+  'backup',
+  'restore',
+  'stock_opname',
+  'debt_management',
+  'shift_management',
+  'api_access',
+  'multi_branch',
+  'return_refund',
+]
+
+const ANNUAL_PLAN_PAYLOAD = {
+  code: 'PRO_ANNUAL',
+  name: 'Tahunan',
+  description: 'Paket 1 tahun untuk operasional lengkap: laporan, export Excel/PDF, multi-user, backup/restore, stock opname, hutang/piutang, shift, API, multi cabang, dan retur/refund.',
+  price: 1999000,
+  currency: 'IDR',
+  duration_days: 365,
+  max_devices: 5,
+  max_transactions_per_day: -1,
+  max_products: -1,
+  max_users: 10,
+  sort_order: 30,
+  is_active: true,
+  is_recommended: false,
+  feature_flags: Object.fromEntries(ALL_FEATURE_CODES.map(code => [code, true])),
+}
+
+const PLAN_FEATURE_SUMMARIES: Record<'trial' | 'basic' | 'pro' | 'enterprise', string[]> = {
+  trial: [
+    'Akses coba terbatas',
+    '1 device',
+    'Limit transaksi dan produk',
+    'Fitur premium terkunci',
+  ],
+  basic: [
+    'Laporan dasar',
+    'Backup data',
+    'Return/refund',
+    'Cocok untuk satu toko kecil',
+  ],
+  pro: [
+    'Export Excel dan PDF',
+    'Multi-user',
+    'Restore/import backup',
+    'Stock opname, hutang/piutang, shift, dan API',
+  ],
+  enterprise: [
+    'Semua fitur Pro',
+    'Multi cabang',
+    'Produk dan transaksi unlimited',
+    'Akses tahunan untuk operasional lengkap',
+  ],
 }
 
 function isOn(value: unknown) {
@@ -162,6 +223,11 @@ function applyFeaturePreset(plan: PlanRow, features: FeatureRow[]) {
   return features.map(feature => ({ ...feature, is_enabled: enabled.has(feature.code) ? 1 : 0 }))
 }
 
+function planFeatureSummary(plan: PlanRow) {
+  const preset = featurePresetForPlan(plan)
+  return preset ? PLAN_FEATURE_SUMMARIES[preset] : []
+}
+
 export default function LicensePlansPage() {
   const toast = useToast()
   const [plans, setPlans] = useState<PlanRow[]>([])
@@ -171,6 +237,7 @@ export default function LicensePlansPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [addingAnnual, setAddingAnnual] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -198,19 +265,56 @@ export default function LicensePlansPage() {
     void load()
   }
 
+  const hasAnnualPlan = plans.some(plan => {
+    const code = cleanCode(plan.code)
+    const name = plan.name.toLowerCase()
+    return code.includes('ANNUAL') || code.includes('TAHUNAN') || name.includes('tahunan')
+  })
+
+  async function addAnnualPlan() {
+    setAddingAnnual(true)
+    const result = await api<PlanRow>('license:createPlan', ANNUAL_PLAN_PAYLOAD)
+    if (!result.success || !result.data?.id) {
+      setAddingAnnual(false)
+      return toast(result.message || 'Gagal menambahkan paket tahunan', 'error')
+    }
+
+    const features = await api<FeatureRow[]>('license:getPlanFeatures', result.data.id)
+    if (features.success && features.data?.length) {
+      await api('license:setPlanFeatures', result.data.id, {
+        features: features.data.map(feature => ({ code: feature.code, enabled: true, limit: feature.limit_value })),
+      })
+    }
+    setAddingAnnual(false)
+    toast('Paket Tahunan berhasil ditambahkan', 'success')
+    void load()
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Paket di sini adalah sumber utama untuk harga Android, pembeli, popup upgrade, limit, dan fitur lisensi.
         </p>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
-        >
-          <Plus className="h-4 w-4" />
-          Tambah Paket
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {!hasAnnualPlan && (
+            <button
+              onClick={addAnnualPlan}
+              disabled={addingAnnual}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900/60 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+            >
+              <Plus className="h-4 w-4" />
+              {addingAnnual ? 'Menambahkan...' : 'Tambah Paket Tahunan'}
+            </button>
+          )}
+          <button
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+          >
+            <Plus className="h-4 w-4" />
+            Tambah Paket
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -224,6 +328,7 @@ export default function LicensePlansPage() {
           {plans.map(plan => {
             const gradient = PLAN_COLORS[plan.code] || 'from-slate-600 to-slate-400'
             const active = isOn(plan.is_active)
+            const summary = planFeatureSummary(plan)
             return (
               <div key={plan.id} className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
                 <div className={`bg-gradient-to-br ${gradient} p-5`}>
@@ -251,6 +356,19 @@ export default function LicensePlansPage() {
                 </div>
                 <div className="flex flex-1 flex-col gap-4 p-4">
                   <p className="min-h-10 text-xs leading-5 text-slate-500 dark:text-slate-400">{plan.description || '-'}</p>
+                  {summary.length > 0 && (
+                    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-800/60">
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">Fitur didapat</p>
+                      <ul className="space-y-1">
+                        {summary.map(item => (
+                          <li key={item} className="flex gap-2 text-xs text-slate-600 dark:text-slate-300">
+                            <span className="mt-1.5 h-1 w-1 rounded-full bg-primary-500" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <Limit label="Device" value={limitLabel(plan.max_devices)} />
                     <Limit label="Transaksi/hari" value={limitLabel(plan.max_transactions_per_day)} />

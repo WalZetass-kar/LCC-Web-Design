@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, Pencil, Trash2, Barcode, AlertTriangle, Image, X, Upload } from 'lucide-react'
+import { Plus, Pencil, Trash2, Barcode, AlertTriangle, Image, X, Upload, Camera, ScanLine } from 'lucide-react'
 import Barcode_ from 'react-barcode'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -15,7 +15,8 @@ import { SkeletonPage } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
-import type { Barang, Kategori, Satuan } from '../../shared/types'
+import { ensureCameraPermission } from '../utils/nativePermissions'
+import type { Barang, IpcResponse, Kategori, Satuan } from '../../shared/types'
 
 interface FormState {
   kd_barang: string
@@ -31,6 +32,17 @@ interface FormState {
   expired_date: string
   foto_barang: string
 }
+
+interface PaginationMeta {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+type PaginatedResponse<T> = IpcResponse<T> & { pagination?: PaginationMeta }
 
 const EMPTY: FormState = {
   kd_barang: '', nama_barang: '', stok: 0, harga_barang: 0, harga_modal: 0,
@@ -61,20 +73,66 @@ export default function Produk() {
   const [loadingData, setLoadingData] = useState(true)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [showImport, setShowImport] = useState(false)
+  const [tableLoading, setTableLoading] = useState(false)
+  const [productPageIndex, setProductPageIndex] = useState(0)
+  const [productPageSize, setProductPageSize] = useState(25)
+  const [productSearch, setProductSearch] = useState('')
+  const [productSortBy, setProductSortBy] = useState('nama_barang')
+  const [productSortOrder, setProductSortOrder] = useState<'ASC' | 'DESC'>('ASC')
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const cameraStreamRef = useRef<MediaStream | null>(null)
+  const scanIntervalRef = useRef<number | null>(null)
+  const [cameraScannerOpen, setCameraScannerOpen] = useState(false)
+  const [cameraScannerError, setCameraScannerError] = useState('')
+  const [cameraScannerStatus, setCameraScannerStatus] = useState('Menyiapkan kamera...')
+  const [productPagination, setProductPagination] = useState<PaginationMeta>({
+    page: 1,
+    limit: 25,
+    total: 0,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false,
+  })
 
-  const load = async () => {
-    const [r1, r2, r3] = await Promise.all([
-      api<Barang[]>('barang:getAll'),
-      api<Kategori[]>('kategori:getAll'),
-      api<Satuan[]>('satuan:getAll'),
-    ])
-    if (r1.success) setData(r1.data ?? [])
-    if (r2.success) setKategori(r2.data ?? [])
-    if (r3.success) setSatuan(r3.data ?? [])
+  const loadProducts = useCallback(async () => {
+    setTableLoading(true)
+    const r = await api<Barang[]>('barang:getPaginated', {
+      page: productPageIndex + 1,
+      limit: productPageSize,
+      search: productSearch,
+      sortBy: productSortBy,
+      sortOrder: productSortOrder,
+    }) as PaginatedResponse<Barang[]>
+    if (r.success) {
+      setData(r.data ?? [])
+      setProductPagination(r.pagination ?? {
+        page: productPageIndex + 1,
+        limit: productPageSize,
+        total: r.data?.length ?? 0,
+        totalPages: 1,
+        hasNext: false,
+        hasPrev: productPageIndex > 0,
+      })
+    }
+    setTableLoading(false)
     setLoadingData(false)
-  }
+  }, [productPageIndex, productPageSize, productSearch, productSortBy, productSortOrder])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    loadProducts()
+  }, [loadProducts])
+
+  useEffect(() => {
+    const loadLookups = async () => {
+      const [r2, r3] = await Promise.all([
+        api<Kategori[]>('kategori:getAll'),
+        api<Satuan[]>('satuan:getAll'),
+      ])
+      if (r2.success) setKategori(r2.data ?? [])
+      if (r3.success) setSatuan(r3.data ?? [])
+    }
+    loadLookups()
+  }, [])
 
   const openAdd = () => { setForm({ ...EMPTY }); setModal('add'); setFormErrors({}) }
   const openEdit = (row: Barang) => {
@@ -99,6 +157,80 @@ export default function Produk() {
   const openDelete = (row: Barang) => { setSelected(row); setConfirmDelete(true) }
   const closeModal = () => { setModal(null); setSelected(null) }
 
+  const stopCameraScanner = useCallback(() => {
+    if (scanIntervalRef.current !== null) {
+      window.clearInterval(scanIntervalRef.current)
+      scanIntervalRef.current = null
+    }
+    cameraStreamRef.current?.getTracks().forEach(track => track.stop())
+    cameraStreamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setCameraScannerOpen(false)
+  }, [])
+
+  useEffect(() => stopCameraScanner, [stopCameraScanner])
+
+  const handleCameraBarcode = useCallback((barcode: string) => {
+    setForm(prev => ({ ...prev, barcode }))
+    toast(`Barcode ${barcode} berhasil dipindai`)
+    stopCameraScanner()
+  }, [stopCameraScanner, toast])
+
+  const openCameraScanner = async () => {
+    const permission = await ensureCameraPermission()
+    if (!permission.granted) {
+      toast(permission.message ?? 'Izin kamera ditolak', 'error')
+      return
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast('Kamera tidak tersedia di perangkat ini', 'error')
+      return
+    }
+
+    setCameraScannerError('')
+    setCameraScannerStatus('Menyiapkan kamera...')
+    setCameraScannerOpen(true)
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      })
+      cameraStreamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        await videoRef.current.play()
+      }
+
+      const BarcodeDetectorCtor = (window as any).BarcodeDetector
+      if (!BarcodeDetectorCtor) {
+        setCameraScannerError('Pemindai barcode kamera belum didukung oleh WebView ini. Gunakan scanner Bluetooth/USB atau ketik barcode.')
+        return
+      }
+
+      const detector = new BarcodeDetectorCtor({
+        formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code'],
+      })
+      setCameraScannerStatus('Arahkan kamera ke barcode produk')
+
+      scanIntervalRef.current = window.setInterval(async () => {
+        const video = videoRef.current
+        if (!video || video.readyState < 2) return
+
+        try {
+          const codes = await detector.detect(video)
+          const rawValue = codes?.[0]?.rawValue
+          if (rawValue) handleCameraBarcode(String(rawValue).trim())
+        } catch (error) {
+          setCameraScannerError(error instanceof Error ? error.message : 'Gagal membaca barcode')
+        }
+      }, 500)
+    } catch (error) {
+      setCameraScannerError(error instanceof Error ? error.message : 'Gagal membuka kamera')
+    }
+  }
+
   const handleSave = async () => {
     const errors: Record<string, string> = {}
     if (!form.kd_barang) errors.kd_barang = 'Kode barang wajib diisi'
@@ -114,7 +246,12 @@ export default function Produk() {
       ? await api('barang:create', form)
       : await api('barang:update', selected!.kd_barang, form)
     setLoading(false)
-    if (r.success) { toast(r.message as string); closeModal(); load() }
+    if (r.success) {
+      toast(r.message as string)
+      closeModal()
+      if (modal === 'add') setProductPageIndex(0)
+      loadProducts()
+    }
     else toast(r.message as string, 'error')
   }
 
@@ -122,7 +259,7 @@ export default function Produk() {
     setLoading(true)
     const r = await api('barang:delete', selected!.kd_barang)
     setLoading(false)
-    if (r.success) { toast(r.message as string); setConfirmDelete(false); setSelected(null); load() }
+    if (r.success) { toast(r.message as string); setConfirmDelete(false); setSelected(null); loadProducts() }
     else toast(r.message as string, 'error')
   }
 
@@ -152,7 +289,12 @@ export default function Produk() {
     setLoading(true)
     const r = await api('barang:bulkImport', products)
     setLoading(false)
-    if (r.success) { toast(r.message as string); setShowImport(false); load() }
+    if (r.success) {
+      toast(r.message as string)
+      setShowImport(false)
+      setProductPageIndex(0)
+      loadProducts()
+    }
     else toast(r.message as string, 'error')
   }
 
@@ -239,9 +381,10 @@ export default function Produk() {
       f('foto_barang', reader.result as string)
     }
     reader.readAsDataURL(file)
+    e.currentTarget.value = ''
   }
 
-  // Count expired/soon products for alert banner
+  // Count current page expired/soon products for alert banner
   const expiredCount = data.filter(d => getExpiredStatus(d.expired_date) === 'expired').length
   const soonCount = data.filter(d => getExpiredStatus(d.expired_date) === 'soon').length
 
@@ -255,14 +398,16 @@ export default function Produk() {
             <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 text-sm">
               <AlertTriangle size={16} className="shrink-0" />
               <span>
-                {expiredCount > 0 && <strong>{expiredCount} produk sudah expired. </strong>}
-                {soonCount > 0 && <strong>{soonCount} produk akan expired dalam 30 hari.</strong>}
+                {expiredCount > 0 && <strong>{expiredCount} produk di halaman ini sudah expired. </strong>}
+                {soonCount > 0 && <strong>{soonCount} produk di halaman ini akan expired dalam 30 hari.</strong>}
               </span>
             </div>
           )}
 
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} produk terdaftar</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {productPagination.total} produk terdaftar, {data.length} ditampilkan
+            </p>
             <div className="flex gap-2 w-full sm:w-auto">
               <Button variant="secondary" icon={<Upload size={16} />} onClick={() => setShowImport(true)} className="w-full sm:w-auto">Import CSV</Button>
               <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Produk</Button>
@@ -270,7 +415,29 @@ export default function Produk() {
           </div>
 
           <Card>
-            <DataTable data={data} columns={columns} searchPlaceholder="Cari produk..." />
+            <DataTable
+              data={data}
+              columns={columns}
+              searchPlaceholder="Cari produk..."
+              defaultPageSize={25}
+              manualPagination
+              totalRows={productPagination.total}
+              pageCount={productPagination.totalPages}
+              pageIndex={productPageIndex}
+              pageSize={productPageSize}
+              loading={tableLoading}
+              onPageChange={setProductPageIndex}
+              onPageSizeChange={setProductPageSize}
+              onSearchChange={search => {
+                setProductSearch(search)
+                setProductPageIndex(0)
+              }}
+              onSortChange={(sortBy, sortOrder) => {
+                setProductSortBy(sortBy || 'nama_barang')
+                setProductSortOrder(sortOrder)
+                setProductPageIndex(0)
+              }}
+            />
           </Card>
         </>
       )}
@@ -309,7 +476,26 @@ export default function Produk() {
             placeholder="-- Pilih Satuan --"
             options={satuan.map(s => ({ value: s.kd_satuan, label: s.nama_satuan ?? '' }))}
           />
-          <Input label="Barcode" value={form.barcode} onChange={e => f('barcode', e.target.value)} placeholder="Scan atau ketik barcode..." />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Barcode</label>
+            <div className="flex gap-2">
+              <input
+                value={form.barcode}
+                onChange={e => f('barcode', e.target.value)}
+                placeholder="Scan atau ketik barcode..."
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 transition-all duration-200 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                icon={<ScanLine size={16} />}
+                onClick={openCameraScanner}
+                className="shrink-0 px-3"
+              >
+                <span className="hidden sm:inline">Scan</span>
+              </Button>
+            </div>
+          </div>
           <Input label="Tanggal Expired" type="date" value={form.expired_date} onChange={e => f('expired_date', e.target.value)} />
           
           {/* Image Upload */}
@@ -322,7 +508,7 @@ export default function Produk() {
                   <button
                     type="button"
                     onClick={() => f('foto_barang', '')}
-                    className="absolute -top-2 -right-2 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-2 -right-2 p-1 rounded-full bg-red-500 text-white shadow-sm transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
                   >
                     <X size={14} />
                   </button>
@@ -340,15 +526,32 @@ export default function Produk() {
                   className="hidden"
                   id="image-upload"
                 />
-                <label
-                  htmlFor="image-upload"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium text-slate-700 dark:text-slate-200 cursor-pointer transition-colors"
-                >
-                  <Image size={16} />
-                  {form.foto_barang ? 'Ganti Gambar' : 'Upload Gambar'}
-                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                  id="image-capture"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <label
+                    htmlFor="image-capture"
+                    className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary-700 cursor-pointer"
+                  >
+                    <Camera size={16} />
+                    Ambil Foto
+                  </label>
+                  <label
+                    htmlFor="image-upload"
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                  >
+                    <Image size={16} />
+                    {form.foto_barang ? 'Ganti File' : 'Upload File'}
+                  </label>
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                  Format: JPG, PNG, GIF. Maksimal 2MB
+                  Format: JPG, PNG, GIF. Maksimal 2MB.
                 </p>
               </div>
             </div>
@@ -375,6 +578,24 @@ export default function Produk() {
               <p className="text-xs mt-1">Edit produk untuk menambahkan barcode.</p>
             </div>
           )}
+        </div>
+      </Modal>
+
+      <Modal open={cameraScannerOpen} onClose={stopCameraScanner} title="Scan Barcode Produk" size="md"
+        footer={<Button variant="secondary" onClick={stopCameraScanner} className="w-full sm:w-auto">Tutup Kamera</Button>}
+      >
+        <div className="space-y-3">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-black dark:border-slate-700">
+            <video ref={videoRef} muted playsInline className="h-72 w-full object-cover" />
+          </div>
+          <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${
+            cameraScannerError
+              ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
+              : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+          }`}>
+            <Camera size={16} className="mt-0.5 shrink-0" />
+            <span>{cameraScannerError || cameraScannerStatus}</span>
+          </div>
         </div>
       </Modal>
 

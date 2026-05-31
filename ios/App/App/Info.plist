@@ -64,7 +64,7 @@
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Aplikasi menggunakan Bluetooth untuk menghubungkan printer struk.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Kamera digunakan untuk scan barcode produk saat transaksi.</string>
+	<string>Kamera digunakan untuk scan barcode produk dan mengambil foto barang.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Aplikasi menggunakan jaringan lokal untuk sinkronisasi POS dengan perangkat desktop.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

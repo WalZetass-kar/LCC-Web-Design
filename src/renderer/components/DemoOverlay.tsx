@@ -33,7 +33,7 @@ export default function DemoOverlay() {
         <div className="flex items-center justify-center gap-2 py-1.5 px-4">
           <ShieldAlert size={14} className="text-white shrink-0 animate-pulse" />
           <span className="text-white text-xs font-bold tracking-wide uppercase">
-            ⚠️ DEMO MODE — READ ONLY — Semua Aksi Tulis Diblokir
+            DEMO MODE - READ ONLY - Semua Aksi Tulis Diblokir
           </span>
           <ShieldAlert size={14} className="text-white shrink-0 animate-pulse" />
         </div>

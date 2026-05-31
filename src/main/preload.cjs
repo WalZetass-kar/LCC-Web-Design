@@ -49,6 +49,7 @@ const ALLOWED_CHANNELS = new Set([
 
   // Barang
   'barang:getAll',
+  'barang:getPaginated',
   'barang:search',
   'barang:create',
   'barang:update',
@@ -218,6 +219,7 @@ const ALLOWED_CHANNELS = new Set([
   // Returns
   'return:create',
   'return:getAll',
+  'return:getDetails',
   'return:approve',
   'return:reject',
   'return:delete',
@@ -433,6 +435,7 @@ const ALLOWED_CHANNELS = new Set([
   'license:extendDeviceLicense',
   'license:getAppUpdates',
   'license:saveAppUpdate',
+  'license:checkAppUpdate',
   'license:getErrors',
   'license:getAnnouncements',
   'license:createAnnouncement',

@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { User, Lock, Store, Eye, EyeOff, Sparkles, Info, Key, Keyboard, Database, Globe, MessageCircle } from 'lucide-react'
+import { User, Lock, Eye, EyeOff, Sparkles, Info, Key, Keyboard, Database, Globe, MessageCircle } from 'lucide-react'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Modal from '../components/Modal'
+import appLogo from '../assets/app-logo.png'
 import { api } from '../utils/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
@@ -347,19 +348,13 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 relative overflow-hidden">
-      {/* Background blobs */}
-      <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-primary-600/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
-      <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-primary-500/10 rounded-full blur-3xl translate-x-1/3 translate-y-1/3" />
-      <div className="absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-pink-600/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+    <div className="min-h-screen bg-slate-950 text-white lg:grid lg:grid-cols-[minmax(420px,0.9fr)_minmax(360px,520px)]">
 
       {/* LEFT PANEL — branding, hidden on mobile */}
-      <div className="hidden lg:flex flex-col justify-between w-[48%] p-12 relative z-10">
+      <div className="hidden min-h-screen flex-col justify-between border-r border-white/10 bg-slate-950 p-8 lg:flex">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary-500 flex items-center justify-center shadow-lg shadow-primary-500/30">
-            <Store size={20} className="text-white" />
-          </div>
+          <img src={appLogo} alt="MediaSoft POS Zetass" className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-primary-500/20" />
           <div>
             <span className="font-bold text-white text-lg block leading-tight">MediaSoft POS</span>
             <span className="text-xs text-slate-500">by Zetass</span>
@@ -367,15 +362,15 @@ export default function Login() {
         </div>
 
         {/* Center content */}
-        <div className="space-y-8">
+        <div className="space-y-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 mb-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary-500/10 border border-primary-500/20 mb-4">
               <Sparkles size={12} className="text-primary-400" />
               <span className="text-xs text-primary-400 font-medium">Point of Sale System v2.0</span>
             </div>
             <h2 className="text-4xl font-bold text-white leading-tight mb-4">
               Kelola toko Anda<br />
-              <span className="bg-gradient-to-r from-primary-400 to-rose-300 bg-clip-text text-transparent">lebih cerdas</span><br />
+              <span className="text-primary-300">lebih rapi</span><br />
               & lebih cepat.
             </h2>
             <p className="text-slate-400 text-sm leading-relaxed">
@@ -386,15 +381,15 @@ export default function Login() {
           {/* Feature cards */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { icon: '💰', label: 'Kasir', desc: 'Transaksi real-time' },
-              { icon: '📦', label: 'Stok', desc: 'Manajemen produk' },
-              { icon: '📊', label: 'Laporan', desc: 'Laba rugi & penjualan' },
-              { icon: '👥', label: 'Customer', desc: 'Loyalty poin system' },
-              { icon: '🚚', label: 'Supplier', desc: 'Manajemen pembelian' },
-              { icon: '💾', label: 'Backup', desc: 'Keamanan data' },
+              { icon: 'POS', label: 'Kasir', desc: 'Transaksi real-time' },
+              { icon: 'STK', label: 'Stok', desc: 'Manajemen produk' },
+              { icon: 'RPT', label: 'Laporan', desc: 'Laba rugi & penjualan' },
+              { icon: 'CRM', label: 'Customer', desc: 'Loyalty poin system' },
+              { icon: 'SUP', label: 'Supplier', desc: 'Manajemen pembelian' },
+              { icon: 'BKP', label: 'Backup', desc: 'Keamanan data' },
             ].map(f => (
-              <div key={f.label} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/8 transition-colors">
-                <span className="text-xl">{f.icon}</span>
+              <div key={f.label} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <span className="w-9 rounded-md bg-slate-800 py-1.5 text-center text-[10px] font-bold tracking-wide text-primary-300">{f.icon}</span>
                 <div>
                   <p className="text-white text-xs font-semibold">{f.label}</p>
                   <p className="text-slate-500 text-xs">{f.desc}</p>
@@ -409,20 +404,18 @@ export default function Login() {
       </div>
 
       {/* RIGHT PANEL — form */}
-      <div className="flex-1 flex items-center justify-center p-6 relative z-10">
-        <div className="w-full max-w-sm">
+      <div className="flex min-h-screen items-center justify-center overflow-y-auto bg-slate-900 p-4 lg:p-6">
+        <div className="w-full max-w-md">
           {/* Mobile logo */}
-          <div className="lg:hidden text-center mb-8">
-            <div className="w-14 h-14 rounded-2xl bg-primary-500 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-primary-500/30">
-              <Store size={26} className="text-white" />
-            </div>
+          <div className="lg:hidden text-center mb-5">
+            <img src={appLogo} alt="MediaSoft POS Zetass" className="mx-auto mb-3 h-14 w-14 rounded-2xl object-cover shadow-lg shadow-primary-500/20" />
             <p className="font-bold text-white text-xl">MediaSoft POS</p>
             <p className="text-slate-500 text-xs mt-1">by Zetass</p>
           </div>
 
           {/* Loading Skeleton */}
           {authLoading ? (
-            <div className="bg-white/[0.06] backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/40">
+            <div className="rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/30">
               <div className="animate-pulse space-y-4">
                 <div className="w-12 h-12 bg-slate-700 rounded-2xl mb-4"></div>
                 <div className="h-6 bg-slate-700 rounded w-3/4"></div>
@@ -436,12 +429,10 @@ export default function Login() {
             </div>
           ) : (
             /* Card */
-            <div className="bg-white/[0.06] backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/40 hover:border-white/20 transition-all duration-300">
+            <div className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/30 scrollbar-thin">
               {/* Header */}
-              <div className="mb-7">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center mb-4 shadow-lg shadow-primary-500/30 animate-pulse">
-                  <Store size={22} className="text-white" />
-                </div>
+              <div className="mb-5">
+                <img src={appLogo} alt="MediaSoft POS Zetass" className="mb-3 h-11 w-11 rounded-lg object-cover shadow-lg shadow-primary-500/20" />
                 <h3 className="text-2xl font-bold text-white mb-1">{showRegisterForm ? 'Daftar Akun Trial' : 'Selamat datang'}</h3>
                 <p className="text-slate-400 text-sm">
                   {showRegisterForm ? 'Buat akun pembeli dan mulai trial terbatas 3 hari.' : 'Masuk ke akun Anda untuk melanjutkan'}
@@ -640,7 +631,7 @@ export default function Login() {
                 {error && (
                   <div className="space-y-3">
                     <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-                      <span className="text-red-400 mt-0.5 shrink-0">⚠️</span>
+                      <span className="text-red-400 mt-0.5 shrink-0">!</span>
                       <p className="text-sm text-red-400">{error}</p>
                     </div>
                     {isExpiredAccessError && (
@@ -765,7 +756,7 @@ export default function Login() {
       <Modal
         open={showIdentitas}
         onClose={() => {}} // Cannot close without filling
-        title="🏪 Lengkapi Identitas Toko"
+        title="Lengkapi Identitas Toko"
         size="md"
         footer={
           <Button loading={savingIdentitas} onClick={handleSaveIdentitas} size="lg" variant="success">

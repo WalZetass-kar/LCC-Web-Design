@@ -50,7 +50,7 @@ const TABS: Array<{
   { id: 'plans', label: 'Paket', hint: 'Harga dan fitur paket', icon: BadgeDollarSign },
   { id: 'features', label: 'Fitur', hint: 'Master fitur premium', icon: ListChecks },
   { id: 'popups', label: 'Popup', hint: 'Pesan upgrade POS', icon: Megaphone },
-  { id: 'payments', label: 'Pembayaran', hint: 'Manual dan approve', icon: CreditCard },
+  { id: 'payments', label: 'Persetujuan Lisensi', hint: 'Setujui pembelian dari popup', icon: CreditCard },
 ]
 
 const TAB_GROUPS: Array<{ label: string; tabs: LicenseTab[] }> = [
@@ -107,7 +107,7 @@ export default function LicenseCenter() {
           </div>
           <div>
             <h1 className="heading-1">Developer Panel</h1>
-            <p className="text-caption">Pusat akun pembeli, lisensi, paket, popup, dan pembayaran Supabase.</p>
+            <p className="text-caption">Pusat akun pembeli, lisensi, paket, popup, dan persetujuan lisensi Supabase.</p>
           </div>
         </div>
 

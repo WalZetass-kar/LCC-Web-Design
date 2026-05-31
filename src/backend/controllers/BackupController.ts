@@ -1,5 +1,7 @@
 import { BackupModel } from '../models/BackupModel.js'
 import { IndustrySettingsController } from './IndustrySettingsController.js'
+import Database from 'better-sqlite3'
+import { sqlite } from '../../database/connection.js'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -15,6 +17,57 @@ function dbPath() {
 
 function isSqliteDatabase(buffer: Buffer) {
   return buffer.subarray(0, 16).toString('binary') === 'SQLite format 3\0'
+}
+
+function quoteSqlString(value: string) {
+  return `'${value.replace(/'/g, "''")}'`
+}
+
+function validateSqliteDatabaseFile(filePath: string): { valid: boolean; message?: string } {
+  if (!fs.existsSync(filePath)) {
+    return { valid: false, message: 'File database tidak ditemukan' }
+  }
+
+  const header = fs.readFileSync(filePath, { flag: 'r' }).subarray(0, 16)
+  if (!isSqliteDatabase(header)) {
+    return { valid: false, message: 'File bukan database SQLite yang valid' }
+  }
+
+  let validationDb: Database.Database | null = null
+  try {
+    validationDb = new Database(filePath, { readonly: true, fileMustExist: true })
+    const rows = validationDb
+      .prepare('PRAGMA integrity_check')
+      .all() as Array<{ integrity_check: string }>
+    const errors = rows
+      .map(row => row.integrity_check)
+      .filter(message => message !== 'ok')
+
+    if (errors.length > 0) {
+      return {
+        valid: false,
+        message: errors.slice(0, 3).join('; '),
+      }
+    }
+
+    return { valid: true }
+  } catch (error) {
+    return { valid: false, message: error instanceof Error ? error.message : String(error) }
+  } finally {
+    validationDb?.close()
+  }
+}
+
+function createConsistentDatabaseCopy(destinationPath: string) {
+  if (fs.existsSync(destinationPath)) fs.rmSync(destinationPath, { force: true })
+
+  sqlite.exec(`VACUUM INTO ${quoteSqlString(destinationPath)}`)
+
+  const validation = validateSqliteDatabaseFile(destinationPath)
+  if (!validation.valid) {
+    fs.rmSync(destinationPath, { force: true })
+    throw new Error(`Backup database tidak lolos validasi: ${validation.message}`)
+  }
 }
 
 function cleanOldBackupFiles(retentionDays: number) {
@@ -34,14 +87,13 @@ export class BackupController {
    */
   static autoBackup(operation: string): string | null {
     try {
-      const sourceDb = dbPath()
       const dir = backupDir()
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const backupFileName = `auto_${operation}_${timestamp}.db`
       const backupPath = path.join(dir, backupFileName)
 
-      fs.copyFileSync(sourceDb, backupPath)
+      createConsistentDatabaseCopy(backupPath)
 
       const stats = fs.statSync(backupPath)
       BackupModel.create({
@@ -71,15 +123,13 @@ export class BackupController {
   static create(username: string, keterangan?: string) {
     try {
       const settings = IndustrySettingsController.getSettings()
-      const sourceDb = dbPath()
       const dir = backupDir()
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const backupFileName = `backup_${timestamp}.db`
       const backupPath = path.join(dir, backupFileName)
 
-      // Copy database file
-      fs.copyFileSync(sourceDb, backupPath)
+      createConsistentDatabaseCopy(backupPath)
 
       // Get file size
       const stats = fs.statSync(backupPath)
@@ -120,14 +170,14 @@ export class BackupController {
       if (!fs.existsSync(backupPath)) {
         return { success: false, message: 'File backup tidak ditemukan' }
       }
-      const backupBuffer = fs.readFileSync(backupPath)
-      if (!isSqliteDatabase(backupBuffer)) {
-        return { success: false, message: 'File backup bukan database SQLite yang valid' }
+      const backupValidation = validateSqliteDatabaseFile(backupPath)
+      if (!backupValidation.valid) {
+        return { success: false, message: `File backup bukan database SQLite yang valid: ${backupValidation.message}` }
       }
 
       // Create backup of current database before restore
       const currentBackupPath = path.join(backupDir(), `before_restore_${Date.now()}.db`)
-      fs.copyFileSync(targetDb, currentBackupPath)
+      createConsistentDatabaseCopy(currentBackupPath)
 
       // Restore from backup
       fs.copyFileSync(backupPath, targetDb)
@@ -171,14 +221,22 @@ export class BackupController {
       
       // Backup current database before import
       const currentBackupPath = path.join(backupsDir, `before_import_${Date.now()}.db`)
-      fs.copyFileSync(targetDb, currentBackupPath)
+      createConsistentDatabaseCopy(currentBackupPath)
       
       // Write imported file
       const buffer = Buffer.from(base64Data, 'base64')
       if (!isSqliteDatabase(buffer)) {
         return { success: false, message: 'File import bukan database SQLite yang valid' }
       }
-      fs.writeFileSync(targetDb, buffer)
+      const importTempPath = path.join(backupsDir, `import_validation_${Date.now()}_${path.basename(fileName)}`)
+      fs.writeFileSync(importTempPath, buffer)
+      const importValidation = validateSqliteDatabaseFile(importTempPath)
+      if (!importValidation.valid) {
+        fs.rmSync(importTempPath, { force: true })
+        return { success: false, message: `File import bukan database SQLite yang valid: ${importValidation.message}` }
+      }
+      fs.copyFileSync(importTempPath, targetDb)
+      fs.rmSync(importTempPath, { force: true })
       
       return {
         success: true,

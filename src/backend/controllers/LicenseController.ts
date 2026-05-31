@@ -697,6 +697,11 @@ export class LicenseController {
   static async extendDeviceLicense(id: string | number, data: unknown) { return call('POST', `/admin/devices/${id}/extend-license`, data) }
   static async getAppUpdates() { return call('GET', '/admin/app-update') }
   static async saveAppUpdate(data: unknown) { return call('PATCH', '/admin/app-update', data) }
+  static async checkAppUpdate(data: unknown) {
+    const endpoint = getPublicLicenseUrl()
+    if (!endpoint) return { success: false, message: 'License server publik belum dikonfigurasi' }
+    return request<ApiResult<any>>('POST', '/app-update', '', endpoint, data)
+  }
   static async getErrors(query?: { type?: string }) {
     const params = new URLSearchParams()
     if (query?.type) params.set('type', query.type)

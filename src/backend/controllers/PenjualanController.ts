@@ -135,6 +135,28 @@ export class PenjualanController {
       return { success: false, message: 'Keranjang kosong' }
     }
 
+    if (!payload.shift_id) {
+      return {
+        success: false,
+        error_code: 'SHIFT_REQUIRED',
+        message: 'Shift kasir belum dibuka. Buka shift terlebih dahulu sebelum membuat transaksi.',
+      }
+    }
+
+    const activeShift = sqlite.prepare(`
+      SELECT id, user_id, status
+      FROM mediasoft_shifts
+      WHERE id = ? AND status = 'OPEN'
+      LIMIT 1
+    `).get(payload.shift_id) as { id: number; user_id: string; status: string } | undefined
+    if (!activeShift || String(activeShift.user_id) !== username) {
+      return {
+        success: false,
+        error_code: 'SHIFT_REQUIRED',
+        message: 'Shift aktif tidak ditemukan untuk kasir ini. Buka atau pilih shift aktif sebelum transaksi.',
+      }
+    }
+
     const now = new Date()
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
     const timeStr = now.getTime().toString().slice(-4)
@@ -193,6 +215,13 @@ export class PenjualanController {
         CustomerModel.addPoin(payload.kd_customer, poinEarned)
         CustomerModel.updateTotalBelanja(payload.kd_customer, sub_total)
       }
+
+      sqlite.prepare(`
+        UPDATE mediasoft_shifts
+        SET total_sales = COALESCE(total_sales, 0) + ?,
+            total_transactions = COALESCE(total_transactions, 0) + 1
+        WHERE id = ?
+      `).run(total_bayar, payload.shift_id)
       
       return kd_transaksi
     })

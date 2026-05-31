@@ -351,7 +351,7 @@ export default function BackupPage() {
       >
         <div className="space-y-3">
           <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300">
-            ⚠️ Database saat ini akan diganti. Database lama akan di-backup
+            Database saat ini akan diganti. Database lama akan di-backup
             otomatis sebelum restore.
           </div>
           {selected && (
@@ -440,7 +440,7 @@ export default function BackupPage() {
       >
         <div className="space-y-3">
           <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300">
-            ⚠️ Database saat ini akan diganti. Database lama akan di-backup
+            Database saat ini akan diganti. Database lama akan di-backup
             otomatis sebelum import.
           </div>
 

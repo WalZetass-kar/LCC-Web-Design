@@ -196,6 +196,91 @@ function syncProductsToLocal(products: EcommerceProduct[]) {
   return { created, updated }
 }
 
+function ecommerceOrderTransactionId(orderId: string | number) {
+  return `ECOM-${String(orderId).replace(/[^a-zA-Z0-9_-]/g, '')}`
+}
+
+function orderItemCode(item: any) {
+  const sku = String(item?.sku ?? '').trim()
+  if (sku) return sku
+  const productId = String(item?.product_id ?? item?.id ?? '').trim()
+  return productId ? `WOO-${productId}` : `WOO-LINE-${Date.now()}`
+}
+
+function syncOrdersToLocal(orders: any[]) {
+  let created = 0
+  let skipped = 0
+
+  const tx = sqlite.transaction((rows: any[]) => {
+    for (const order of rows) {
+      const transactionId = ecommerceOrderTransactionId(order.id)
+      const exists = sqlite.prepare('SELECT kd_tansaksi_jual FROM mediasoft_penjualan WHERE kd_tansaksi_jual = ?').get(transactionId)
+      if (exists) {
+        skipped += 1
+        continue
+      }
+
+      const lineItems = Array.isArray(order.line_items) ? order.line_items : []
+      const details = lineItems
+        .map((item: any) => {
+          const kdBarang = orderItemCode(item)
+          const qty = Math.max(1, Math.round(toNumber(item.quantity, 1)))
+          const subtotal = toNumber(item.subtotal, toNumber(item.total))
+          const price = qty > 0 ? Math.round(subtotal / qty) : toNumber(item.price)
+          const modal = sqlite.prepare('SELECT harga_modal FROM mediasoft_harga WHERE kd_barang = ?').get(kdBarang) as { harga_modal?: number } | undefined
+          return {
+            kd_barang: kdBarang,
+            nama_barang: String(item.name ?? kdBarang),
+            qty,
+            harga_jual: price,
+            harga_modal: toNumber(modal?.harga_modal),
+            total_harga_jual: subtotal || price * qty,
+          }
+        })
+        .filter((item: any) => item.kd_barang && item.qty > 0)
+
+      if (!details.length) {
+        skipped += 1
+        continue
+      }
+
+      const totalQty = details.reduce((sum: number, item: any) => sum + item.qty, 0)
+      const total = toNumber(order.total, details.reduce((sum: number, item: any) => sum + item.total_harga_jual, 0))
+      const createdAt = String(order.date_created ?? new Date().toISOString()).replace('T', ' ').slice(0, 19)
+      const customerName = String(order.billing?.first_name ?? order.billing?.company ?? '').trim()
+
+      sqlite.prepare(`
+        INSERT INTO mediasoft_penjualan
+          (kd_tansaksi_jual, tgl_wkt_transaksi, deskripsi, username_transaksi, total_qty, sub_total, pajak, yang_dibayar, kembalian, jenis_pembayaran, discount_amount, kd_customer)
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, 0, ?, 0, NULL)
+      `).run(
+        transactionId,
+        createdAt,
+        `WooCommerce order #${order.id}${customerName ? ` - ${customerName}` : ''}`,
+        'ECOMMERCE',
+        totalQty,
+        total,
+        total,
+        'ECOMMERCE',
+      )
+
+      const detailStmt = sqlite.prepare(`
+        INSERT INTO mediasoft_penjualan_detail
+          (kd_tansaksi_jual, kd_barang, harga_modal, harga_jual, qty, disc, harga_disc, total_harga_jual, nama_pengguna, tgl_waktu_input)
+        VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
+      `)
+      for (const item of details) {
+        detailStmt.run(transactionId, item.kd_barang, item.harga_modal, item.harga_jual, item.qty, item.total_harga_jual, 'ECOMMERCE', createdAt)
+      }
+
+      created += 1
+    }
+  })
+
+  tx(orders)
+  return { created, skipped }
+}
+
 async function processRetryQueue(provider: WooCommerceProvider) {
   const due = sqlite.prepare(`
     SELECT * FROM ${QUEUE_TABLE}
@@ -386,12 +471,13 @@ export class EcommerceApiController {
         provider.getOrders(),
       ])
       const productResult = syncProductsToLocal(products)
-      const message = `Sync selesai: ${productResult.created} produk baru, ${productResult.updated} produk diperbarui, ${orders.length} order masuk, ${retried} retry diproses`
+      const orderResult = syncOrdersToLocal(orders)
+      const message = `Sync selesai: ${productResult.created} produk baru, ${productResult.updated} produk diperbarui, ${orderResult.created} order jadi transaksi POS, ${orderResult.skipped} order dilewati, ${retried} retry diproses`
       sqlite.prepare(`UPDATE ${PROVIDER_TABLE} SET last_sync_at = ?, last_status = ?, last_error = '' WHERE id = 1`)
         .run(new Date().toISOString(), message)
-      logSync('success', message, { orders: orders.map(order => ({ id: order.id, status: order.status, total: order.total })) })
-      if (caller) ActivityLogModel.log(caller, message, 'ECOMMERCE_SYNC', JSON.stringify({ created: productResult.created, updated: productResult.updated }), 'integration')
-      return { success: true, data: { products: productResult, orders: orders.length, retried }, message }
+      logSync('success', message, { orders: orders.map(order => ({ id: order.id, status: order.status, total: order.total })), posOrders: orderResult })
+      if (caller) ActivityLogModel.log(caller, message, 'ECOMMERCE_SYNC', JSON.stringify({ created: productResult.created, updated: productResult.updated, orders: orderResult.created }), 'integration')
+      return { success: true, data: { products: productResult, orders: orders.length, posOrders: orderResult, retried }, message }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       sqlite.prepare(`UPDATE ${PROVIDER_TABLE} SET last_error = ?, last_status = ? WHERE id = 1`).run(message, 'Sync gagal')

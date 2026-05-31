@@ -37,9 +37,9 @@ export const PaymentsPage: React.FC = () => {
   return (
     <div>
       <PageHeader
-        title="Pembayaran"
-        subtitle="Catat pembayaran manual. Status success otomatis perpanjang langganan user."
-        action={<Button onClick={() => setShowAdd(true)}><Plus className="w-4 h-4" />Catat Pembayaran</Button>}
+        title="Persetujuan Lisensi"
+        subtitle="Setujui request dari popup langganan. Status success otomatis perpanjang langganan user."
+        action={<Button onClick={() => setShowAdd(true)}><Plus className="w-4 h-4" />Catat Persetujuan</Button>}
       />
       <Table>
         <thead>
@@ -49,7 +49,7 @@ export const PaymentsPage: React.FC = () => {
           {loading ? (
             <tr><td colSpan={7} className="text-center py-12 text-slate-400 text-sm">Memuat…</td></tr>
           ) : payments.length === 0 ? (
-            <tr><td colSpan={7} className="text-center py-12 text-slate-400 text-sm">Belum ada pembayaran</td></tr>
+            <tr><td colSpan={7} className="text-center py-12 text-slate-400 text-sm">Belum ada persetujuan lisensi</td></tr>
           ) : payments.map((p) => (
             <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
               <Td>
@@ -69,7 +69,7 @@ export const PaymentsPage: React.FC = () => {
                 <div className="flex justify-end gap-1">
                   {p.status === 'pending' && (
                     <Button size="sm" onClick={async () => { await approvePayment(p.id); load(); }}>
-                      <CheckCircle className="w-3 h-3" />Approve
+                      <CheckCircle className="w-3 h-3" />Setujui
                     </Button>
                   )}
                   <Button size="sm" variant="danger" onClick={() => { setConfirmingDelete(p); setDeleteError(''); }} disabled={deletingId === p.id}>
@@ -83,7 +83,7 @@ export const PaymentsPage: React.FC = () => {
       </Table>
       {showAdd && <AddPaymentModal onClose={() => setShowAdd(false)} onSaved={load} />}
       {confirmingDelete && (
-        <Modal title="Hapus Pembayaran" onClose={() => { if (!deletingId) setConfirmingDelete(null); }}>
+        <Modal title="Hapus Persetujuan Lisensi" onClose={() => { if (!deletingId) setConfirmingDelete(null); }}>
           <div className="space-y-4">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400">
@@ -141,7 +141,7 @@ const AddPaymentModal: React.FC<{ onClose: () => void; onSaved: () => void }> = 
   }
 
   return (
-    <Modal title="Catat Pembayaran" onClose={onClose}>
+    <Modal title="Catat Persetujuan Lisensi" onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         {err && <Alert>{err}</Alert>}
         <Field label="User">

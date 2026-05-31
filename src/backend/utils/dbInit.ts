@@ -63,6 +63,116 @@ export function initDatabase() {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `).run()
+
+    // Shift, return, debt, and stock opname are operational tables. Keep them
+    // available even when the app starts from an older bundled database.
+    sqlite.prepare(`
+      CREATE TABLE IF NOT EXISTS mediasoft_shifts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shift_number TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        start_time TEXT DEFAULT CURRENT_TIMESTAMP,
+        end_time TEXT,
+        opening_balance REAL DEFAULT 0,
+        closing_balance REAL DEFAULT 0,
+        expected_balance REAL DEFAULT 0,
+        difference REAL DEFAULT 0,
+        total_sales REAL DEFAULT 0,
+        total_transactions INTEGER DEFAULT 0,
+        notes TEXT,
+        status TEXT DEFAULT 'OPEN'
+      )
+    `).run()
+
+    sqlite.prepare(`
+      CREATE TABLE IF NOT EXISTS mediasoft_returns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        return_number TEXT NOT NULL UNIQUE,
+        penjualan_id TEXT NOT NULL,
+        customer_id TEXT,
+        total_amount REAL DEFAULT 0,
+        refund_method TEXT DEFAULT 'TUNAI',
+        reason TEXT,
+        status TEXT DEFAULT 'PENDING',
+        created_by TEXT,
+        approved_by TEXT,
+        stock_applied INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        approved_at TEXT,
+        rejected_at TEXT
+      )
+    `).run()
+
+    sqlite.prepare(`
+      CREATE TABLE IF NOT EXISTS mediasoft_return_details (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        return_id INTEGER NOT NULL,
+        barang_id TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        price REAL DEFAULT 0,
+        subtotal REAL DEFAULT 0,
+        reason TEXT
+      )
+    `).run()
+
+    sqlite.prepare(`
+      CREATE TABLE IF NOT EXISTS mediasoft_debts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        debt_number TEXT NOT NULL,
+        type TEXT NOT NULL,
+        customer_id TEXT,
+        supplier_id TEXT,
+        penjualan_id TEXT,
+        pembelian_id TEXT,
+        total_amount REAL DEFAULT 0,
+        paid_amount REAL DEFAULT 0,
+        remaining_amount REAL DEFAULT 0,
+        due_date TEXT,
+        status TEXT DEFAULT 'UNPAID',
+        notes TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run()
+
+    sqlite.prepare(`
+      CREATE TABLE IF NOT EXISTS mediasoft_debt_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        debt_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        payment_method TEXT DEFAULT 'TUNAI',
+        reference_number TEXT,
+        notes TEXT,
+        created_by TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run()
+
+    sqlite.prepare(`
+      CREATE TABLE IF NOT EXISTS mediasoft_stock_opname (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        opname_number TEXT NOT NULL,
+        opname_date TEXT NOT NULL,
+        total_items INTEGER DEFAULT 0,
+        total_difference REAL DEFAULT 0,
+        notes TEXT,
+        status TEXT DEFAULT 'DRAFT',
+        created_by TEXT,
+        approved_by TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run()
+
+    sqlite.prepare(`
+      CREATE TABLE IF NOT EXISTS mediasoft_stock_opname_details (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        opname_id INTEGER NOT NULL,
+        barang_id TEXT NOT NULL,
+        system_stock INTEGER DEFAULT 0,
+        physical_stock INTEGER DEFAULT 0,
+        difference INTEGER DEFAULT 0,
+        notes TEXT
+      )
+    `).run()
     
     // Insert default data if empty
     const taxCount = sqlite.prepare('SELECT COUNT(*) as count FROM mediasoft_tax_settings').get() as any

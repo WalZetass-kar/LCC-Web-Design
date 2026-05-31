@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { lazy, Suspense, useEffect } from 'react'
 import ReactDOM from 'react-dom/client'
 import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import './i18n' // initialize i18next
@@ -8,42 +8,43 @@ import { AuthProvider } from './contexts/AuthContext'
 import { DemoProvider } from './contexts/DemoContext'
 import { useAuth } from './contexts/AuthContext'
 import AppLayout from './layouts/AppLayout'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Produk from './pages/Produk'
-import Kategori from './pages/Kategori'
-import Satuan from './pages/Satuan'
-import Transaksi from './pages/Transaksi'
-import Riwayat from './pages/Riwayat'
-import Settings from './pages/Settings'
-import Supplier from './pages/Supplier'
-import Users from './pages/Users'
-import Customer from './pages/Customer'
-import Kas from './pages/Kas'
-import Laporan from './pages/Laporan'
-import Backup from './pages/Backup'
-import Pembelian from './pages/Pembelian'
-import ActivityLog from './pages/ActivityLog'
-import Returns from './pages/Returns'
-import Shifts from './pages/Shifts'
-import Debts from './pages/Debts'
-import StockOpname from './pages/StockOpname'
-import Tutorials from './pages/Tutorials'
-import Hpp from './pages/Hpp'
-import Promo from './pages/Promo'
-import Branch from './pages/Branch'
-import Security from './pages/Security'
-import Loyalty from './pages/Loyalty'
-import WhatsApp from './pages/WhatsApp'
-import PrintQueue from './pages/PrintQueue'
-import EcommerceApi from './pages/EcommerceApi'
-import LicenseCenter from './pages/LicenseCenter'
-import PaymentInvoice from './pages/PaymentInvoice'
 import ErrorBoundary from './components/ErrorBoundary'
 import RemoteLicensePopup from './components/RemoteLicensePopup'
 import { validateProductionConfig } from './utils/productionConfig'
 import { registerDeepLinkHandlers } from './utils/deepLinks'
 import './styles/globals.css'
+
+const Login = lazy(() => import('./pages/Login'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Produk = lazy(() => import('./pages/Produk'))
+const Kategori = lazy(() => import('./pages/Kategori'))
+const Satuan = lazy(() => import('./pages/Satuan'))
+const Transaksi = lazy(() => import('./pages/Transaksi'))
+const Riwayat = lazy(() => import('./pages/Riwayat'))
+const Settings = lazy(() => import('./pages/Settings'))
+const Supplier = lazy(() => import('./pages/Supplier'))
+const Users = lazy(() => import('./pages/Users'))
+const Customer = lazy(() => import('./pages/Customer'))
+const Kas = lazy(() => import('./pages/Kas'))
+const Laporan = lazy(() => import('./pages/Laporan'))
+const Backup = lazy(() => import('./pages/Backup'))
+const Pembelian = lazy(() => import('./pages/Pembelian'))
+const ActivityLog = lazy(() => import('./pages/ActivityLog'))
+const Returns = lazy(() => import('./pages/Returns'))
+const Shifts = lazy(() => import('./pages/Shifts'))
+const Debts = lazy(() => import('./pages/Debts'))
+const StockOpname = lazy(() => import('./pages/StockOpname'))
+const Tutorials = lazy(() => import('./pages/Tutorials'))
+const Hpp = lazy(() => import('./pages/Hpp'))
+const Promo = lazy(() => import('./pages/Promo'))
+const Branch = lazy(() => import('./pages/Branch'))
+const Security = lazy(() => import('./pages/Security'))
+const Loyalty = lazy(() => import('./pages/Loyalty'))
+const WhatsApp = lazy(() => import('./pages/WhatsApp'))
+const PrintQueue = lazy(() => import('./pages/PrintQueue'))
+const EcommerceApi = lazy(() => import('./pages/EcommerceApi'))
+const LicenseCenter = lazy(() => import('./pages/LicenseCenter'))
+const PaymentInvoice = lazy(() => import('./pages/PaymentInvoice'))
 
 function ProductionConfigGate({ children }: { children: React.ReactNode }) {
   const validation = validateProductionConfig()
@@ -105,53 +106,63 @@ function DeepLinkBridge() {
   return null
 }
 
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[220px] items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+      Memuat halaman...
+    </div>
+  )
+}
+
 function App() {
   return (
     <HashRouter>
       <DeepLinkBridge />
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route
-          element={
-            <RequireAuth>
-              <AppLayout />
-            </RequireAuth>
-          }
-        >
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/produk" element={<Produk />} />
-          <Route path="/kategori" element={<Kategori />} />
-          <Route path="/satuan" element={<Satuan />} />
-          <Route path="/transaksi" element={<Transaksi />} />
-          <Route path="/riwayat" element={<Riwayat />} />
-          <Route path="/supplier" element={<Supplier />} />
-          <Route path="/customer" element={<Customer />} />
-          <Route path="/kas" element={<Kas />} />
-          <Route path="/laporan" element={<RequireRole minRole="admin"><Laporan /></RequireRole>} />
-          <Route path="/pembelian" element={<Pembelian />} />
-          <Route path="/users" element={<RequireExactRoles allowedRoles={['developer']}><Users /></RequireExactRoles>} />
-          <Route path="/backup" element={<RequireExactRoles allowedRoles={['developer']}><Backup /></RequireExactRoles>} />
-          <Route path="/activity-log" element={<RequireExactRoles allowedRoles={['developer']}><ActivityLog /></RequireExactRoles>} />
-          <Route path="/returns" element={<Returns />} />
-          <Route path="/shifts" element={<Shifts />} />
-          <Route path="/debts" element={<Debts />} />
-          <Route path="/stock-opname" element={<StockOpname />} />
-          <Route path="/subscription-plans" element={<Navigate to="/license-admin" replace />} />
-          <Route path="/tutorials" element={<Tutorials />} />
-          <Route path="/hpp" element={<Hpp />} />
-          <Route path="/promo" element={<Promo />} />
-          <Route path="/branch" element={<Branch />} />
-          <Route path="/security" element={<Security />} />
-          <Route path="/loyalty" element={<Loyalty />} />
-          <Route path="/whatsapp" element={<WhatsApp />} />
-          <Route path="/print-queue" element={<PrintQueue />} />
-          <Route path="/ecommerce-api" element={<EcommerceApi />} />
-          <Route path="/payment" element={<PaymentInvoice />} />
-          <Route path="/license-admin" element={<RequireExactRoles allowedRoles={['developer']}><LicenseCenter /></RequireExactRoles>} />
-          <Route path="/settings" element={<Settings />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            element={
+              <RequireAuth>
+                <AppLayout />
+              </RequireAuth>
+            }
+          >
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/produk" element={<Produk />} />
+            <Route path="/kategori" element={<Kategori />} />
+            <Route path="/satuan" element={<Satuan />} />
+            <Route path="/transaksi" element={<Transaksi />} />
+            <Route path="/riwayat" element={<Riwayat />} />
+            <Route path="/supplier" element={<Supplier />} />
+            <Route path="/customer" element={<Customer />} />
+            <Route path="/kas" element={<Kas />} />
+            <Route path="/laporan" element={<RequireRole minRole="admin"><Laporan /></RequireRole>} />
+            <Route path="/pembelian" element={<Pembelian />} />
+            <Route path="/users" element={<RequireExactRoles allowedRoles={['developer']}><Users /></RequireExactRoles>} />
+            <Route path="/backup" element={<RequireExactRoles allowedRoles={['developer']}><Backup /></RequireExactRoles>} />
+            <Route path="/activity-log" element={<RequireExactRoles allowedRoles={['developer']}><ActivityLog /></RequireExactRoles>} />
+            <Route path="/returns" element={<Returns />} />
+            <Route path="/shifts" element={<Shifts />} />
+            <Route path="/debts" element={<Debts />} />
+            <Route path="/stock-opname" element={<StockOpname />} />
+            <Route path="/subscription-plans" element={<Navigate to="/license-admin" replace />} />
+            <Route path="/tutorials" element={<Tutorials />} />
+            <Route path="/hpp" element={<Hpp />} />
+            <Route path="/promo" element={<Promo />} />
+            <Route path="/branch" element={<Branch />} />
+            <Route path="/security" element={<Security />} />
+            <Route path="/loyalty" element={<Loyalty />} />
+            <Route path="/whatsapp" element={<WhatsApp />} />
+            <Route path="/print-queue" element={<PrintQueue />} />
+            <Route path="/ecommerce-api" element={<EcommerceApi />} />
+            <Route path="/payment" element={<PaymentInvoice />} />
+            <Route path="/license-admin" element={<RequireExactRoles allowedRoles={['developer']}><LicenseCenter /></RequireExactRoles>} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </HashRouter>
   )
 }

@@ -747,6 +747,11 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
 function createSale(store: MobileStore, payload: AnyRecord) {
   const items = Array.isArray(payload.items) ? payload.items : []
   if (items.length === 0) return fail('Keranjang kosong')
+  if (!payload.shift_id) return fail('Shift kasir belum dibuka. Buka shift terlebih dahulu sebelum transaksi.')
+
+  const username = String(payload.username ?? 'admin')
+  const activeShift = store.shifts.find(item => String(item.id) === String(payload.shift_id) && item.status === 'OPEN' && String(item.user_id) === username)
+  if (!activeShift) return fail('Shift aktif tidak ditemukan untuk kasir ini.')
 
   const kd = `TRX-${compactDateKey()}-${pad(nextCounter(store, 'transaksi'), 4)}`
   const details: PenjualanDetailItem[] = items.map((item: AnyRecord) => {
@@ -772,7 +777,7 @@ function createSale(store: MobileStore, payload: AnyRecord) {
   const header: Penjualan = {
     kd_tansaksi_jual: kd,
     tgl_wkt_transaksi: now(),
-    username_transaksi: String(payload.username ?? 'admin'),
+    username_transaksi: username,
     total_qty: totalQty,
     sub_total: total,
     discount_amount: toNumber(payload.diskon_promo),
@@ -802,11 +807,8 @@ function createSale(store: MobileStore, payload: AnyRecord) {
     activeKas.total_penjualan = toNumber(activeKas.total_penjualan) + total
   }
 
-  const activeShift = store.shifts.find(item => item.status === 'OPEN' && String(item.user_id) === String(header.username_transaksi))
-  if (activeShift) {
-    activeShift.total_sales = toNumber(activeShift.total_sales) + total
-    activeShift.total_transactions = toNumber(activeShift.total_transactions) + 1
-  }
+  activeShift.total_sales = toNumber(activeShift.total_sales) + total
+  activeShift.total_transactions = toNumber(activeShift.total_transactions) + 1
 
   store.penjualan.unshift(header)
   store.penjualanDetails[kd] = details
@@ -1762,6 +1764,15 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     case 'license:saveAppUpdate':
       return mobileAdminLicenseRequest<T>('PATCH', '/admin/app-update', args[0])
 
+    case 'license:checkAppUpdate': {
+      const device = collectAuthDeviceInfo()
+      const input = (args[0] ?? {}) as AnyRecord
+      return mobileLicenseRequest<T>('POST', '/app-update', {
+        platform: input.platform ?? device.platform,
+        app_version: input.app_version ?? input.current_version ?? device.appVersion,
+      })
+    }
+
     case 'license:getErrors': {
       const query = args[0] as AnyRecord | undefined
       const params = new URLSearchParams()
@@ -2243,6 +2254,44 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
     case 'barang:getAll':
       return ok(getBarangList(store) as T)
+
+    case 'barang:getPaginated': {
+      const params = (args[0] ?? {}) as AnyRecord
+      const page = Math.max(1, toNumber(params.page, 1))
+      const limit = Math.min(100, Math.max(1, toNumber(params.limit, 25)))
+      const sortBy = String(params.sortBy || 'nama_barang')
+      const sortOrder = params.sortOrder === 'DESC' ? -1 : 1
+      const query = String(params.search ?? '').toLowerCase().trim()
+      const rows = getBarangList(store)
+        .filter(item => !query || [
+          item.kd_barang,
+          item.nama_barang,
+          item.barcode,
+          item.kategori_barang,
+        ].some(value => String(value ?? '').toLowerCase().includes(query)))
+        .sort((a, b) => {
+          const left = (a as AnyRecord)[sortBy]
+          const right = (b as AnyRecord)[sortBy]
+          if (typeof left === 'number' && typeof right === 'number') return (left - right) * sortOrder
+          return String(left ?? '').localeCompare(String(right ?? ''), 'id-ID') * sortOrder
+        })
+      const total = rows.length
+      const totalPages = Math.max(1, Math.ceil(total / limit))
+      const start = (page - 1) * limit
+      return {
+        success: true,
+        data: rows.slice(start, start + limit) as T,
+        message: 'OK',
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1,
+        },
+      } as IpcResponse<T> & { pagination: AnyRecord }
+    }
 
     case 'barang:search': {
       const query = String(args[0] ?? '').toLowerCase()
@@ -2872,12 +2921,49 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     case 'return:getAll':
       return ok(store.returns as T)
 
-    case 'return:create':
-      return createSimpleRow(store, store.returns, 'return', { ...(args[0] as AnyRecord), status: 'PENDING' }) as IpcResponse<T>
+    case 'return:getDetails': {
+      const row = store.returns.find(item => String(item.id) === String(args[0]))
+      return ok((row?.items ?? []) as T)
+    }
 
-    case 'return:approve':
+    case 'return:create': {
+      const data = args[0] as AnyRecord
+      const penjualanId = String(data.penjualan_id ?? '').trim()
+      if (!penjualanId) return fail('Pilih transaksi asli terlebih dahulu')
+      const sale = store.penjualan.find(item => item.kd_tansaksi_jual === penjualanId)
+      if (!sale) return fail('Transaksi asli tidak ditemukan')
+      const items = Array.isArray(data.items)
+        ? data.items.filter((item: AnyRecord) => String(item.kd_barang ?? item.barang_id ?? '').trim() && toNumber(item.quantity) > 0)
+        : []
+      if (!items.length) return fail('Pilih minimal 1 item dari transaksi asli')
+      return createSimpleRow(store, store.returns, 'return', {
+        ...data,
+        return_number: `RET-${Date.now()}`,
+        customer_id: data.customer_id ?? sale.kd_customer ?? null,
+        total_amount: items.reduce((sum: number, item: AnyRecord) => sum + toNumber(item.subtotal, toNumber(item.price) * toNumber(item.quantity)), 0),
+        items,
+        status: 'PENDING',
+        stock_applied: 0,
+      }) as IpcResponse<T>
+    }
+
+    case 'return:approve': {
+      const row = store.returns.find(item => String(item.id) === String(args[0]))
+      if (!row) return fail('Return tidak ditemukan')
+      if (row.status !== 'PENDING') return fail('Return sudah diproses')
+      if (!row.stock_applied) {
+        for (const item of row.items ?? []) {
+          const product = store.barang.find(product => product.kd_barang === String(item.kd_barang ?? item.barang_id ?? ''))
+          if (product) product.stok = toNumber(product.stok) + toNumber(item.quantity)
+        }
+      }
+      Object.assign(row, { status: 'APPROVED', approved_by: args[1], stock_applied: 1, approved_at: now() })
+      saveStore(store)
+      return ok(row as T, 'Return disetujui dan stok sudah dikembalikan')
+    }
+
     case 'return:reject':
-      return updateSimpleRow(store, store.returns, args[0], { status: channel === 'return:approve' ? 'APPROVED' : 'REJECTED', approved_by: args[1] }) as IpcResponse<T>
+      return updateSimpleRow(store, store.returns, args[0], { status: 'REJECTED', approved_by: args[1], rejected_at: now() }) as IpcResponse<T>
 
     case 'return:delete':
       return deleteSimpleRow(store, store.returns, args[0]) as IpcResponse<T>

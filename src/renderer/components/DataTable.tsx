@@ -2,6 +2,7 @@ import {
   useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel,
   getSortedRowModel, flexRender,
   type ColumnDef, type SortingState, type ColumnFiltersState,
+  type PaginationState, type OnChangeFn,
 } from '@tanstack/react-table'
 import { useState, useEffect, useRef } from 'react'
 import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -14,6 +15,16 @@ interface DataTableProps<T> {
   searchPlaceholder?: string
   searchKey?: string
   defaultPageSize?: number
+  manualPagination?: boolean
+  totalRows?: number
+  pageCount?: number
+  pageIndex?: number
+  pageSize?: number
+  loading?: boolean
+  onPageChange?: (pageIndex: number) => void
+  onPageSizeChange?: (pageSize: number) => void
+  onSearchChange?: (search: string) => void
+  onSortChange?: (sortBy: string, sortOrder: 'ASC' | 'DESC') => void
 }
 
 /** Debounce hook for search performance */
@@ -28,33 +39,86 @@ function useDebounce(value: string, delay: number) {
 
 const PAGE_SIZES = [10, 25, 50, 100]
 
-export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari...', searchKey, defaultPageSize = 10 }: DataTableProps<T>) {
+export default function DataTable<T>({
+  data,
+  columns,
+  searchPlaceholder = 'Cari...',
+  searchKey,
+  defaultPageSize = 10,
+  manualPagination = false,
+  totalRows,
+  pageCount,
+  pageIndex,
+  pageSize,
+  loading = false,
+  onPageChange,
+  onPageSizeChange,
+  onSearchChange,
+  onSortChange,
+}: DataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: defaultPageSize })
   const [searchInput, setSearchInput] = useState('')
   const globalFilter = useDebounce(searchInput, 300)
+  const tablePagination = manualPagination
+    ? { pageIndex: pageIndex ?? 0, pageSize: pageSize ?? defaultPageSize }
+    : pagination
+
+  const handlePaginationChange: OnChangeFn<PaginationState> = updater => {
+    const next = typeof updater === 'function' ? updater(tablePagination) : updater
+    if (manualPagination) {
+      if (next.pageSize !== tablePagination.pageSize) {
+        onPageSizeChange?.(next.pageSize)
+        onPageChange?.(0)
+        return
+      }
+      if (next.pageIndex !== tablePagination.pageIndex) onPageChange?.(next.pageIndex)
+      return
+    }
+    setPagination(next)
+  }
+
+  const handleSortingChange: OnChangeFn<SortingState> = updater => {
+    const next = typeof updater === 'function' ? updater(sorting) : updater
+    setSorting(next)
+    if (manualPagination) {
+      const first = next[0]
+      onSortChange?.(first ? String(first.id) : '', first?.desc ? 'DESC' : 'ASC')
+    }
+  }
 
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, columnFilters, globalFilter },
-    onSortingChange: setSorting,
+    state: { sorting, columnFilters, globalFilter, pagination: tablePagination },
+    onSortingChange: handleSortingChange,
     onColumnFiltersChange: setColumnFilters,
+    onPaginationChange: handlePaginationChange,
     onGlobalFilterChange: () => {}, // Controlled via debounce
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    manualPagination,
+    manualFiltering: manualPagination,
+    manualSorting: manualPagination,
+    pageCount: manualPagination ? Math.max(pageCount ?? 1, 1) : undefined,
     initialState: { pagination: { pageSize: defaultPageSize } },
     globalFilterFn: 'includesString',
   })
 
   // Sync debounced value to table
   useEffect(() => {
+    if (manualPagination) {
+      onSearchChange?.(globalFilter)
+      return
+    }
     table.setGlobalFilter(globalFilter)
-  }, [globalFilter, table])
+  }, [globalFilter])
 
-  const totalFiltered = table.getFilteredRowModel().rows.length
+  const totalFiltered = manualPagination ? (totalRows ?? data.length) : table.getFilteredRowModel().rows.length
+  const totalPages = Math.max(table.getPageCount() || 1, 1)
 
   return (
     <div className="flex flex-col gap-3">
@@ -70,8 +134,16 @@ export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari.
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-400">{totalFiltered} data</span>
           <select
-            value={table.getState().pagination.pageSize}
-            onChange={e => table.setPageSize(Number(e.target.value))}
+            value={tablePagination.pageSize}
+            onChange={e => {
+              const nextPageSize = Number(e.target.value)
+              if (manualPagination) {
+                onPageSizeChange?.(nextPageSize)
+                onPageChange?.(0)
+                return
+              }
+              table.setPageSize(nextPageSize)
+            }}
             className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
           >
             {PAGE_SIZES.map(size => (
@@ -108,10 +180,10 @@ export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari.
               ))}
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-              {table.getRowModel().rows.length === 0 ? (
+              {loading || table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length} className="px-3 sm:px-4 py-10 text-center text-slate-400 text-sm">
-                    Tidak ada data
+                    {loading ? 'Memuat data...' : 'Tidak ada data'}
                   </td>
                 </tr>
               ) : (
@@ -133,20 +205,19 @@ export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari.
       {/* Pagination */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
         <span className="order-2 sm:order-1">
-          Halaman {table.getState().pagination.pageIndex + 1} dari {table.getPageCount() || 1}
+          Halaman {tablePagination.pageIndex + 1} dari {totalPages}
         </span>
         <div className="flex items-center gap-1 order-1 sm:order-2">
           <button
             onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            disabled={loading || !table.getCanPreviousPage()}
             className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ChevronLeft size={14} />
           </button>
           {/* Page number buttons */}
-          {Array.from({ length: Math.min(table.getPageCount(), 5) }, (_, i) => {
-            const currentPage = table.getState().pagination.pageIndex
-            const totalPages = table.getPageCount()
+          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+            const currentPage = tablePagination.pageIndex
             let pageNum: number
             if (totalPages <= 5) {
               pageNum = i
@@ -161,6 +232,7 @@ export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari.
               <button
                 key={pageNum}
                 onClick={() => table.setPageIndex(pageNum)}
+                disabled={loading}
                 className={`w-7 h-7 rounded-lg text-xs font-medium transition-colors
                   ${pageNum === currentPage
                     ? 'bg-primary-500 text-white shadow-sm'
@@ -173,7 +245,7 @@ export default function DataTable<T>({ data, columns, searchPlaceholder = 'Cari.
           })}
           <button
             onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            disabled={loading || !table.getCanNextPage()}
             className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ChevronRight size={14} />

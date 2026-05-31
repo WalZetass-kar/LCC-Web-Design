@@ -1,22 +1,87 @@
 import { BarangModel } from '../models/BarangModel.js'
 import { validateDemoMode } from '../utils/demoMode.js'
-import { paginate, type PaginationParams } from '../utils/pagination.js'
+import { type PaginationParams } from '../utils/pagination.js'
 import { batchDelete, batchUpdate, batchInsert } from '../utils/transaction.js'
 import { BackupController } from './BackupController.js'
 import { ActivityLogModel } from '../models/ActivityLogModel.js'
 import { checkProductLimit, getLimitPopup, getSubscriptionStatus, getUpgradePopup } from '../middleware/subscriptionGuard.js'
+import { sqlite } from '../../database/connection.js'
+
+const PRODUCT_SORT_COLUMNS: Record<string, string> = {
+  kd_barang: 'b.kd_barang',
+  nama_barang: 'b.nama_barang',
+  stok: 'b.stok',
+  harga_barang: 'h.harga_barang',
+  harga_modal: 'h.harga_modal',
+  potongan: 'h.potongan',
+  kategori_barang: 'k.kategori_barang',
+  barcode: 'b.barcode',
+  expired_date: 'b.expired_date',
+}
 
 export class BarangController {
   static getAll() {
     return { success: true, data: BarangModel.getAll() }
   }
 
-  static getPaginated(params: PaginationParams) {
+  static getPaginated(params: PaginationParams = {}) {
     try {
-      const result = paginate('mediasoft_barang', {
-        ...params,
-        searchFields: ['nama_barang', 'kd_barang', 'barcode'],
-      })
+      const page = Math.max(1, Number(params?.page) || 1)
+      const limit = Math.min(100, Math.max(1, Number(params?.limit) || 25))
+      const offset = (page - 1) * limit
+      const sortBy = PRODUCT_SORT_COLUMNS[String(params?.sortBy ?? '')] ?? 'b.nama_barang'
+      const sortOrder = params?.sortOrder === 'DESC' ? 'DESC' : 'ASC'
+      const search = String(params?.search ?? '').trim()
+      const searchParams = search ? [`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`] : []
+      const whereClause = search
+        ? `WHERE b.kd_barang LIKE ? OR b.nama_barang LIKE ? OR b.barcode LIKE ? OR k.kategori_barang LIKE ?`
+        : ''
+
+      const totalRow = sqlite.prepare(`
+        SELECT COUNT(*) AS total
+        FROM mediasoft_barang b
+        LEFT JOIN mediasoft_kategori_barang k ON b.kd_kategori_barang = k.kd_kategori_barang
+        ${whereClause}
+      `).get(...searchParams) as { total: number }
+
+      const data = sqlite.prepare(`
+        SELECT
+          b.kd_barang,
+          b.nama_barang,
+          b.stok,
+          b.stok_minimum,
+          b.foto_barang,
+          b.deskripsi_barang,
+          b.kd_kategori_barang,
+          b.kd_satuan,
+          b.jenis_transaksi,
+          COALESCE(h.harga_barang, 0) AS harga_barang,
+          COALESCE(h.potongan, 0) AS potongan,
+          COALESCE(h.harga_modal, 0) AS harga_modal,
+          k.kategori_barang,
+          b.barcode,
+          b.expired_date
+        FROM mediasoft_barang b
+        LEFT JOIN mediasoft_harga h ON b.kd_barang = h.kd_barang
+        LEFT JOIN mediasoft_kategori_barang k ON b.kd_kategori_barang = k.kd_kategori_barang
+        ${whereClause}
+        ORDER BY ${sortBy} ${sortOrder}
+        LIMIT ? OFFSET ?
+      `).all(...searchParams, limit, offset)
+
+      const total = Number(totalRow?.total ?? 0)
+      const totalPages = Math.max(1, Math.ceil(total / limit))
+      const result = {
+        data,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1,
+        },
+      }
       return { success: true, ...result }
     } catch (error) {
       return { success: false, message: String(error) }

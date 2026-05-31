@@ -19,7 +19,7 @@ const NAV: Array<{ code: AdminTab; label: string; icon: React.ElementType; badge
   { code: 'plans', label: 'Plans', icon: CreditCard },
   { code: 'features', label: 'Fitur', icon: Puzzle },
   { code: 'popups', label: 'Popup', icon: MessageSquare },
-  { code: 'payments', label: 'Pembayaran', icon: DollarSign },
+  { code: 'payments', label: 'Persetujuan Lisensi', icon: DollarSign },
 ];
 
 export const AdminPanel: React.FC<{ onExit?: () => void }> = ({ onExit }) => {

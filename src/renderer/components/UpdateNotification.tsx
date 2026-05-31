@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Download, X, AlertCircle } from 'lucide-react'
 import Button from './Button'
 import { api } from '../utils/api'
+import { collectAuthDeviceInfo } from '../utils/authDevice'
 
 interface UpdateInfo {
   hasUpdate: boolean
@@ -9,6 +10,14 @@ interface UpdateInfo {
   downloadUrl: string
   releaseNotes?: string
   isCritical: boolean
+}
+
+interface RemoteUpdateInfo {
+  update_required?: boolean
+  update_available?: boolean
+  latest_version?: string
+  download_url?: string | null
+  release_notes?: string | null
 }
 
 export default function UpdateNotification() {
@@ -28,6 +37,27 @@ export default function UpdateNotification() {
 
   const checkForUpdates = async () => {
     try {
+      const device = collectAuthDeviceInfo()
+      const remote = await api<RemoteUpdateInfo>('license:checkAppUpdate', {
+        platform: device.platform,
+        app_version: device.appVersion,
+      })
+      if (
+        remote.success &&
+        remote.data &&
+        (remote.data.update_required || remote.data.update_available) &&
+        isMountedRef.current
+      ) {
+        setUpdateInfo({
+          hasUpdate: true,
+          latestVersion: remote.data.latest_version ?? device.appVersion,
+          downloadUrl: remote.data.download_url ?? '',
+          releaseNotes: remote.data.release_notes ?? undefined,
+          isCritical: Boolean(remote.data.update_required),
+        })
+        return
+      }
+
       const r = await api<UpdateInfo>('update:check')
       if (r.success && r.data?.hasUpdate && isMountedRef.current) {
         setUpdateInfo(r.data)
@@ -38,6 +68,7 @@ export default function UpdateNotification() {
   }
 
   if (!updateInfo || dismissed || !updateInfo.hasUpdate) return null
+  const canDismiss = !updateInfo.isCritical || !updateInfo.downloadUrl
 
   return (
     <div className={`fixed bottom-4 right-4 max-w-md p-4 rounded-lg shadow-lg ${
@@ -56,15 +87,17 @@ export default function UpdateNotification() {
             <p className="text-xs opacity-75 mb-3">{updateInfo.releaseNotes}</p>
           )}
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => window.open(updateInfo.downloadUrl, '_blank')}
-              icon={<Download />}
-            >
-              Download
-            </Button>
-            {!updateInfo.isCritical && (
+            {updateInfo.downloadUrl && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => window.open(updateInfo.downloadUrl, '_blank')}
+                icon={<Download />}
+              >
+                Download
+              </Button>
+            )}
+            {canDismiss && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -75,7 +108,7 @@ export default function UpdateNotification() {
             )}
           </div>
         </div>
-        {!updateInfo.isCritical && (
+        {canDismiss && (
           <button onClick={() => setDismissed(true)} className="text-white/80 hover:text-white">
             <X className="w-5 h-5" />
           </button>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Bell, Plus, RotateCcw, UserX, Trash2 } from 'lucide-react'
+import { Bell, CheckCircle, Copy, KeyRound, Plus, RotateCcw, Trash2, UserX } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
 import ConfirmDialog from '../../components/ConfirmDialog'
@@ -17,7 +17,26 @@ interface UserRow {
   force_popup_code?: string | null
   force_popup_until?: string | null
 }
-interface PlanRow { id: string; code: string; name: string; price: number; duration_days: number }
+interface PlanRow {
+  id: string
+  code: string
+  name: string
+  price: number
+  duration_days: number
+  description?: string | null
+  max_devices?: number | null
+  max_transactions_per_day?: number | null
+  max_products?: number | null
+  max_users?: number | null
+}
+interface PlanFeatureRow {
+  id: string
+  code: string
+  name: string
+  category: string | null
+  is_enabled: number | boolean
+  limit_value: number | null
+}
 interface PopupRow { id: string; code: string; title: string; is_active: number | boolean }
 type UserConfirmAction = 'inactive' | 'blocked' | 'delete'
 
@@ -40,6 +59,8 @@ export default function LicenseUsersPage() {
   const [editPopup, setEditPopup] = useState<UserRow | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ type: UserConfirmAction; user: UserRow } | null>(null)
   const [confirmLoading, setConfirmLoading] = useState(false)
+  const [resetLoadingId, setResetLoadingId] = useState<string | null>(null)
+  const [resetPasswordResult, setResetPasswordResult] = useState<{ user: UserRow; password: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -65,6 +86,18 @@ export default function LicenseUsersPage() {
     toast(type === 'delete' ? 'User berhasil dihapus' : 'Status user berhasil diperbarui', 'success')
     setConfirmAction(null)
     void load()
+  }
+
+  async function resetPassword(user: UserRow) {
+    setResetLoadingId(user.id)
+    const r = await api<{ new_password: string }>('license:resetUserPassword', user.id)
+    setResetLoadingId(null)
+    if (!r.success || !r.data?.new_password) {
+      toast(r.message || 'Gagal reset password', 'error')
+      return
+    }
+    setResetPasswordResult({ user, password: r.data.new_password })
+    toast('Password pembeli berhasil di-reset', 'success')
   }
 
   const confirmTitle = confirmAction?.type === 'delete'
@@ -129,8 +162,8 @@ export default function LicenseUsersPage() {
                 <td className="pr-3">
                   <div className="flex items-center gap-1 justify-end">
                     <button onClick={() => setEditPlan(u)} className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs hover:bg-slate-50 dark:hover:bg-slate-800">Ubah Paket</button>
-                    <button onClick={async () => { const r = await api<{new_password:string}>('license:resetUserPassword', u.id); if (r.success) alert(`Password baru: ${r.data?.new_password}`) }}
-                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800" title="Reset Password"><RotateCcw className="w-3.5 h-3.5 text-slate-500" /></button>
+                    <button onClick={() => void resetPassword(u)} disabled={resetLoadingId === u.id}
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50" title="Reset Password"><RotateCcw className={`w-3.5 h-3.5 text-slate-500 ${resetLoadingId === u.id ? 'animate-spin' : ''}`} /></button>
                     <button onClick={() => setEditPopup(u)}
                       className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800" title="Remote popup">
                       <Bell className="w-3.5 h-3.5 text-primary-500" />
@@ -158,6 +191,13 @@ export default function LicenseUsersPage() {
       {showCreate && <CreateUserModal onClose={() => setShowCreate(false)} onSaved={load} />}
       {editPlan && <ChangePlanModal user={editPlan} onClose={() => setEditPlan(null)} onSaved={load} />}
       {editPopup && <RemotePopupModal user={editPopup} onClose={() => setEditPopup(null)} onSaved={load} />}
+      {resetPasswordResult && (
+        <ResetPasswordModal
+          user={resetPasswordResult.user}
+          password={resetPasswordResult.password}
+          onClose={() => setResetPasswordResult(null)}
+        />
+      )}
       <ConfirmDialog
         open={!!confirmAction}
         onClose={() => setConfirmAction(null)}
@@ -180,15 +220,105 @@ export default function LicenseUsersPage() {
   )
 }
 
+function ResetPasswordModal({ user, password, onClose }: { user: UserRow; password: string; onClose: () => void }) {
+  const toast = useToast()
+  const [copied, setCopied] = useState(false)
+
+  async function copyPassword() {
+    try {
+      await navigator.clipboard.writeText(password)
+      setCopied(true)
+      toast('Password baru disalin', 'success')
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      toast('Gagal menyalin password', 'error')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" onClick={e => e.stopPropagation()}>
+        <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-300">
+              <KeyRound className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-semibold text-slate-900 dark:text-white">Password Pembeli Di-reset</h3>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{user.name} - {user.email}</p>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-4 p-5">
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
+            Berikan password ini ke pembeli. Password hanya tampil di sini setelah reset berhasil.
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Password Baru</label>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={password}
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-mono text-sm font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+              <button
+                type="button"
+                onClick={copyPassword}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700"
+              >
+                {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <span className="hidden sm:inline">{copied ? 'Tersalin' : 'Salin'}</span>
+              </button>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+            <button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">Tutup</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CreateUserModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const toast = useToast()
   const [plans, setPlans] = useState<PlanRow[]>([])
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', plan_code: 'BASIC_MONTHLY', duration_days: 30 })
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', plan_code: '', duration_days: 30 })
   const [loading, setLoading] = useState(false)
-  useEffect(() => { api<PlanRow[]>('license:getPlans').then(r => { if (r.success) setPlans(r.data ?? []) }) }, [])
+  useEffect(() => {
+    api<PlanRow[]>('license:getPlans').then(r => {
+      if (!r.success) return
+      const rows = r.data ?? []
+      setPlans(rows)
+      setForm(current => {
+        if (current.plan_code && rows.some(plan => plan.code === current.plan_code)) return current
+        const preferred = rows.find(plan => plan.code.includes('BASIC')) ?? rows.find(plan => Number(plan.price) > 0) ?? rows[0]
+        return {
+          ...current,
+          plan_code: preferred?.code ?? current.plan_code,
+          duration_days: preferred?.duration_days ?? current.duration_days,
+        }
+      })
+    })
+  }, [])
+
+  const selectedPlan = plans.find(plan => plan.code === form.plan_code)
+
+  function selectPlan(code: string) {
+    const plan = plans.find(item => item.code === code)
+    setForm({
+      ...form,
+      plan_code: code,
+      duration_days: plan?.duration_days ?? form.duration_days,
+    })
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setLoading(true)
+    if (!form.plan_code) {
+      setLoading(false)
+      return toast('Paket wajib dipilih', 'error')
+    }
     const r = await api('license:createUser', { ...form, duration_days: Number(form.duration_days) })
     setLoading(false)
     if (r.success) { onSaved(); onClose() } else toast(r.message || 'Gagal', 'error')
@@ -196,7 +326,7 @@ function CreateUserModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-700" onClick={e => e.stopPropagation()}>
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
           <h3 className="font-semibold text-slate-800 dark:text-white">Buat Akun Pembeli</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">×</button>
@@ -213,8 +343,9 @@ function CreateUserModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Paket</label>
-              <select value={form.plan_code} onChange={e => setForm({ ...form, plan_code: e.target.value })}
+              <select value={form.plan_code} onChange={e => selectPlan(e.target.value)}
                 className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500">
+                {!plans.length && <option value="">Paket belum tersedia</option>}
                 {plans.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
               </select>
             </div>
@@ -224,11 +355,98 @@ function CreateUserModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
                 className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500" />
             </div>
           </div>
+          <PlanAccessPreview plan={selectedPlan} />
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm">Batal</button>
             <button type="submit" disabled={loading} className="px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm disabled:opacity-50">{loading ? 'Menyimpan…' : 'Simpan'}</button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function planLimitLabel(value?: number | null) {
+  if (value === -1) return 'Unlimited'
+  if (value === null || value === undefined) return '-'
+  return Number(value).toLocaleString('id-ID')
+}
+
+function isEnabled(value: number | boolean) {
+  return value === true || value === 1
+}
+
+function PlanAccessPreview({ plan, compact = false }: { plan?: PlanRow; compact?: boolean }) {
+  const [features, setFeatures] = useState<PlanFeatureRow[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!plan?.id) {
+      setFeatures([])
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    api<PlanFeatureRow[]>('license:getPlanFeatures', plan.id).then(result => {
+      if (cancelled) return
+      setFeatures(result.success ? result.data ?? [] : [])
+    }).finally(() => {
+      if (!cancelled) setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [plan?.id])
+
+  if (!plan) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-xs text-slate-400 dark:border-slate-700">
+        Pilih paket untuk melihat fitur yang akan dibuka pembeli.
+      </div>
+    )
+  }
+
+  const activeFeatures = features.filter(feature => isEnabled(feature.is_enabled))
+  const visibleFeatures = activeFeatures.slice(0, compact ? 6 : 10)
+
+  return (
+    <div className="rounded-xl border border-primary-100 bg-primary-50/60 px-4 py-3 dark:border-primary-900/50 dark:bg-primary-900/10">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-primary-700 dark:text-primary-300">Fitur terbuka untuk pembeli</p>
+          <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-100">{plan.name}</p>
+          {!compact && plan.description && <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{plan.description}</p>}
+        </div>
+        <div className="shrink-0 text-left text-xs text-slate-500 dark:text-slate-400 sm:text-right">
+          <p className="font-semibold text-slate-800 dark:text-slate-100">Rp {Number(plan.price ?? 0).toLocaleString('id-ID')}</p>
+          <p>{plan.duration_days} hari</p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
+        <div><span className="text-slate-400">Device:</span> <b>{planLimitLabel(plan.max_devices)}</b></div>
+        <div><span className="text-slate-400">Transaksi:</span> <b>{planLimitLabel(plan.max_transactions_per_day)}</b></div>
+        <div><span className="text-slate-400">Produk:</span> <b>{planLimitLabel(plan.max_products)}</b></div>
+        <div><span className="text-slate-400">User:</span> <b>{planLimitLabel(plan.max_users)}</b></div>
+      </div>
+
+      <div className="mt-3">
+        {loading ? (
+          <p className="text-xs text-slate-400">Memuat fitur paket...</p>
+        ) : activeFeatures.length === 0 ? (
+          <p className="text-xs text-slate-500 dark:text-slate-400">Belum ada fitur aktif di paket ini.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {visibleFeatures.map(feature => (
+              <span key={feature.code} className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">
+                {feature.name}
+              </span>
+            ))}
+            {activeFeatures.length > visibleFeatures.length && (
+              <span className="rounded-full bg-primary-100 px-2 py-1 text-[11px] font-semibold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">
+                +{activeFeatures.length - visibleFeatures.length} fitur
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -242,7 +460,15 @@ function ChangePlanModal({ user, onClose, onSaved }: { user: UserRow; onClose: (
   const [expiresAt, setExpiresAt] = useState(toDateInput(user.expired_at))
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
-  useEffect(() => { api<PlanRow[]>('license:getPlans').then(r => { if (r.success) setPlans(r.data ?? []) }) }, [])
+  useEffect(() => {
+    api<PlanRow[]>('license:getPlans').then(r => {
+      if (!r.success) return
+      const rows = r.data ?? []
+      setPlans(rows)
+      setDays(current => rows.find(plan => plan.code === planCode)?.duration_days ?? current)
+    })
+  }, [])
+  const selectedPlan = plans.find(plan => plan.code === planCode)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setLoading(true)
@@ -258,7 +484,7 @@ function ChangePlanModal({ user, onClose, onSaved }: { user: UserRow; onClose: (
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-700" onClick={e => e.stopPropagation()}>
+      <div className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
           <h3 className="font-semibold text-slate-800 dark:text-white">Ubah Paket — {user.name}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">×</button>
@@ -270,11 +496,16 @@ function ChangePlanModal({ user, onClose, onSaved }: { user: UserRow; onClose: (
           </div>
           <div>
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Paket baru</label>
-            <select value={planCode} onChange={e => setPlanCode(e.target.value)}
+            <select value={planCode} onChange={e => {
+              const nextPlan = plans.find(plan => plan.code === e.target.value)
+              setPlanCode(e.target.value)
+              if (nextPlan?.duration_days) setDays(nextPlan.duration_days)
+            }}
               className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500">
               {plans.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
             </select>
           </div>
+          <PlanAccessPreview plan={selectedPlan} compact />
           <div>
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Durasi (hari)</label>
             <input type="number" value={days} onChange={e => setDays(Number(e.target.value))}

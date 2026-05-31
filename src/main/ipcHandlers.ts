@@ -59,10 +59,34 @@ import { sqlite } from '../database/connection.js'
 import { SyncServerService, setSyncChannelInvoker } from './syncServer.js'
 import { SyncClientService } from './syncClient.js'
 import { openExternalHttps } from './platformSecurity.js'
+import type { PaginationParams } from '../backend/utils/pagination.js'
 
 type ChannelHandler = (...args: any[]) => any
 
 const channelHandlers = new Map<string, ChannelHandler>()
+
+function isDatabaseCorruptionError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('database disk image is malformed')
+    || message.includes('database image is malformed')
+}
+
+function channelErrorResponse(channel: string, error: unknown) {
+  console.error(`IPC channel error [${channel}]:`, error)
+
+  if (isDatabaseCorruptionError(error)) {
+    return {
+      success: false,
+      error_code: 'DATABASE_CORRUPT',
+      message: 'Database lokal rusak/korup. Tutup aplikasi, lalu restore backup yang valid atau jalankan recovery database.',
+    }
+  }
+
+  return {
+    success: false,
+    message: error instanceof Error ? error.message : String(error),
+  }
+}
 
 function registerChannel(channel: string, handler: ChannelHandler) {
   channelHandlers.set(channel, handler)
@@ -81,11 +105,7 @@ export async function invokeRegisteredChannel(channel: string, args: unknown[] =
   try {
     return await handler(...args)
   } catch (error) {
-    console.error(`❌ Sync channel error [${channel}]:`, error)
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : String(error),
-    }
+    return channelErrorResponse(channel, error)
   }
 }
 
@@ -105,15 +125,19 @@ function syncRendererSession(channel: string, result: any) {
 }
 
 async function invokeRendererChannel(channel: string, args: unknown[], localHandler: ChannelHandler) {
-  if (SyncClientService.shouldForward(channel)) {
-    const result = await SyncClientService.invoke(channel, args)
+  try {
+    if (SyncClientService.shouldForward(channel)) {
+      const result = await SyncClientService.invoke(channel, args)
+      syncRendererSession(channel, result)
+      return result
+    }
+
+    const result = await localHandler(...args)
     syncRendererSession(channel, result)
     return result
+  } catch (error) {
+    return channelErrorResponse(channel, error)
   }
-
-  const result = await localHandler(...args)
-  syncRendererSession(channel, result)
-  return result
 }
 
 /**
@@ -308,6 +332,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
 
   // ─── BARANG (Products) ─────────────────────────────────────────────
   handle(ipcMain, 'barang:getAll', () => BarangController.getAll())
+  handle(ipcMain, 'barang:getPaginated', (params?: PaginationParams) => BarangController.getPaginated(params))
   handle(ipcMain, 'barang:search', (q: string) => BarangController.search(q))
   handle(ipcMain, 'barang:create', (data: any) => BarangController.create({
     ...data,
@@ -510,8 +535,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── RETURNS ───────────────────────────────────────────────────────
   handle(ipcMain, 'return:create', (data: any) => ReturnController.create(data))
   handle(ipcMain, 'return:getAll', () => ReturnController.getAll())
-  handle(ipcMain, 'return:approve', (id: number, userId: number) => ReturnController.approve(id, userId))
-  handle(ipcMain, 'return:reject', (id: number, userId: number) => ReturnController.reject(id, userId))
+  handle(ipcMain, 'return:getDetails', (id: number) => ReturnController.getDetails(id))
+  handle(ipcMain, 'return:approve', (id: number, userId: string | number) => ReturnController.approve(id, userId))
+  handle(ipcMain, 'return:reject', (id: number, userId: string | number) => ReturnController.reject(id, userId))
   handle(ipcMain, 'return:delete', (id: number) => ReturnController.delete(id))
 
   // ─── SHIFTS ────────────────────────────────────────────────────────
@@ -734,6 +760,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'license:extendDeviceLicense', (id: string | number, data: any) => LicenseController.extendDeviceLicense(id, data))
   handle(ipcMain, 'license:getAppUpdates', () => LicenseController.getAppUpdates())
   handle(ipcMain, 'license:saveAppUpdate', (data: any) => LicenseController.saveAppUpdate(data))
+  handle(ipcMain, 'license:checkAppUpdate', (data: any) => LicenseController.checkAppUpdate(data))
   handle(ipcMain, 'license:getErrors', (query?: { type?: string }) => LicenseController.getErrors(query))
   handle(ipcMain, 'license:getAnnouncements', () => LicenseController.getAnnouncements())
   handle(ipcMain, 'license:createAnnouncement', (data: any) => LicenseController.createAnnouncement(data))

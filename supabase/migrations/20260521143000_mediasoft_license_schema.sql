@@ -229,6 +229,12 @@ values
     199000, 30, true, true, 3, -1, -1, 5,
     '{"reports":true,"export_excel":true,"export_pdf":true,"multi_user":true,"backup":true,"restore":true,"stock_opname":true,"debt_management":true,"shift_management":true,"api_access":true,"multi_branch":false,"return_refund":true}'::jsonb,
     20
+  ),
+  (
+    'PRO_ANNUAL', 'Tahunan', 'Paket 1 tahun untuk operasional lengkap: laporan, export Excel/PDF, multi-user, backup/restore, stock opname, hutang/piutang, shift, API, multi cabang, dan retur/refund.',
+    1999000, 365, true, false, 5, -1, -1, 10,
+    '{"reports":true,"export_excel":true,"export_pdf":true,"multi_user":true,"backup":true,"restore":true,"stock_opname":true,"debt_management":true,"shift_management":true,"api_access":true,"multi_branch":true,"return_refund":true}'::jsonb,
+    30
   )
 on conflict (code) do update set
   name = excluded.name,

@@ -207,7 +207,7 @@ export default function SupplierPage() {
       <Modal
         open={modal === 'add' || modal === 'edit'}
         onClose={closeModal}
-        title={modal === 'add' ? '➕ Tambah Supplier' : '✏️ Edit Supplier'}
+        title={modal === 'add' ? 'Tambah Supplier' : 'Edit Supplier'}
         size="lg"
         footer={
           <>

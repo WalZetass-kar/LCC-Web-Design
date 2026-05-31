@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLicense } from './FeatureContext';
+import appLogo from '../assets/app-logo.png';
 
 /**
  * Halaman login + register demo untuk client app.
@@ -41,7 +42,7 @@ export const LoginScreen: React.FC = () => {
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-8">
         <div className="text-center mb-6">
-          <div className="text-3xl mb-2">🏪</div>
+          <img src={appLogo} alt="MediaSoft POS Zetass" className="mx-auto mb-2 h-14 w-14 rounded-2xl object-cover shadow" />
           <h1 className="text-2xl font-bold">MediaSoft POS</h1>
           <p className="text-sm text-gray-500">Masuk untuk mulai berjualan</p>
         </div>

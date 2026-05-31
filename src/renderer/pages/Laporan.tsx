@@ -303,6 +303,8 @@ export default function Laporan() {
               { label: 'Total Transaksi', value: penjualanData.summary.total_transaksi, currency: false },
               { label: 'Total Qty', value: penjualanData.summary.total_qty, currency: false },
               { label: 'Total Penjualan', value: penjualanData.summary.total_penjualan, currency: true },
+              { label: 'Return Approved', value: penjualanData.summary.total_return ?? 0, currency: true },
+              { label: 'Penjualan Bersih', value: penjualanData.summary.total_bersih ?? penjualanData.summary.total_penjualan, currency: true },
               { label: 'Total Pajak', value: penjualanData.summary.total_pajak, currency: true },
             ].map(s => (
               <Card key={s.label} className="text-center">
@@ -473,7 +475,7 @@ export default function Laporan() {
             </Card>
           </div>
           {stokData.stok_menipis.length > 0 && (
-            <Card title={`⚠️ Stok Menipis (${stokData.stok_menipis.length} produk)`}>
+            <Card title={`Stok Menipis (${stokData.stok_menipis.length} produk)`}>
               <div className="overflow-x-auto -mx-6">
                 <table className="w-full text-sm min-w-[400px]">
                   <thead className="bg-slate-50/80 dark:bg-slate-800/80">

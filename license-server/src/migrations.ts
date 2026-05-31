@@ -201,6 +201,7 @@ export function seed() {
   insertPlan.run('BASIC', 'Basic', 'Toko skala kecil', 99000, 30, 1);
   insertPlan.run('PRO', 'Pro', 'Toko menengah', 249000, 30, 2);
   insertPlan.run('ENTERPRISE', 'Enterprise', 'Multi cabang & unlimited', 599000, 30, 3);
+  insertPlan.run('PRO_ANNUAL', 'Tahunan', 'Paket 1 tahun dengan fitur lengkap untuk operasional toko dan multi cabang', 1999000, 365, 4);
 
   // ===== Plan ↔ Features =====
   const planFeatureMap: Record<string, Array<[string, boolean, number | null]>> = {
@@ -247,10 +248,12 @@ export function seed() {
       ['multi_cashier', true, null],
     ],
     ENTERPRISE: [], // diisi semua di bawah
+    PRO_ANNUAL: [], // diisi semua di bawah
   };
 
   const allFeatureCodes = featureMaster.map(([c]) => c);
   planFeatureMap.ENTERPRISE = allFeatureCodes.map((c) => [c, true, null]);
+  planFeatureMap.PRO_ANNUAL = allFeatureCodes.map((c) => [c, true, null]);
 
   const upsertPF = db.prepare(`
     INSERT INTO plan_features (plan_id, feature_id, is_enabled, limit_value)
@@ -279,7 +282,7 @@ export function seed() {
       'Upgrade Sekarang',
       config.APP_BILLING_URL,
       config.APP_WHATSAPP,
-      `<ul><li><b>Basic</b> Rp 99.000/bln</li><li><b>Pro</b> Rp 249.000/bln</li><li><b>Enterprise</b> Rp 599.000/bln</li></ul>`,
+      `<ul><li><b>Basic</b> Rp 99.000/bln</li><li><b>Pro</b> Rp 249.000/bln</li><li><b>Enterprise</b> Rp 599.000/bln</li><li><b>Tahunan</b> Rp 1.999.000/thn</li></ul>`,
     );
     insertPopup.run(
       'EXPIRED',

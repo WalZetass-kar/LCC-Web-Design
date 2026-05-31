@@ -51,30 +51,36 @@ export default function LicensePaymentsPage() {
     setDeletingId(deletePayment.id)
     const r = await api('license:deletePayment', deletePayment.id)
     setDeletingId(null)
-    if (!r.success) return toast(r.message || 'Gagal menghapus pembayaran', 'error')
-    toast('Pembayaran berhasil dihapus', 'success')
+    if (!r.success) return toast(r.message || 'Gagal menghapus persetujuan lisensi', 'error')
+    toast('Persetujuan lisensi berhasil dihapus', 'success')
     setDeletePayment(null)
     void load()
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="font-semibold text-slate-800 dark:text-white">Persetujuan Lisensi</h3>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Request dari popup langganan muncul sebagai pending. Setujui setelah pembayaran pembeli valid agar lisensi aktif atau diperpanjang.
+          </p>
+        </div>
         <button onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl px-4 py-2 text-sm font-medium">
-          <Plus className="w-4 h-4" />Catat Pembayaran
+          className="flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl px-4 py-2 text-sm font-medium">
+          <Plus className="w-4 h-4" />Catat Persetujuan Manual
         </button>
       </div>
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 text-left">
-            <tr><th className="px-4 py-3">User</th><th>Paket</th><th>Jumlah</th><th>Metode</th><th>Status</th><th>Tanggal</th><th></th></tr>
+            <tr><th className="px-4 py-3">Pembeli</th><th>Paket</th><th>Jumlah</th><th>Request</th><th>Status</th><th>Tanggal</th><th></th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {loading ? (
               <tr><td colSpan={7} className="text-center py-10 text-slate-400">Memuat…</td></tr>
             ) : payments.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-10 text-slate-400">Belum ada pembayaran</td></tr>
+              <tr><td colSpan={7} className="text-center py-10 text-slate-400">Belum ada request persetujuan lisensi</td></tr>
             ) : payments.map(p => (
               <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <td className="px-4 py-3">
@@ -94,14 +100,14 @@ export default function LicensePaymentsPage() {
                     {p.status === 'pending' && (
                       <button onClick={async () => { await api('license:approvePayment', p.id); load() }}
                         className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs">
-                        <CheckCircle className="w-3 h-3" />Approve
+                        <CheckCircle className="w-3 h-3" />Setujui
                       </button>
                     )}
                     <button
                       onClick={() => setDeletePayment(p)}
                       disabled={deletingId === p.id}
                       className="flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/70 dark:text-red-400 dark:hover:bg-red-950/30"
-                      title="Hapus pembayaran"
+                      title="Hapus persetujuan lisensi"
                     >
                       <Trash2 className="w-3 h-3" />Hapus
                     </button>
@@ -117,15 +123,15 @@ export default function LicensePaymentsPage() {
         open={!!deletePayment}
         onClose={() => setDeletePayment(null)}
         onConfirm={handleDeletePayment}
-        title="Hapus Pembayaran"
-        message={`Pembayaran ${deletePayment?.invoice_number || deletePayment?.id || ''} akan dihapus dari Developer Panel.`}
+        title="Hapus Persetujuan Lisensi"
+        message={`Request ${deletePayment?.invoice_number || deletePayment?.id || ''} akan dihapus dari Developer Panel.`}
         confirmText="Hapus"
         variant="danger"
         loading={!!deletePayment && deletingId === deletePayment.id}
       >
         {deletePayment && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/70">
-            <div className="flex justify-between gap-3"><span className="text-slate-500">User</span><span className="font-semibold text-slate-800 dark:text-slate-100">{deletePayment.user_email}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-slate-500">Pembeli</span><span className="font-semibold text-slate-800 dark:text-slate-100">{deletePayment.user_email}</span></div>
             <div className="flex justify-between gap-3"><span className="text-slate-500">Jumlah</span><span className="font-semibold text-slate-800 dark:text-slate-100">Rp {Number(deletePayment.amount).toLocaleString('id-ID')}</span></div>
             <div className="flex justify-between gap-3"><span className="text-slate-500">Status</span><span className="font-semibold text-slate-800 dark:text-slate-100">{deletePayment.status}</span></div>
           </div>
@@ -139,7 +145,7 @@ function AddPaymentModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
   const toast = useToast()
   const [users, setUsers] = useState<UserRow[]>([])
   const [plans, setPlans] = useState<PlanRow[]>([])
-  const [form, setForm] = useState({ user_id: '', plan_code: 'BASIC_MONTHLY', amount: 99000, method: 'manual_transfer', status: 'paid' as 'paid' | 'pending' | 'failed' | 'expired', notes: '' })
+  const [form, setForm] = useState({ user_id: '', plan_code: 'BASIC_MONTHLY', amount: 99000, method: 'manual_transfer', status: 'pending' as 'paid' | 'pending' | 'failed' | 'expired', notes: '' })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -149,7 +155,7 @@ function AddPaymentModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.user_id) return toast('User wajib dipilih', 'error')
+    if (!form.user_id) return toast('Pembeli wajib dipilih', 'error')
     setLoading(true)
     const r = await api('license:createPayment', { ...form, user_id: form.user_id, amount: Number(form.amount) })
     setLoading(false)
@@ -162,12 +168,12 @@ function AddPaymentModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-700" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-          <h3 className="font-semibold text-slate-800 dark:text-white">Catat Pembayaran</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-white">Catat Persetujuan Lisensi Manual</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl">×</button>
         </div>
         <form onSubmit={submit} className="p-5 space-y-3">
           <div>
-            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">User</label>
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Pembeli</label>
             <select required value={form.user_id} onChange={e => setForm({ ...form, user_id: e.target.value })} className={inp}>
               <option value="">— pilih user —</option>
               {users.map(u => <option key={u.id} value={u.id}>{u.name} — {u.email}</option>)}
@@ -194,8 +200,8 @@ function AddPaymentModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
             <div>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Status</label>
               <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as 'paid' | 'pending' | 'failed' | 'expired' })} className={inp}>
-                <option value="paid">paid (auto perpanjang)</option>
-                <option value="pending">pending (butuh approve/webhook)</option>
+                <option value="pending">pending (menunggu persetujuan)</option>
+                <option value="paid">paid (langsung aktif/perpanjang)</option>
                 <option value="failed">failed</option>
                 <option value="expired">expired</option>
               </select>

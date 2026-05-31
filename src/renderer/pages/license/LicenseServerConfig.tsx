@@ -184,7 +184,7 @@ export default function LicenseServerConfig() {
           </button>
         </div>
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-          Sync menarik paket dan popup dari Supabase ke database lokal aplikasi ini. Akun pembeli, fitur, popup, dan pembayaran dikelola dari tab Developer Panel lain.
+          Sync menarik paket dan popup dari Supabase ke database lokal aplikasi ini. Akun pembeli, fitur, popup, dan persetujuan lisensi dikelola dari tab Developer Panel lain.
         </p>
       </div>
 

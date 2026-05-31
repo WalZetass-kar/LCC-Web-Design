@@ -31,6 +31,21 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('lucide-react')) return 'vendor-icons'
+          if (id.includes('recharts')) return 'vendor-charts'
+          if (id.includes('@tanstack')) return 'vendor-table'
+          if (id.includes('jspdf') || id.includes('xlsx') || id.includes('exceljs')) return 'vendor-export'
+          if (id.includes('@capacitor')) return 'vendor-capacitor'
+          if (id.includes('i18next')) return 'vendor-i18n'
+          if (id.includes('react')) return 'vendor-react'
+          return undefined
+        },
+      },
+    },
     minify: 'terser',
     terserOptions: {
       compress: {

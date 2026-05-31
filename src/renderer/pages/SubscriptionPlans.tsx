@@ -524,7 +524,7 @@ export default function SubscriptionPlans() {
 
           {form.is_recommended && (
             <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg">
-              ⚠️ Menandai paket ini sebagai rekomendasi akan menghapus status rekomendasi dari paket lain.
+              Menandai paket ini sebagai rekomendasi akan menghapus status rekomendasi dari paket lain.
             </p>
           )}
         </div>

@@ -235,6 +235,8 @@ function planAliases(code: string) {
   const aliases: Record<string, string[]> = {
     BASIC: ['BASIC_MONTHLY'],
     PRO: ['PRO_MONTHLY'],
+    ANNUAL: ['PRO_ANNUAL', 'TAHUNAN'],
+    TAHUNAN: ['PRO_ANNUAL'],
     TRIAL: ['TRIAL_3_DAYS'],
     DEMO: ['TRIAL_3_DAYS'],
   }
@@ -284,6 +286,23 @@ const PRO_FEATURE_FLAGS = {
 }
 const ENTERPRISE_FEATURE_FLAGS = trueFeatureFlags()
 
+const DEFAULT_ANNUAL_PLAN = {
+  code: 'PRO_ANNUAL',
+  name: 'Tahunan',
+  description: 'Paket 1 tahun untuk operasional lengkap: laporan, export Excel/PDF, multi-user, backup/restore, stock opname, hutang/piutang, shift, API, multi cabang, dan retur/refund.',
+  price: 1999000,
+  currency: 'IDR',
+  duration_days: 365,
+  is_active: true,
+  is_recommended: false,
+  max_devices: 5,
+  max_transactions_per_day: -1,
+  max_products: -1,
+  max_users: 10,
+  feature_flags: ENTERPRISE_FEATURE_FLAGS,
+  sort_order: 30,
+}
+
 let defaultFeatureCatalogEnsured = false
 
 function parseFeatureFlags(value: unknown): Record<string, boolean> {
@@ -320,6 +339,15 @@ async function ensureDefaultFeatureCatalog() {
     DEFAULT_FEATURE_CATALOG.map(feature => ({ ...feature, is_active: true })),
     'resolution=merge-duplicates,return=minimal')
   defaultFeatureCatalogEnsured = true
+}
+
+async function ensureDefaultAnnualPlan() {
+  const rows = await rest<any[]>('GET', 'subscription_plans?code=eq.PRO_ANNUAL&select=id&limit=1')
+  if (rows[0]) return
+  await rest('POST',
+    'subscription_plans?on_conflict=code',
+    DEFAULT_ANNUAL_PLAN,
+    'resolution=merge-duplicates,return=minimal')
 }
 
 async function applyDefaultFeatureFlags(plans: any[]) {
@@ -483,6 +511,7 @@ async function getTrialPlan() {
 
 async function listPlansRaw() {
   await ensureDefaultFeatureCatalog()
+  await ensureDefaultAnnualPlan()
   const plans = await rest<any[]>('GET', 'subscription_plans?select=*&order=sort_order.asc')
   return await applyDefaultFeatureFlags(plans)
 }

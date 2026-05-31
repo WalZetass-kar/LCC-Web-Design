@@ -148,7 +148,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
 
         {isDemoMode() && (
           <div className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-primary-500 to-primary-400 text-white text-xs font-bold shadow-lg shadow-primary-500/30 animate-pulse">
-            🔒 DEMO
+            DEMO
           </div>
         )}
 

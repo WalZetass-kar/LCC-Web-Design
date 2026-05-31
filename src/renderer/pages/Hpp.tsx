@@ -253,7 +253,7 @@ export default function Hpp() {
     if (r.success && r.data) {
       setLastResult(r.data)
       setUsageCount(r.data.count ?? usageCount + 1)
-      toast('HPP berhasil dihitung ✅')
+      toast('HPP berhasil dihitung')
       loadData()
       // Scroll to result
       setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)

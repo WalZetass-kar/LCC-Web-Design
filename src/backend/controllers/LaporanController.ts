@@ -32,11 +32,22 @@ export class LaporanController {
         .orderBy(desc(penjualan.tgl_wkt_transaksi))
         .all()
 
+      const returnSummary = sqlite.prepare(`
+        SELECT COUNT(*) AS count, COALESCE(SUM(total_amount), 0) AS total
+        FROM mediasoft_returns
+        WHERE status = 'APPROVED'
+          AND created_at >= ?
+          AND created_at <= ?
+      `).get(start, end) as { count?: number; total?: number } | undefined
+
       const summary = {
         total_transaksi: result.length,
         total_qty: result.reduce((sum, r) => sum + (r.total_qty || 0), 0),
         total_penjualan: result.reduce((sum, r) => sum + (r.yang_dibayar || 0), 0),
         total_pajak: result.reduce((sum, r) => sum + (r.pajak || 0), 0),
+        total_return: returnSummary?.total ?? 0,
+        transaksi_return: returnSummary?.count ?? 0,
+        total_bersih: result.reduce((sum, r) => sum + (r.yang_dibayar || 0), 0) - (returnSummary?.total ?? 0),
       }
 
       return { success: true, data: { transaksi: result, summary } }
@@ -85,6 +96,15 @@ export class LaporanController {
         if (row?.discount_amount) total_penjualan -= row.discount_amount
       }
 
+      const returnSummary = sqlite.prepare(`
+        SELECT COALESCE(SUM(total_amount), 0) AS total
+        FROM mediasoft_returns
+        WHERE status = 'APPROVED'
+          AND created_at >= ?
+          AND created_at <= ?
+      `).get(start, end) as { total?: number } | undefined
+      total_penjualan -= returnSummary?.total ?? 0
+
       const laba_kotor = total_penjualan - total_modal
       const margin_persen = total_penjualan > 0 ? (laba_kotor / total_penjualan) * 100 : 0
 
@@ -93,6 +113,7 @@ export class LaporanController {
         data: {
           total_transaksi: transaksi.length,
           total_penjualan,
+          total_return: returnSummary?.total ?? 0,
           total_modal,
           laba_kotor,
           margin_persen: Math.round(margin_persen * 100) / 100,

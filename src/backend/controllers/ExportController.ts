@@ -10,7 +10,7 @@ export class ExportController {
         return { success: false, message: 'Gagal mengambil data laporan' }
       }
 
-      return ExportService.exportLaporanPenjualanExcel(laporan.data.transaksi, customPath)
+      return ExportService.exportLaporanPenjualanExcel(laporan.data.transaksi, customPath, { startDate, endDate })
     } catch (error) {
       return { success: false, message: 'Gagal export: ' + (error as Error).message }
     }
@@ -23,7 +23,7 @@ export class ExportController {
         return { success: false, message: 'Gagal mengambil data laporan' }
       }
 
-      return ExportService.exportLaporanPenjualanPDF(laporan.data.transaksi, customPath)
+      return ExportService.exportLaporanPenjualanPDF(laporan.data.transaksi, customPath, { startDate, endDate })
     } catch (error) {
       return { success: false, message: 'Gagal export: ' + (error as Error).message }
     }

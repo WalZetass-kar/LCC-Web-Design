@@ -448,7 +448,7 @@ export default function Dashboard() {
             </Card>
 
             {/* Stok Menipis */}
-            <Card title="⚠️ Stok Menipis" subtitle="Produk yang perlu direstock">
+            <Card title="Stok Menipis" subtitle="Produk yang perlu direstock">
               <div className="space-y-2">
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
@@ -485,7 +485,7 @@ export default function Dashboard() {
                 ) : (
                   <div className="text-center py-8 text-slate-400">
                     <Package size={32} className="mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">Semua stok aman ✅</p>
+                    <p className="text-sm">Semua stok aman</p>
                   </div>
                 )}
               </div>

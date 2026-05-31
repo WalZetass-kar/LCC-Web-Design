@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Plus, RefreshCw, RotateCcw, Trash2, UserX } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Copy, KeyRound, Plus, RefreshCw, RotateCcw, Trash2, UserX } from 'lucide-react';
 import {
   AdminUserRow, AdminPlanRow,
   changeUserPlan, createUser, deleteUser, listPlans, listUsers, resetUserPassword, updateUser,
@@ -13,6 +13,8 @@ export const UsersPage: React.FC = () => {
   const [editPlan, setEditPlan] = useState<AdminUserRow | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: 'suspended' | 'delete'; user: AdminUserRow } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [resetLoadingId, setResetLoadingId] = useState<number | null>(null);
+  const [resetPasswordResult, setResetPasswordResult] = useState<{ user: AdminUserRow; password: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -44,6 +46,19 @@ export const UsersPage: React.FC = () => {
       setErr(e?.response?.data?.message || e?.message || 'Aksi gagal diproses');
     } finally {
       setConfirmLoading(false);
+    }
+  }
+
+  async function resetPassword(user: AdminUserRow) {
+    setResetLoadingId(user.id);
+    setErr(null);
+    try {
+      const r = await resetUserPassword(user.id);
+      setResetPasswordResult({ user, password: r.new_password });
+    } catch (e: any) {
+      setErr(e?.response?.data?.message || e?.message || 'Gagal reset password');
+    } finally {
+      setResetLoadingId(null);
     }
   }
 
@@ -84,10 +99,7 @@ export const UsersPage: React.FC = () => {
               <Td>
                 <div className="flex items-center gap-1 justify-end">
                   <Button size="sm" variant="secondary" onClick={() => setEditPlan(u)}>Ubah Paket</Button>
-                  <Button size="sm" variant="secondary" onClick={async () => {
-                    const r = await resetUserPassword(u.id);
-                    alert(`Password baru: ${r.new_password}`);
-                  }}><RotateCcw className="w-3 h-3" /></Button>
+                  <Button size="sm" variant="secondary" disabled={resetLoadingId === u.id} onClick={() => void resetPassword(u)}><RotateCcw className={`w-3 h-3 ${resetLoadingId === u.id ? 'animate-spin' : ''}`} /></Button>
                   <Button size="sm" variant="secondary" onClick={() => setConfirmAction({ type: 'suspended', user: u })}><UserX className="w-3 h-3" /></Button>
                   <Button size="sm" variant="danger" onClick={() => setConfirmAction({ type: 'delete', user: u })}><Trash2 className="w-3 h-3" /></Button>
                 </div>
@@ -99,6 +111,13 @@ export const UsersPage: React.FC = () => {
 
       {showCreate && <CreateUserModal onClose={() => setShowCreate(false)} onSaved={load} />}
       {editPlan && <ChangePlanModal user={editPlan} onClose={() => setEditPlan(null)} onSaved={load} />}
+      {resetPasswordResult && (
+        <ResetPasswordResultModal
+          user={resetPasswordResult.user}
+          password={resetPasswordResult.password}
+          onClose={() => setResetPasswordResult(null)}
+        />
+      )}
       {confirmAction && (
         <Modal title={confirmAction.type === 'delete' ? 'Hapus User' : 'Suspend User'} onClose={() => { if (!confirmLoading) setConfirmAction(null); }}>
           <div className="space-y-4">
@@ -130,6 +149,53 @@ export const UsersPage: React.FC = () => {
         </Modal>
       )}
     </div>
+  );
+};
+
+const ResetPasswordResultModal: React.FC<{ user: AdminUserRow; password: string; onClose: () => void }> = ({ user, password, onClose }) => {
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
+
+  async function copyPassword() {
+    setCopyError('');
+    try {
+      await navigator.clipboard.writeText(password);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopyError('Gagal menyalin password');
+    }
+  }
+
+  return (
+    <Modal title="Password Pembeli Di-reset" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-300">
+            <KeyRound className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-slate-800 dark:text-white">{user.name}</p>
+            <p className="mt-1 text-xs text-slate-400">{user.email}</p>
+          </div>
+        </div>
+        <Alert kind="success">Berikan password ini ke pembeli. Password hanya tampil di sini setelah reset berhasil.</Alert>
+        {copyError && <Alert>{copyError}</Alert>}
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Password Baru</label>
+          <div className="flex gap-2">
+            <Input readOnly value={password} className="font-mono font-semibold" />
+            <Button type="button" onClick={copyPassword}>
+              {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied ? 'Tersalin' : 'Salin'}
+            </Button>
+          </div>
+        </div>
+        <div className="flex justify-end border-t border-slate-100 pt-4 dark:border-slate-800">
+          <Button variant="secondary" onClick={onClose}>Tutup</Button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 
