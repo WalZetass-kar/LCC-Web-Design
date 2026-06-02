@@ -11,6 +11,14 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
+const rootDir = path.join(__dirname, '..');
+const electronBin = path.join(
+  rootDir,
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'electron.cmd' : 'electron',
+);
+
 const targets = [
   {
     name: 'better-sqlite3',
@@ -62,6 +70,22 @@ function nativeMatchesPlatform(magic) {
   return true; // platform lain → biarkan
 }
 
+function nativeLoadsInElectron(moduleName) {
+  if (!fs.existsSync(electronBin)) return false;
+
+  const res = spawnSync(
+    electronBin,
+    ['-e', `require(${JSON.stringify(moduleName)})`],
+    {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      encoding: 'utf8',
+      stdio: 'pipe',
+    },
+  );
+
+  return res.status === 0;
+}
+
 let needRebuild = false;
 for (const t of targets) {
   if (!fs.existsSync(t.file)) {
@@ -75,11 +99,19 @@ for (const t of targets) {
       `[ensure-native] ${t.name}: binary tidak cocok untuk ${process.platform} → akan rebuild`,
     );
     needRebuild = true;
+    continue;
+  }
+
+  if (!nativeLoadsInElectron(t.name)) {
+    console.log(
+      `[ensure-native] ${t.name}: binary tidak cocok dengan runtime Electron → akan rebuild`,
+    );
+    needRebuild = true;
   }
 }
 
 if (!needRebuild) {
-  console.log('[ensure-native] Native modules sudah cocok untuk', process.platform);
+  console.log('[ensure-native] Native modules sudah cocok untuk', process.platform, 'dan runtime Electron');
   process.exit(0);
 }
 

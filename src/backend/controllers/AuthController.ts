@@ -108,6 +108,8 @@ function toSession(user: AuthUserRecord, auth?: {
   remote_license_refresh_token?: string | null
   remote_customer_id?: string | null
   remote_auth_user_id?: string | null
+  remote_registration_status?: 'synced' | 'pending' | null
+  remote_registration_message?: string | null
 }) {
   const expiresAt = getEffectiveAccessExpiresAt(user)
   return {
@@ -127,6 +129,8 @@ function toSession(user: AuthUserRecord, auth?: {
     remote_license_refresh_token: auth?.remote_license_refresh_token ?? null,
     remote_customer_id: auth?.remote_customer_id ?? null,
     remote_auth_user_id: auth?.remote_auth_user_id ?? null,
+    remote_registration_status: auth?.remote_registration_status ?? null,
+    remote_registration_message: auth?.remote_registration_message ?? null,
   }
 }
 
@@ -401,10 +405,17 @@ async function loginRemoteBuyer(input: {
   const remote = await LicenseController.loginBuyer({ email, password: input.password }, input.device)
   if (!remote) return null
   if (!remote.success) {
+    const message = remote.message || 'Login pembeli ke license server pusat gagal'
+    if (message.toLowerCase().includes('tidak ditemukan') && input.existingUser?.nama_pengguna) {
+      sqlite.prepare(`DELETE FROM mediasoft_pengguna WHERE nama_pengguna = ? AND is_buyer = 1`).run(input.existingUser.nama_pengguna)
+    }
     return {
       success: false,
-      message: remote.message || 'Login pembeli ke license server pusat gagal',
-      data: remote.data,
+      message,
+      data: {
+        ...(remote.data as any),
+        error_code: (remote.data as any)?.error_code ?? (message.toLowerCase().includes('tidak ditemukan') ? 'NOT_FOUND' : undefined),
+      },
     }
   }
 
@@ -588,13 +599,6 @@ export class AuthController {
       return { success: false, message: 'Email valid wajib diisi untuk daftar akun trial' }
     }
 
-    const existingBuyer = sqlite
-      .prepare(`SELECT nama_pengguna FROM mediasoft_pengguna WHERE is_buyer = 1 LIMIT 1`)
-      .get() as { nama_pengguna?: string } | undefined
-    if (existingBuyer?.nama_pengguna) {
-      return { success: false, message: 'Akun pembeli trial sudah terdaftar. Silakan login atau upgrade akun yang sudah ada.' }
-    }
-
     if (PenggunaModel.findByUsername(username)) {
       return { success: false, message: 'Username sudah digunakan. Pilih username lain.' }
     }
@@ -616,9 +620,9 @@ export class AuthController {
       no_telp: noTelp || undefined,
     }, device)
     if (remoteRegistration && !remoteRegistration.success) {
-      return {
-        success: false,
-        message: remoteRegistration.message || 'Gagal daftar akun trial ke license server pusat',
+      const message = remoteRegistration.message || 'Gagal daftar akun trial ke license server pusat'
+      if (message.toLowerCase().includes('sudah terdaftar')) {
+        return { success: false, message }
       }
     }
 
@@ -677,7 +681,9 @@ export class AuthController {
 
     return {
       success: true,
-      message: 'Trial 3 hari aktif. Beberapa fitur premium dikunci sampai upgrade.',
+      message: remoteRegistration?.success
+        ? 'Trial 3 hari aktif. Beberapa fitur premium dikunci sampai upgrade.'
+        : `Trial lokal aktif. Supabase belum tersambung: ${remoteRegistration?.message || 'license server pusat tidak merespons'}`,
       data: toSession(user, {
         token: authSession.token,
         expires_at: authSession.expires_at,
@@ -686,6 +692,8 @@ export class AuthController {
         remote_license_refresh_token: remotePayload?.refresh_token ?? null,
         remote_customer_id: remotePayload?.customer?.id ?? null,
         remote_auth_user_id: remotePayload?.customer?.auth_user_id ?? null,
+        remote_registration_status: remoteRegistration?.success ? 'synced' : 'pending',
+        remote_registration_message: remoteRegistration?.success ? null : remoteRegistration?.message ?? null,
       }),
     }
   }
@@ -1171,7 +1179,7 @@ export class AuthController {
     if (user.is_buyer) {
       const remote = await LicenseController.syncBuyerLicense(username, device)
       const code = String((remote.data as any)?.error_code ?? '').toUpperCase()
-      if (!remote.success && ['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED', 'DEVICE_LIMIT'].includes(code)) {
+      if (!remote.success && ['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED', 'DEVICE_LIMIT', 'NOT_FOUND'].includes(code)) {
         ActivityLogModel.create({
           username,
           aktivitas: 'SESSION_RESTORE_REMOTE_BLOCKED',

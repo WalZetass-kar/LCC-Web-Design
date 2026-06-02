@@ -63,9 +63,18 @@ export const SkeletonChart = ({ className = '' }: { className?: string }) => (
 )
 
 export const SkeletonSpinner = ({ label = 'Memuat...' }: { label?: string }) => (
-  <div className="flex flex-col items-center justify-center py-12 space-y-4">
-    <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
-    <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
+  <div aria-label={label} className="space-y-3 py-4 animate-pulse">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <Skeleton className="h-24" />
+      <Skeleton className="h-24" />
+      <Skeleton className="h-24" />
+    </div>
+    <Skeleton className="h-64" />
+    <div className="space-y-2">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Skeleton key={i} className="h-10" />
+      ))}
+    </div>
   </div>
 )
 

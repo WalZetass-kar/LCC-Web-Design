@@ -30,6 +30,13 @@ interface FormState {
   access_expires_at: string
 }
 
+interface LocalSubscriptionStatus {
+  plan_name?: string | null
+  max_users?: number | null
+  feature_flags?: Record<string, boolean>
+  is_expired?: boolean
+}
+
 const EMPTY: FormState = {
   nama_pengguna: '',
   nama_lengkap: '',
@@ -124,6 +131,7 @@ export default function Users() {
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const [permissions, setPermissions] = useState<Record<string, boolean>>({})
   const [extendDays, setExtendDays] = useState('30')
+  const [subscriptionStatus, setSubscriptionStatus] = useState<LocalSubscriptionStatus | null>(null)
 
   const load = async () => {
     const r = await api<Pengguna[]>('user:getAll')
@@ -137,8 +145,24 @@ export default function Users() {
     load()
   }, [])
 
+  useEffect(() => {
+    if (!currentUser?.nama_pengguna) {
+      setSubscriptionStatus(null)
+      return
+    }
+    api<LocalSubscriptionStatus>('subscription:getStatus', currentUser.nama_pengguna).then(r => {
+      setSubscriptionStatus(r.success ? (r.data ?? null) : null)
+    })
+  }, [currentUser?.nama_pengguna])
+
   const openAdd = () => {
     if (guardPremiumFeature('multi_user', 'Tambah User')) return
+    if (multiUserLocked) {
+      return toast('Paket saat ini belum mengaktifkan multi-user. Aktifkan fitur multi_user di Developer Panel -> Paket.', 'error')
+    }
+    if (userLimitReached) {
+      return toast(`Limit pengguna lokal paket sudah penuh (${localManagedCount}/${limitText}). Ubah Max User di Developer Panel -> Paket untuk menambah kasir lagi.`, 'error')
+    }
     setPermissions(getDefaultPermissions())
     setForm({ ...EMPTY }); setModal('add')
   }
@@ -403,6 +427,13 @@ export default function Users() {
   const f = (k: keyof FormState, v: string) =>
     setForm(prev => ({ ...prev, [k]: v }))
   const formHasUnlimitedAccess = isPrivilegedRole(form.hak_akses)
+  const currentUserBypassesPlan = currentUser?.hak_akses === 'developer' || currentUser?.hak_akses === 'super_admin'
+  const isCurrentPlanManaged = !currentUserBypassesPlan && Boolean(currentUser?.subscription_plan_id || subscriptionStatus?.plan_name)
+  const localManagedCount = data.filter(row => row.hak_akses !== 'developer').length
+  const maxLocalUsers = subscriptionStatus?.max_users ?? null
+  const limitText = maxLocalUsers === -1 ? 'Unlimited' : maxLocalUsers === null || maxLocalUsers === undefined ? '-' : String(maxLocalUsers)
+  const userLimitReached = isCurrentPlanManaged && maxLocalUsers !== null && maxLocalUsers !== -1 && localManagedCount >= maxLocalUsers
+  const multiUserLocked = isCurrentPlanManaged && subscriptionStatus?.feature_flags?.multi_user === false
 
   // Group permission menus by group label
   const permGroups = MENU_GROUPS.map(g => ({
@@ -470,8 +501,22 @@ export default function Users() {
       ) : (
         <>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} user terdaftar</p>
-            <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah User</Button>
+            <div>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} user terdaftar</p>
+              {isCurrentPlanManaged && (
+                <p className={`text-xs mt-0.5 ${userLimitReached || multiUserLocked ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                  Pengguna lokal perangkat ini: {localManagedCount}/{limitText} termasuk owner
+                  {subscriptionStatus?.plan_name ? ` - Paket ${subscriptionStatus.plan_name}` : ''}
+                  {multiUserLocked ? ' - multi-user terkunci' : ''}
+                </p>
+              )}
+              {currentUser?.hak_akses === 'admin' && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
+                  <span>🔒</span> Pengguna bersifat lokal — hanya berlaku di perangkat ini
+                </p>
+              )}
+            </div>
+            <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Pengguna</Button>
           </div>
           <Card>
             <DataTable data={data} columns={columns} searchPlaceholder="Cari user..." />
@@ -516,12 +561,14 @@ export default function Users() {
                   !isPrivilegedRole(currentUser?.hak_akses)
                 )
               }
-              className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="kasir">Kasir</option>
               <option value="operator">Operator</option>
               <option value="admin">Admin</option>
-              <option value="developer">Developer</option>
+              {(currentUser?.hak_akses === 'developer' || currentUser?.hak_akses === 'super_admin') && (
+                <option value="developer">Developer</option>
+              )}
             </select>
           </div>
           <Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} />

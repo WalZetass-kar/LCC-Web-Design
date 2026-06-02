@@ -43,7 +43,7 @@ export function useKeyboardShortcuts() {
         navigate('/settings')
       } else if (e.key === 'F10') {
         e.preventDefault()
-        navigate('/dashboard')
+        navigate('/')
       }
     }
 

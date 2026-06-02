@@ -1,0 +1,152 @@
+import { useEffect, useState, useRef } from 'react'
+import { type ColumnDef } from '@tanstack/react-table'
+import { Eye, Printer } from 'lucide-react'
+import Card from '../components/Card'
+import Button from '../components/Button'
+import Modal from '../components/Modal'
+import Badge from '../components/Badge'
+import DataTable from '../components/DataTable'
+import Struk from '../components/Struk'
+import { SkeletonPage } from '../components/Skeleton'
+import { api } from '../utils/api'
+import { formatRupiah, formatDateTime } from '../utils/format'
+import { useReactToPrint } from 'react-to-print'
+import type { Penjualan, PenjualanDetailItem } from '../../shared/types'
+
+export default function Riwayat() {
+  const [data, setData] = useState<Penjualan[]>([])
+  const [detail, setDetail] = useState<{ header: Penjualan; details: PenjualanDetailItem[] } | null>(null)
+  const [loadingData, setLoadingData] = useState(true)
+  const strukRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    api<Penjualan[]>('penjualan:getAll').then(r => {
+      if (r.success) setData(r.data ?? [])
+      setLoadingData(false)
+    })
+  }, [])
+
+  const openDetail = async (kd: string) => {
+    const r = await api<{ header: Penjualan; details: PenjualanDetailItem[] }>('penjualan:getDetail', kd)
+    if (r.success && r.data) setDetail(r.data)
+  }
+
+  const handlePrint = useReactToPrint({ content: () => strukRef.current })
+
+  // Convert detail items to CartItem format for Struk
+  const cartItems = detail?.details.map(d => ({
+    kd_barang: d.kd_barang ?? '',
+    nama_barang: d.nama_barang ?? '',
+    harga_jual: d.harga_jual ?? 0,
+    harga_modal: 0,
+    qty: d.qty ?? 0,
+    disc: d.disc ?? 0,
+  })) ?? []
+
+  const columns: ColumnDef<Penjualan>[] = [
+    { accessorKey: 'kd_tansaksi_jual', header: 'No. Transaksi' },
+    {
+      accessorKey: 'tgl_wkt_transaksi', header: 'Tanggal',
+      cell: ({ getValue }) => formatDateTime(getValue() as string),
+    },
+    { accessorKey: 'username_transaksi', header: 'Kasir' },
+    { accessorKey: 'total_qty', header: 'Qty', size: 60 },
+    {
+      accessorKey: 'sub_total', header: 'Total',
+      cell: ({ getValue }) => <span className="font-semibold text-primary-600 dark:text-primary-400">{formatRupiah(getValue() as number)}</span>,
+    },
+    {
+      accessorKey: 'jenis_pembayaran', header: 'Pembayaran',
+      cell: ({ getValue }) => <Badge label={String(getValue())} variant={getValue() === 'TUNAI' ? 'green' : 'blue'} />,
+    },
+    {
+      id: 'actions', header: 'Detail',
+      cell: ({ row }) => (
+        <button onClick={() => openDetail(row.original.kd_tansaksi_jual)} className="p-1.5 rounded-lg hover:bg-primary-50 dark:hover:bg-slate-700 text-primary-500 transition-colors">
+          <Eye size={14} />
+        </button>
+      ),
+    },
+  ]
+
+  return (
+    <div className="space-y-4">
+      {loadingData ? (
+        <SkeletonPage rows={6} />
+      ) : (
+        <>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{data.length} transaksi tercatat</p>
+          <Card>
+            <DataTable data={data} columns={columns} searchPlaceholder="Cari transaksi..." />
+          </Card>
+        </>
+      )}
+
+      <Modal
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        title={`Detail: ${detail?.header.kd_tansaksi_jual}`}
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDetail(null)} className="w-full sm:w-auto">Tutup</Button>
+            <Button icon={<Printer size={14} />} onClick={handlePrint} className="w-full sm:w-auto">Cetak Ulang Struk</Button>
+          </>
+        }
+      >
+        {detail && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div><span className="text-slate-400">Tanggal:</span> <span className="font-medium">{formatDateTime(detail.header.tgl_wkt_transaksi)}</span></div>
+              <div><span className="text-slate-400">Kasir:</span> <span className="font-medium">{detail.header.username_transaksi}</span></div>
+              <div><span className="text-slate-400">Pembayaran:</span> <Badge label={detail.header.jenis_pembayaran ?? '-'} variant="blue" /></div>
+              <div><span className="text-slate-400">Kembalian:</span> <span className="font-medium">{formatRupiah(detail.header.kembalian)}</span></div>
+            </div>
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <table className="w-full text-sm border-t border-slate-100 dark:border-slate-700 pt-3">
+                <thead>
+                  <tr className="text-xs text-slate-400 uppercase">
+                    <th className="text-left py-2 px-2 sm:px-0">Produk</th>
+                    <th className="text-right py-2 px-2 sm:px-0">Harga</th>
+                    <th className="text-right py-2 px-2 sm:px-0">Qty</th>
+                    <th className="text-right py-2 px-2 sm:px-0">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                  {detail.details.map((d, i) => (
+                    <tr key={d.kd_trans_jual_detail} className={i % 2 === 1 ? 'bg-slate-50/50 dark:bg-slate-800/30' : ''}>
+                      <td className="py-2 px-2 sm:px-0">{d.nama_barang ?? d.kd_barang}</td>
+                      <td className="py-2 text-right px-2 sm:px-0">{formatRupiah(d.harga_jual)}</td>
+                      <td className="py-2 text-right px-2 sm:px-0">{d.qty}</td>
+                      <td className="py-2 text-right font-semibold px-2 sm:px-0">{formatRupiah(d.total_harga_jual)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-bold text-primary-600 dark:text-primary-400">
+                    <td colSpan={3} className="pt-3 text-right px-2 sm:px-0">Total</td>
+                    <td className="pt-3 text-right px-2 sm:px-0">{formatRupiah(detail.header.sub_total)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Hidden print target */}
+            <div className="hidden">
+              <div ref={strukRef}>
+                <Struk
+                  cart={cartItems}
+                  subTotal={detail.header.sub_total ?? 0}
+                  bayar={detail.header.yang_dibayar ?? 0}
+                  kembalian={detail.header.kembalian ?? 0}
+                  kdTransaksi={detail.header.kd_tansaksi_jual}
+                  jenisBayar={detail.header.jenis_pembayaran ?? 'TUNAI'}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  )
+}

@@ -1,0 +1,126 @@
+apply plugin: 'com.android.application'
+
+def envOrProp = { key ->
+    return project.findProperty(key) ?: System.getenv(key)
+}
+
+def releaseStoreFilePath = envOrProp('MEDIASOFT_RELEASE_STORE_FILE')
+def releaseStorePassword = envOrProp('MEDIASOFT_RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = envOrProp('MEDIASOFT_RELEASE_KEY_ALIAS') ?: 'mediasoft-pos-zetass'
+def releaseKeyPassword = envOrProp('MEDIASOFT_RELEASE_KEY_PASSWORD') ?: releaseStorePassword
+def hasReleaseSigning = releaseStoreFilePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+def defaultPinnedDomain = 'azhkvmkmimepmflzqqty.supabase.co'
+def defaultCertPinSha256 = 'p51goejPCgGH+Oog/MU2k6PObcEfTrrr73jUcuWJ7w0='
+def pinnedDomain = envOrProp('MEDIASOFT_PINNED_DOMAIN') ?: defaultPinnedDomain
+def certPinSha256 = envOrProp('MEDIASOFT_CERT_PIN_SHA256') ?: envOrProp('VITE_CERT_PIN_SHA256') ?: defaultCertPinSha256
+def isReleaseRequested = {
+    gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+}
+def allowLanHttp = {
+    def raw = envOrProp('MEDIASOFT_ALLOW_LAN_HTTP')
+    return raw == null ? !isReleaseRequested() : raw.toString().toBoolean()
+}
+
+android {
+    namespace = "com.mediasoft.pos.zetass"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.mediasoft.pos.zetass"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 2
+        versionName "2.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseStoreFilePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+tasks.register('validateReleaseSecurityConfig') {
+    doLast {
+        def releaseRequested = isReleaseRequested()
+        if (releaseRequested && !allowLanHttp() && (!pinnedDomain || !certPinSha256)) {
+            throw new GradleException('Release build wajib mengisi MEDIASOFT_PINNED_DOMAIN dan MEDIASOFT_CERT_PIN_SHA256 untuk certificate pinning endpoint kritis.')
+        }
+    }
+}
+
+tasks.register('generateNetworkSecurityConfig') {
+    doLast {
+        def xmlFile = file('src/main/res/xml/network_security_config.xml')
+        def cleartextPermitted = allowLanHttp() ? 'true' : 'false'
+        def pinningBlock = (pinnedDomain && certPinSha256) ? """
+    <domain-config cleartextTrafficPermitted=\"false\">
+        <domain includeSubdomains=\"true\">${pinnedDomain}</domain>
+        <pin-set expiration=\"2028-12-31\">
+            <pin digest=\"SHA-256\">${certPinSha256}</pin>
+        </pin-set>
+    </domain-config>""" : ''
+        xmlFile.text = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted=\"${cleartextPermitted}\">
+        <trust-anchors>
+            <certificates src=\"system\" />
+        </trust-anchors>
+    </base-config>${pinningBlock}
+</network-security-config>
+"""
+    }
+}
+
+generateNetworkSecurityConfig.mustRunAfter validateReleaseSecurityConfig
+preBuild.dependsOn validateReleaseSecurityConfig, generateNetworkSecurityConfig
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation "com.google.errorprone:error_prone_annotations:2.28.0"
+    implementation "com.google.code.findbugs:jsr305:3.0.2"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

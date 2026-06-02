@@ -8,6 +8,7 @@ import Badge from '../components/Badge'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { SkeletonPage } from '../components/Skeleton'
+import AdvancedInventory from './AdvancedInventory'
 
 interface Branch {
   id: number
@@ -19,15 +20,36 @@ interface Branch {
   is_active: number
 }
 
+interface BranchStock {
+  id: number
+  branch_name: string
+  nama_barang: string
+  kd_barang: string
+  jumlah: number
+}
+
+interface BranchTransfer {
+  id: number
+  nama_barang: string
+  kd_barang: string
+  from_branch: string
+  to_branch: string
+  qty: number
+  created_at: string
+}
+
 export default function Branch() {
   const toast = useToast()
   const [branches, setBranches] = useState<Branch[]>([])
-  const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [modal, setModal] = useState<'add' | 'edit' | 'transfer' | null>(null)
   const [selected, setSelected] = useState<Branch | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<Branch | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [stockRows, setStockRows] = useState<BranchStock[]>([])
+  const [transferRows, setTransferRows] = useState<BranchTransfer[]>([])
   const [form, setForm] = useState({
     code: '',
     name: '',
@@ -44,14 +66,22 @@ export default function Branch() {
     notes: '',
   })
 
-  const load = async () => {
-    setLoading(true)
-    const r = await api<Branch[]>('branch:getAll')
+  const load = async (isInitial = false) => {
+    if (isInitial) setInitialLoading(true)
+    else setRefreshing(true)
+    const [r, stockRes, transferRes] = await Promise.all([
+      api<Branch[]>('branch:getAll'),
+      api<BranchStock[]>('branch:getStockSummary'),
+      api<BranchTransfer[]>('branch:getTransferHistory', 30),
+    ])
     if (r.success) setBranches(r.data ?? [])
-    setLoading(false)
+    if (stockRes.success) setStockRows(stockRes.data ?? [])
+    if (transferRes.success) setTransferRows(transferRes.data ?? [])
+    if (isInitial) setInitialLoading(false)
+    else setRefreshing(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(true) }, [])
 
   const resetForm = () => {
     setForm({ code: '', name: '', address: '', phone: '', is_warehouse: 0, is_active: 1 })
@@ -87,7 +117,7 @@ export default function Branch() {
       if (r.success) {
         toast('Cabang berhasil ditambahkan')
         setModal(null)
-        load()
+        load(false)
       } else {
         toast(r.message as string, 'error')
       }
@@ -97,7 +127,7 @@ export default function Branch() {
       if (r.success) {
         toast('Cabang berhasil diperbarui')
         setModal(null)
-        load()
+        load(false)
       } else {
         toast(r.message as string, 'error')
       }
@@ -109,7 +139,7 @@ export default function Branch() {
     const r = await api('branch:update', branch.id, { is_active: newStatus })
     if (r.success) {
       toast(`Cabang ${newStatus === 1 ? 'diaktifkan' : 'dinonaktifkan'}`)
-      load()
+      load(false)
     } else {
       toast(r.message as string, 'error')
     }
@@ -123,7 +153,7 @@ export default function Branch() {
     if (r.success) {
       toast('Cabang berhasil dihapus')
       setDeleteConfirm(null)
-      load()
+      load(false)
     } else {
       toast(r.message as string, 'error')
     }
@@ -150,12 +180,13 @@ export default function Branch() {
     if (r.success) {
       toast('Transfer stok berhasil')
       setModal(null)
+      load(false)
     } else {
       toast(r.message as string, 'error')
     }
   }
 
-  if (loading) return <SkeletonPage rows={5} />
+  if (initialLoading) return <SkeletonPage rows={5} />
 
   const outlets = branches.filter(b => !b.is_warehouse)
   const warehouses = branches.filter(b => b.is_warehouse)
@@ -166,7 +197,8 @@ export default function Branch() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Building2 className="text-primary-500" size={28} />
-            Kelola Cabin & Gudang
+            Kelola Cabang & Gudang
+            {refreshing && <span className="ml-2 h-4 w-4 border-2 border-primary-400 border-t-transparent rounded-full animate-spin inline-block" />}
           </h1>
           <p className="text-slate-600 dark:text-slate-400">Kelola cabang toko dan gudang</p>
         </div>
@@ -175,7 +207,7 @@ export default function Branch() {
             Transfer Stok
           </Button>
           <Button onClick={openAdd} icon={<Plus size={16} />} className="w-full sm:w-auto">
-            Tambah Cabin
+            Tambah Cabang
           </Button>
         </div>
       </div>
@@ -278,11 +310,69 @@ export default function Branch() {
         </div>
       </Card>
 
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card title="Saldo Stok per Cabang" subtitle="Saldo ini dipakai untuk transfer antar cabang.">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase text-slate-500 text-left">
+                <tr>
+                  <th className="px-3 py-2">Cabang</th>
+                  <th>Produk</th>
+                  <th className="text-right pr-3">Stok</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {stockRows.length === 0 ? (
+                  <tr><td colSpan={3} className="py-8 text-center text-slate-400">Belum ada saldo stok cabang</td></tr>
+                ) : stockRows.slice(0, 12).map(row => (
+                  <tr key={row.id}>
+                    <td className="px-3 py-2">{row.branch_name || '-'}</td>
+                    <td>{row.nama_barang || row.kd_barang}</td>
+                    <td className="text-right pr-3 font-semibold">{row.jumlah}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card title="Histori Transfer Cabang">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-xs uppercase text-slate-500 text-left">
+                <tr>
+                  <th className="px-3 py-2">Produk</th>
+                  <th>Dari</th>
+                  <th>Ke</th>
+                  <th>Qty</th>
+                  <th>Tanggal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {transferRows.length === 0 ? (
+                  <tr><td colSpan={5} className="py-8 text-center text-slate-400">Belum ada transfer cabang</td></tr>
+                ) : transferRows.map(row => (
+                  <tr key={row.id}>
+                    <td className="px-3 py-2">{row.nama_barang || row.kd_barang}</td>
+                    <td>{row.from_branch || '-'}</td>
+                    <td>{row.to_branch || '-'}</td>
+                    <td>{row.qty}</td>
+                    <td className="text-xs text-slate-500">{new Date(row.created_at).toLocaleString('id-ID')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+
+      <AdvancedInventory embedded />
+
       {/* Add/Edit Modal */}
       <Modal
         open={!!modal && modal !== 'transfer'}
         onClose={() => setModal(null)}
-        title={modal === 'add' ? 'Tambah Cabin/Gudang' : 'Edit Cabin/Gudang'}
+        title={modal === 'add' ? 'Tambah Cabang/Gudang' : 'Edit Cabang/Gudang'}
         size="md"
         footer={
           <>
@@ -327,7 +417,7 @@ export default function Branch() {
                 onChange={() => setForm({ ...form, is_warehouse: 0 })}
                 className="w-4 h-4 text-primary-500"
               />
-              <span className="text-sm">Cabang Toko</span>
+              <span className="text-sm text-slate-700 dark:text-slate-200">Cabang Toko</span>
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -337,7 +427,7 @@ export default function Branch() {
                 onChange={() => setForm({ ...form, is_warehouse: 1 })}
                 className="w-4 h-4 text-primary-500"
               />
-              <span className="text-sm">Gudang</span>
+              <span className="text-sm text-slate-700 dark:text-slate-200">Gudang</span>
             </label>
           </div>
         </div>
@@ -347,7 +437,7 @@ export default function Branch() {
       <Modal
         open={modal === 'transfer'}
         onClose={() => setModal(null)}
-        title="Transfer Stok Antar Cabin"
+        title="Transfer Stok Antar Cabang"
         size="md"
         footer={
           <>
@@ -358,11 +448,11 @@ export default function Branch() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Dari Cabin/Gudang *</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Dari Cabang/Gudang *</label>
             <select
               value={transferForm.from_branch_id}
               onChange={e => setTransferForm({ ...transferForm, from_branch_id: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="">Pilih asal...</option>
               {branches.filter(b => b.is_active).map(b => (
@@ -371,11 +461,11 @@ export default function Branch() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Ke Cabin/Gudang *</label>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Ke Cabang/Gudang *</label>
             <select
               value={transferForm.to_branch_id}
               onChange={e => setTransferForm({ ...transferForm, to_branch_id: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="">Pilih tujuan...</option>
               {branches.filter(b => b.is_active && b.id !== parseInt(transferForm.from_branch_id || '0')).map(b => (
@@ -411,7 +501,7 @@ export default function Branch() {
       <Modal
         open={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}
-        title="Hapus Cabin/Gudang"
+        title="Hapus Cabang/Gudang"
         size="sm"
         footer={
           <>

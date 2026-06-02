@@ -62,8 +62,8 @@ Fitur promo digunakan untuk membuat kode diskon yang dapat digunakan oleh pelang
 - Sistem akan menghitung diskon otomatis`
         },
         {
-          title: 'Mengelola Cabin dan Gudang',
-          content: `## Cabin dan Gudang (Multi-branch)
+          title: 'Mengelola Cabang dan Gudang',
+          content: `## Cabang dan Gudang (Multi-branch)
 
 Fitur ini digunakan untuk mengelola beberapa cabang toko dan gudang.
 
@@ -71,21 +71,21 @@ Fitur ini digunakan untuk mengelola beberapa cabang toko dan gudang.
 - **Cabang Toko** - Lokasi penjualan retail
 - **Gudang** - Lokasi penyimpanan stok
 
-### Cara Menambah Cabin/Gudang:
-- Buka menu **Cabin/Gudang** dari sidebar
-- Klik **Tambah Cabin**
+### Cara Menambah Cabang/Gudang:
+- Buka menu **Cabang/Gudang** dari sidebar
+- Klik **Tambah Cabang**
 - Masukkan kode dan nama lokasi
 - Pilih tipe (Cabang atau Gudang)
 - Klik **Simpan**
 
-### Transfer Stok Antar Cabin:
+### Transfer Stok Antar Cabang:
 - Klik tombol **Transfer Stok**
 - Pilih lokasi asal dan tujuan
 - Masukkan kode produk dan jumlah
 - Klik **Transfer**
 
 ### Tips:
-- Stok di setiap cabin dapat dilihat secara terpisah
+- Stok di setiap cabang dapat dilihat secara terpisah
 - Transfer stok akan mengurangi stok di asal dan menambah di tujuan`
         },
         {

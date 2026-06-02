@@ -6,6 +6,7 @@ import { migrate, seed } from './migrations';
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 import adminRoutes from './routes/adminRoutes';
+import { db } from './db';
 
 const app = express();
 
@@ -25,6 +26,14 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
 app.use('/api/auth', authLimiter);
 
 app.get('/api/health', (_req, res) => res.json({ success: true, time: new Date().toISOString() }));
+app.get('/api/plans', (_req, res) => {
+  try {
+    const plans = db.prepare(`SELECT * FROM plans ORDER BY sort_order, id`).all();
+    res.json({ success: true, data: plans });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Gagal memuat plans' });
+  }
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);

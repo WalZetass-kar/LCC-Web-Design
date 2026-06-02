@@ -15,9 +15,63 @@ Saat aplikasi pertama dibuka, database disalin otomatis ke folder writable:
 Migrasi tetap dijalankan otomatis pada startup melalui `src/database/connection.ts`
 dan `src/backend/utils/dbInit.ts`.
 
+Backup desktop juga disimpan di folder data aplikasi saat packaged, bukan di
+folder instalasi:
+
+- Windows: `%APPDATA%/MediaSoft POS Zetass v2.0/backups`
+- Linux: `~/.config/MediaSoft POS Zetass v2.0/backups`
+- macOS: `~/Library/Application Support/MediaSoft POS Zetass v2.0/backups`
+
+Mobile memakai Capacitor SQLite/local storage bridge di
+`src/renderer/utils/sqlitePersistence.ts` dan file backup melalui Capacitor
+Filesystem.
+
+## Preflight Resource
+
+Sebelum packaging, jalankan:
+
+```bash
+npm run verify:build-resources
+```
+
+Preflight ini memastikan resource wajib tersedia:
+
+- `sistem_pos.db`
+- `migrations/`
+- `.env.production`
+- `build/icon.png`
+- `build/icon.ico`
+- `src/renderer/assets/`
+- konfigurasi Electron Builder di `package.json`
+- konfigurasi Capacitor di `capacitor.config.ts`
+- project Android dan iOS Capacitor
+
+Electron Builder memasukkan resource berikut ke package desktop:
+
+- `sistem_pos.db` ke `resources/sistem_pos.db`
+- `migrations/` ke `resources/migrations`
+- `build/icon.png` ke `resources/app-icon.png`
+- `build/icon.ico` ke `resources/app-icon.ico`
+- `src/renderer/assets/` ke `resources/renderer-assets`
+- `.env.production` ke `resources/.env.production`
+
 ## Desktop
 
 Build desktop memakai Electron Builder.
+
+```bash
+npm run build:desktop:windows
+npm run build:desktop:linux
+npm run build:desktop:mac
+```
+
+Output:
+
+- Windows: `release/*.exe` installer NSIS, `release/*.msi`, dan `release/*.zip`
+- Linux: `release/*.AppImage` dan `release/*.deb`
+- macOS: `release/*.dmg` dan `release/*.zip`
+
+Alias lama masih tersedia:
 
 ```bash
 npm run desktop:win
@@ -32,8 +86,18 @@ Catatan:
 - macOS `.dmg` final harus dibuat di macOS, lalu code signing dan notarization.
 - Linux menghasilkan AppImage dan deb.
 - `desktop:all:ci` disediakan untuk CI matrix, bukan pengganti signing per OS.
+- Setelah install, database runtime tetap berada di folder data aplikasi.
+- Uninstall NSIS tidak menghapus app data karena `deleteAppDataOnUninstall`
+  diset `false`.
 - Desktop mendaftarkan deep link `mediasoftposzetass://...`, membatasi external link ke HTTPS,
   dan melakukan certificate pinning untuk endpoint Supabase/license utama.
+
+Menjalankan hasil build:
+
+- Windows: buka installer `.exe` dari `release/`, lalu jalankan dari Start Menu.
+- Linux AppImage: beri izin eksekusi jika perlu, lalu jalankan file AppImage.
+- Linux deb: install dengan package manager, lalu jalankan aplikasi dari launcher.
+- macOS: buka `.dmg`, drag aplikasi ke Applications, lalu jalankan.
 
 ## Android
 
@@ -42,6 +106,14 @@ Debug APK:
 ```bash
 npm run android:debug
 ```
+
+Build mobile Android lengkap memakai alias:
+
+```bash
+npm run build:mobile:android
+```
+
+Alias tersebut menjalankan release APK dan AAB. Jika hanya butuh salah satu:
 
 Release APK:
 
@@ -67,6 +139,16 @@ MEDIASOFT_ALLOW_LAN_HTTP=true npm run android:release
 
 Output release disalin ke folder `release/`.
 
+Output native Gradle tetap tersedia di:
+
+- APK: `android/app/build/outputs/apk/release/app-release.apk`
+- AAB: `android/app/build/outputs/bundle/release/app-release.aab`
+
+Script `scripts/build-android.cjs` menyalin hasil final menjadi:
+
+- `release/MediaSoft POS Zetass v2.0.apk`
+- `release/MediaSoft POS Zetass v2.0.aab`
+
 ## iOS
 
 iOS menggunakan Capacitor. Platform iOS hanya dapat di-build final di macOS
@@ -79,6 +161,12 @@ npm run ios:add
 ```
 
 Sync web assets ke project iOS:
+
+```bash
+npm run build:mobile:ios
+```
+
+Alias lama:
 
 ```bash
 npm run ios:sync
@@ -100,6 +188,25 @@ Di Xcode:
 Konfigurasi iOS sudah memuat privacy usage text untuk kamera, Bluetooth printer,
 file backup/export, local network sync, deep link `mediasoftposzetass://...`,
 ATS HTTPS-only, dan pinning SPKI untuk endpoint Supabase/license utama.
+
+Project Xcode berada di:
+
+```bash
+ios/App/App.xcodeproj
+```
+
+## Application Split
+
+Routing utama sekarang dipisah:
+
+- `/app` untuk User Panel / POS operasional.
+- `/developer` untuk Developer Panel.
+- `/login` untuk login utama.
+- `/license` diarahkan ke alur pembayaran/aktivasi lisensi di User Panel.
+
+Route Developer Panel dilindungi RBAC di frontend dan channel administrasi
+dilindungi di backend IPC guard. Link menu Developer Panel hanya tampil untuk
+role developer/super admin.
 
 ## Backend Production
 

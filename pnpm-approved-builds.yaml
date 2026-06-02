@@ -1,0 +1,7 @@
+better-sqlite3@11.10.0: true
+core-js@3.49.0: true
+electron@31.7.7: true
+esbuild@0.18.20: true
+esbuild@0.19.12: true
+esbuild@0.21.5: true
+lzma-native@8.0.6: true

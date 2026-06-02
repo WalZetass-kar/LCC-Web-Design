@@ -207,6 +207,19 @@ const ALLOWED_CHANNELS = new Set([
   'payment:createQris',
   'payment:checkStatus',
   'payment:cancelQris',
+  'payment:getGatewaySettings',
+  'payment:saveGatewaySettings',
+  'payment:getQrisSessions',
+  'payment:markQrisPaid',
+
+  // Accounting
+  'accounting:getSummary',
+  'accounting:getAccounts',
+  'accounting:saveAccount',
+  'accounting:deleteAccount',
+  'accounting:getJournalEntries',
+  'accounting:createJournalEntry',
+  'accounting:getTrialBalance',
 
   // Tax
   'tax:getActive',
@@ -316,6 +329,8 @@ const ALLOWED_CHANNELS = new Set([
   'branch:getActive',
   'branch:getWarehouses',
   'branch:getById',
+  'branch:getStockSummary',
+  'branch:getTransferHistory',
   'branch:create',
   'branch:update',
   'branch:delete',
@@ -341,11 +356,22 @@ const ALLOWED_CHANNELS = new Set([
   // Inventory / Warehouse
   'warehouse:getAll',
   'warehouse:create',
+  'warehouse:update',
+  'warehouse:delete',
   'inventory:getBatches',
   'inventory:addBatch',
+  'inventory:updateBatch',
+  'inventory:deleteBatch',
   'inventory:getSerials',
   'inventory:addSerial',
+  'inventory:updateSerial',
+  'inventory:deleteSerial',
   'inventory:transfer',
+  'inventory:getWarehouseStock',
+  'inventory:getTransfers',
+
+  // Owner dashboard
+  'ownerDashboard:getInsights',
 
   // Audit Trail
   'audit:getAll',
@@ -374,6 +400,13 @@ const ALLOWED_CHANNELS = new Set([
   'ecommerce:saveIntegration',
   'ecommerce:syncNow',
   'ecommerce:enqueueStockUpdate',
+  // Marketplace
+  'marketplace:getChannels',
+  'marketplace:saveChannel',
+  'marketplace:deleteChannel',
+  'marketplace:getSkuMap',
+  'marketplace:saveSkuMap',
+  'marketplace:runStockSync',
   // Device Tracking
   'device:getAll',
   'device:getByUser',
@@ -403,6 +436,7 @@ const ALLOWED_CHANNELS = new Set([
   'license:createManualPaymentRequest',
   'license:getPaymentStatus',
   'license:getPublicPlans',
+  'license:getPublicPopup',
   'license:getUsers',
   'license:createUser',
   'license:updateUser',

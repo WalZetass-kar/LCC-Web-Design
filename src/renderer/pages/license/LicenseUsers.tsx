@@ -425,7 +425,7 @@ function PlanAccessPreview({ plan, compact = false }: { plan?: PlanRow; compact?
         <div><span className="text-slate-400">Device:</span> <b>{planLimitLabel(plan.max_devices)}</b></div>
         <div><span className="text-slate-400">Transaksi:</span> <b>{planLimitLabel(plan.max_transactions_per_day)}</b></div>
         <div><span className="text-slate-400">Produk:</span> <b>{planLimitLabel(plan.max_products)}</b></div>
-        <div><span className="text-slate-400">User:</span> <b>{planLimitLabel(plan.max_users)}</b></div>
+        <div><span className="text-slate-400">Pengguna:</span> <b>{planLimitLabel(plan.max_users)}</b></div>
       </div>
 
       <div className="mt-3">

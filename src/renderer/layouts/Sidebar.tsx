@@ -1,15 +1,19 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import {
-  LayoutDashboard, Package, Tag, ShoppingCart, History, Settings, LogOut, Truck, X,
-  Users, UserCircle, Wallet, FileText, BarChart2, Database, ShoppingBag, Activity,
-  RotateCcw, Clock, DollarSign, ClipboardCheck, Rocket, BookOpen, Calculator, Ruler, Gift, Building2, Shield, Award, MessageCircle, Printer, Globe, ChevronLeft, ChevronRight, ShieldCheck
+  Activity, Award, BarChart2, BookOpen, BookOpenCheck, Bot, Building2,
+  Calculator, ChevronLeft, ChevronRight, ClipboardCheck, Clock, CreditCard,
+  Crown, Database, DollarSign, Gift, Globe, History, LayoutDashboard, LogOut,
+  MessageCircle, Package, Printer, Rocket, RotateCcw, Ruler, Settings, Shield,
+  ShieldCheck, ShoppingBag, ShoppingCart, Store, Tag, Truck, UserCircle, Users,
+  Wallet, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
 import { api } from '../utils/api'
 import appLogo from '../assets/app-logo.png'
+import { canOpenDeveloperPanel, hasRole, type AppRole } from '../../shared/config/rbac'
 
 export interface MenuItem {
   to: string
@@ -18,6 +22,7 @@ export interface MenuItem {
   code: string
   adminOnly?: boolean
   feature?: string
+  roles?: AppRole[]
 }
 
 interface MenuGroup {
@@ -30,6 +35,7 @@ export const MENU_GROUPS: MenuGroup[] = [
     label: 'Utama',
     items: [
       { to: '/', icon: LayoutDashboard, label: 'Dashboard', code: 'nav_dashboard' },
+      { to: '/assistant', icon: Bot, label: 'Asisten AI', code: 'nav_dashboard' },
       { to: '/transaksi', icon: ShoppingCart, label: 'Kasir', code: 'nav_penjualan' },
       { to: '/riwayat', icon: History, label: 'Riwayat', code: 'nav_penjualan' },
     ],
@@ -42,7 +48,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       { to: '/satuan', icon: Ruler, label: 'Satuan', code: 'nav_barang' },
       { to: '/pembelian', icon: ShoppingBag, label: 'Pembelian', code: 'nav_pembelian' },
       { to: '/stock-opname', icon: ClipboardCheck, label: 'Stok Opname', code: 'nav_barang', feature: 'stock_opname' },
-      { to: '/branch', icon: Building2, label: 'Cabang/Gudang', code: 'nav_branch', adminOnly: true, feature: 'multi_branch' },
+      { to: '/branch', icon: Building2, label: 'Cabang/Gudang', code: 'nav_branch', roles: ['developer', 'super_admin', 'admin'], feature: 'multi_branch' },
     ],
   },
   {
@@ -57,9 +63,11 @@ export const MENU_GROUPS: MenuGroup[] = [
     label: 'Keuangan',
     items: [
       { to: '/kas', icon: Wallet, label: 'Kas', code: 'nav_pembelian' },
+      { to: '/accounting', icon: BookOpenCheck, label: 'Akuntansi', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'], feature: 'reports' },
       { to: '/shifts', icon: Clock, label: 'Shift', code: 'nav_pembelian', feature: 'shift_management' },
       { to: '/debts', icon: DollarSign, label: 'Hutang/Piutang', code: 'nav_pembelian', feature: 'debt_management' },
       { to: '/payment', icon: DollarSign, label: 'Pembayaran Lisensi', code: 'nav_plans' },
+      { to: '/payment-automation', icon: CreditCard, label: 'Pembayaran Digital', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
       { to: '/returns', icon: RotateCcw, label: 'Return', code: 'nav_penjualan', feature: 'return_refund' },
       { to: '/promo', icon: Gift, label: 'Promo', code: 'nav_promo' },
       { to: '/laporan', icon: BarChart2, label: 'Laporan', code: 'nav_pembelian', feature: 'reports' },
@@ -77,19 +85,20 @@ export const MENU_GROUPS: MenuGroup[] = [
   {
     label: 'Administrasi',
     items: [
-      { to: '/users', icon: Users, label: 'Pengguna', code: 'nav_pengguna', adminOnly: true },
-      { to: '/license-admin', icon: ShieldCheck, label: 'Developer Panel', code: 'nav_license_admin', adminOnly: true },
-      { to: '/activity-log', icon: Activity, label: 'Activity Log', code: 'nav_activity_log', adminOnly: true },
-      { to: '/backup', icon: Database, label: 'Backup', code: 'nav_export_db', adminOnly: true, feature: 'backup' },
-      { to: '/security', icon: Shield, label: 'Keamanan', code: 'nav_security', adminOnly: true },
-      { to: '/ecommerce-api', icon: Globe, label: 'E-commerce API', code: 'nav_ecommerce_api', adminOnly: true, feature: 'api_access' },
+      { to: '/users', icon: Users, label: 'Pengguna', code: 'nav_pengguna', roles: ['developer', 'super_admin', 'admin'] },
+      { to: '/backup', icon: Database, label: 'Backup', code: 'nav_export_db', roles: ['developer', 'super_admin', 'admin'], feature: 'backup' },
+      { to: '/activity-log', icon: Activity, label: 'Aktivitas Pengguna', code: 'nav_activity_log', roles: ['developer', 'super_admin', 'admin'] },
+      { to: '/security', icon: Shield, label: 'Keamanan', code: 'nav_security', roles: ['developer', 'super_admin', 'admin'] },
+      { to: '/ecommerce-api', icon: Globe, label: 'E-commerce API', code: 'nav_ecommerce_api', roles: ['developer', 'super_admin', 'admin'], feature: 'api_access' },
+      { to: '/marketplace', icon: Store, label: 'Marketplace', code: 'nav_ecommerce_api', roles: ['developer', 'super_admin', 'admin'], feature: 'api_access' },
+      { to: '/license-admin', icon: ShieldCheck, label: 'Developer Panel', code: 'nav_license_admin', roles: ['developer', 'super_admin'] },
       { to: '/settings', icon: Settings, label: 'Pengaturan', code: 'nav_identitas' },
     ],
   },
 ]
 
 const QUICK_MENU_PATHS = ['/', '/transaksi', '/produk', '/laporan', '/settings']
-const SIMPLE_MENU_PATHS = new Set(['/', '/transaksi', '/riwayat', '/produk', '/customer', '/kas', '/shifts', '/settings'])
+const SIMPLE_MENU_PATHS = new Set(['/', '/assistant', '/transaksi', '/riwayat', '/produk', '/customer', '/kas', '/shifts', '/settings'])
 
 interface SidebarProps {
   isOpen: boolean
@@ -129,8 +138,8 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
 
   const isDemo = user?.hak_akses === 'demo'
   const isSimpleMode = user?.hak_akses === 'kasir'
-  const isAdmin = user?.hak_akses === 'developer'
-  const canShowRenewal = !isDemo && user?.hak_akses !== 'developer'
+  const isDeveloper = canOpenDeveloperPanel(user?.hak_akses)
+  const canShowRenewal = !isDemo && !isDeveloper
   const accessDaysRemaining = user?.access_days_remaining ?? (() => {
     if (!user?.access_expires_at) return null
     const expires = new Date(user.access_expires_at)
@@ -138,9 +147,10 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
     return Math.max(0, Math.ceil((expires.getTime() - Date.now()) / 86400000))
   })()
   const canShowItem = (item: MenuItem) => {
-    if (item.adminOnly && !isAdmin) return false
+    if (item.adminOnly && !isDeveloper) return false
+    if (item.roles && !hasRole(user?.hak_akses, item.roles)) return false
     if (isSimpleMode && !SIMPLE_MENU_PATHS.has(item.to)) return false
-    if (permissions && !isAdmin && item.code && permissions[item.code] === false) return false
+    if (permissions && !isDeveloper && item.code && permissions[item.code] === false) return false
     if ('feature' in item && item.feature && featureFlags[item.feature] === false) return false
     return true
   }

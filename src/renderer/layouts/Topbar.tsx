@@ -9,13 +9,17 @@ import type { Identitas, Notifikasi } from '../../shared/types'
 
 const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   '/': { label: 'Dashboard' },
+  '/owner-dashboard': { label: 'Dashboard Owner', parent: 'Utama' },
+  '/assistant': { label: 'Asisten AI', parent: 'Utama' },
   '/transaksi': { label: 'Kasir', parent: 'Transaksi' },
   '/riwayat': { label: 'Riwayat', parent: 'Transaksi' },
   '/produk': { label: 'Produk', parent: 'Inventaris' },
   '/kategori': { label: 'Kategori', parent: 'Inventaris' },
+  '/satuan': { label: 'Satuan', parent: 'Inventaris' },
   '/supplier': { label: 'Supplier', parent: 'Relasi' },
   '/customer': { label: 'Customer', parent: 'Relasi' },
   '/kas': { label: 'Kas', parent: 'Keuangan' },
+  '/accounting': { label: 'Akuntansi', parent: 'Keuangan' },
   '/shifts': { label: 'Shift', parent: 'Keuangan' },
   '/debts': { label: 'Hutang/Piutang', parent: 'Keuangan' },
   '/returns': { label: 'Return', parent: 'Keuangan' },
@@ -24,10 +28,21 @@ const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   '/license-admin': { label: 'Developer Panel', parent: 'Administrasi' },
   '/payment': { label: 'Pembayaran Lisensi', parent: 'Keuangan' },
   '/activity-log': { label: 'Activity Log', parent: 'Administrasi' },
+  '/security': { label: 'Keamanan', parent: 'Administrasi' },
+  '/ecommerce-api': { label: 'E-commerce API', parent: 'Administrasi' },
+  '/marketplace': { label: 'Marketplace', parent: 'Administrasi' },
   '/settings': { label: 'Pengaturan', parent: 'Administrasi' },
   '/pembelian': { label: 'Pembelian', parent: 'Inventaris' },
   '/stock-opname': { label: 'Stok Opname', parent: 'Inventaris' },
   '/backup': { label: 'Backup', parent: 'Administrasi' },
+  '/tutorials': { label: 'Tutorial', parent: 'Alat Bantu' },
+  '/hpp': { label: 'Kalkulator HPP', parent: 'Alat Bantu' },
+  '/promo': { label: 'Promo', parent: 'Keuangan' },
+  '/branch': { label: 'Cabang/Gudang', parent: 'Inventaris' },
+  '/loyalty': { label: 'Loyalty', parent: 'Relasi' },
+  '/whatsapp': { label: 'WhatsApp', parent: 'Alat Bantu' },
+  '/print-queue': { label: 'Antrian Print', parent: 'Alat Bantu' },
+  '/payment-automation': { label: 'Pembayaran Digital', parent: 'Keuangan' },
 }
 
 const JENIS_COLOR: Record<string, string> = {
@@ -113,7 +128,8 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
     loadNotifs()
   }
 
-  const route = ROUTE_MAP[pathname]
+  const normalizedPath = pathname.replace(/^\/app(?=\/|$)/, '') || '/'
+  const route = ROUTE_MAP[normalizedPath]
   const pageLabel = route?.label ?? 'MediaSoft POS'
   const parentLabel = route?.parent
 

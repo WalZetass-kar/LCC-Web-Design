@@ -54,6 +54,9 @@ import { IndustrySettingsController } from '../backend/controllers/IndustrySetti
 import { AssistantController } from '../backend/controllers/AssistantController.js'
 import { LicenseController } from '../backend/controllers/LicenseController.js'
 import { DeviceController, detectPlatformOS } from '../backend/controllers/DeviceController.js'
+import { AccountingController } from '../backend/controllers/AccountingController.js'
+import { OwnerDashboardController } from '../backend/controllers/OwnerDashboardController.js'
+import { MarketplaceController } from '../backend/controllers/MarketplaceController.js'
 import { getSubscriptionStatus, checkTransactionLimit, getPopupRule, isFeatureEnabled, getActiveFeatures, getUpgradePopup } from '../backend/middleware/subscriptionGuard.js'
 import { sqlite } from '../database/connection.js'
 import { SyncServerService, setSyncChannelInvoker } from './syncServer.js'
@@ -366,6 +369,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
 
   // ─── DASHBOARD ─────────────────────────────────────────────────────
   handle(ipcMain, 'dashboard:getSummary', () => DashboardController.getSummary())
+  handle(ipcMain, 'ownerDashboard:getInsights', () => OwnerDashboardController.getInsights())
 
   // ─── AI ASSISTANT ──────────────────────────────────────────────────
   handle(ipcMain, 'assistant:ask', (data: any) => AssistantController.ask(data))
@@ -523,6 +527,22 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'payment:createQris', (data: any) => PaymentMethodController.createQris(data))
   handle(ipcMain, 'payment:checkStatus', (orderId: string) => PaymentMethodController.checkStatus(orderId))
   handle(ipcMain, 'payment:cancelQris', (orderId: string) => PaymentMethodController.cancelQris(orderId))
+  handle(ipcMain, 'payment:getGatewaySettings', () => PaymentMethodController.getGatewaySettings())
+  handle(ipcMain, 'payment:saveGatewaySettings', (data: any) => PaymentMethodController.saveGatewaySettings(data))
+  handle(ipcMain, 'payment:getQrisSessions', (limit?: number) => PaymentMethodController.getQrisSessions(limit))
+  handle(ipcMain, 'payment:markQrisPaid', (orderId: string) => PaymentMethodController.markQrisPaid(orderId))
+
+  // ─── ACCOUNTING ────────────────────────────────────────────────────
+  handle(ipcMain, 'accounting:getSummary', (startDate?: string, endDate?: string) => AccountingController.getSummary(startDate, endDate))
+  handle(ipcMain, 'accounting:getAccounts', () => AccountingController.getAccounts())
+  handle(ipcMain, 'accounting:saveAccount', (data: any) => AccountingController.saveAccount(data))
+  handle(ipcMain, 'accounting:deleteAccount', (id: number) => AccountingController.deleteAccount(id))
+  handle(ipcMain, 'accounting:getJournalEntries', (limit?: number) => AccountingController.getJournalEntries(limit))
+  handle(ipcMain, 'accounting:createJournalEntry', (data: any) => AccountingController.createJournalEntry({
+    ...data,
+    created_by: demoSession.getUsername() ?? data?.created_by,
+  }))
+  handle(ipcMain, 'accounting:getTrialBalance', (startDate?: string, endDate?: string) => AccountingController.getTrialBalance(startDate, endDate))
 
   // ─── TAX ───────────────────────────────────────────────────────────
   handle(ipcMain, 'tax:getActive', () => TaxController.getActive())
@@ -619,11 +639,19 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── INVENTORY ─────────────────────────────────────────────────────
   handle(ipcMain, 'warehouse:getAll', () => InventoryController.getWarehouses())
   handle(ipcMain, 'warehouse:create', (data: any) => InventoryController.createWarehouse(data))
+  handle(ipcMain, 'warehouse:update', (id: number, data: any) => InventoryController.updateWarehouse(id, data))
+  handle(ipcMain, 'warehouse:delete', (id: number) => InventoryController.deleteWarehouse(id))
   handle(ipcMain, 'inventory:getBatches', (kd: string) => InventoryController.getBatches(kd))
   handle(ipcMain, 'inventory:addBatch', (data: any) => InventoryController.addBatch(data))
+  handle(ipcMain, 'inventory:updateBatch', (id: number, data: any) => InventoryController.updateBatch(id, data))
+  handle(ipcMain, 'inventory:deleteBatch', (id: number) => InventoryController.deleteBatch(id))
   handle(ipcMain, 'inventory:getSerials', (kd: string) => InventoryController.getSerials(kd))
   handle(ipcMain, 'inventory:addSerial', (data: any) => InventoryController.addSerial(data))
+  handle(ipcMain, 'inventory:updateSerial', (id: number, data: any) => InventoryController.updateSerial(id, data))
+  handle(ipcMain, 'inventory:deleteSerial', (id: number) => InventoryController.deleteSerial(id))
   handle(ipcMain, 'inventory:transfer', (data: any) => InventoryController.transfer(data))
+  handle(ipcMain, 'inventory:getWarehouseStock', (warehouseId?: number) => InventoryController.getWarehouseStock(warehouseId))
+  handle(ipcMain, 'inventory:getTransfers', (limit?: number) => InventoryController.getTransfers(limit))
 
   // ─── PROMO ─────────────────────────────────────────────────────────
   handle(ipcMain, 'promo:getAll', () => PromoController.getAll())
@@ -639,6 +667,8 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'branch:getActive', () => BranchController.getActive())
   handle(ipcMain, 'branch:getWarehouses', () => BranchController.getWarehouses())
   handle(ipcMain, 'branch:getById', (id: number) => BranchController.getById(id))
+  handle(ipcMain, 'branch:getStockSummary', (branchId?: number) => BranchController.getStockSummary(branchId))
+  handle(ipcMain, 'branch:getTransferHistory', (limit?: number) => BranchController.getTransferHistory(limit))
   handle(ipcMain, 'branch:create', (data: any) => BranchController.create(data))
   handle(ipcMain, 'branch:update', (id: number, data: any) => BranchController.update(id, data))
   handle(ipcMain, 'branch:delete', (id: number) => BranchController.delete(id))
@@ -688,6 +718,14 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'ecommerce:syncNow', () => EcommerceApiController.syncNow(demoSession.getUsername()))
   handle(ipcMain, 'ecommerce:enqueueStockUpdate', (productId: string | number, qty: number) => EcommerceApiController.enqueueStockUpdate(productId, qty))
 
+  // ─── MARKETPLACE OMNICHANNEL ───────────────────────────────────────
+  handle(ipcMain, 'marketplace:getChannels', () => MarketplaceController.getChannels())
+  handle(ipcMain, 'marketplace:saveChannel', (data: any) => MarketplaceController.saveChannel(data))
+  handle(ipcMain, 'marketplace:deleteChannel', (id: number) => MarketplaceController.deleteChannel(id))
+  handle(ipcMain, 'marketplace:getSkuMap', (channelId?: number) => MarketplaceController.getSkuMap(channelId))
+  handle(ipcMain, 'marketplace:saveSkuMap', (data: any) => MarketplaceController.saveSkuMap(data))
+  handle(ipcMain, 'marketplace:runStockSync', (channelId?: number) => MarketplaceController.runStockSync(channelId))
+
   // ─── DEVICE TRACKING ───────────────────────────────────────────────
   handle(ipcMain, 'device:getAll', () => ({ success: true, data: DeviceController.getAllDevices() }))
   handle(ipcMain, 'device:getByUser', (username: string) => ({ success: true, data: DeviceController.getByUser(username) }))
@@ -728,6 +766,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'license:createManualPaymentRequest', (data: any) => LicenseController.createManualPaymentRequest(data))
   handle(ipcMain, 'license:getPaymentStatus', (externalRef: string) => LicenseController.getPaymentStatus(externalRef))
   handle(ipcMain, 'license:getPublicPlans', () => LicenseController.getPublicPlans())
+  handle(ipcMain, 'license:getPublicPopup', (code: string) => LicenseController.getPublicPopup(code))
   handle(ipcMain, 'license:getUsers', (search?: string) => LicenseController.getUsers(search))
   handle(ipcMain, 'license:createUser', (data: any) => LicenseController.createUser(data))
   handle(ipcMain, 'license:updateUser', (id: string | number, data: any) => LicenseController.updateUser(id, data))

@@ -209,17 +209,18 @@ export default function Security() {
           </div>
 
           <div className="flex items-center justify-between p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-            <div>
-              <p className="font-medium text-slate-700 dark:text-slate-200">Two-Factor Authentication (2FA)</p>
-              <p className="text-sm text-slate-500">Verifikasi tambahan saat login (coming soon)</p>
+              <div>
+                <p className="font-medium text-slate-700 dark:text-slate-200">Two-Factor Authentication (2FA)</p>
+                <p className="text-sm text-slate-500">Aktifkan kebijakan 2FA untuk akun admin dan operator</p>
+              </div>
+              <button
+                onClick={() => setSettings({ ...settings, twoFactorEnabled: !settings.twoFactorEnabled })}
+                className={`w-12 h-6 rounded-full transition-colors ${settings.twoFactorEnabled ? 'bg-primary-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                title={settings.twoFactorEnabled ? 'Nonaktifkan 2FA' : 'Aktifkan 2FA'}
+              >
+                <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${settings.twoFactorEnabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
+              </button>
             </div>
-            <button
-              disabled
-              className="w-12 h-6 rounded-full bg-slate-300 dark:bg-slate-600 opacity-50 cursor-not-allowed"
-            >
-              <div className="w-5 h-5 bg-white rounded-full shadow translate-x-0.5" />
-            </button>
-          </div>
         </div>
       </Card>
 

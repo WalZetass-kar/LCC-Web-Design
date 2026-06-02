@@ -101,6 +101,12 @@ const LOCAL_CHANNELS = new Set([
   'dialog:showSaveDialog',
   'print:getPrinters',
   'print:execute',
+  'marketplace:getChannels',
+  'marketplace:saveChannel',
+  'marketplace:deleteChannel',
+  'marketplace:getSkuMap',
+  'marketplace:saveSkuMap',
+  'marketplace:runStockSync',
 ])
 
 class SyncClient {

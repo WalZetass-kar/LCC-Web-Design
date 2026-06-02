@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { shouldBlockChannel } from '../src/backend/middleware/demoGuardV2'
+import { isMutationChannel, shouldBlockChannel } from '../src/backend/middleware/demoGuardV2'
 import { demoSession } from '../src/backend/services/demoSessionManager'
 
 afterEach(() => {
@@ -50,6 +50,38 @@ describe('demoGuardV2 role checks', () => {
     expect(shouldBlockChannel('device:getAll')).toBe(true)
     expect(shouldBlockChannel('license:getConfig')).toBe(true)
     expect(shouldBlockChannel('popup:getAll')).toBe(true)
+  })
+
+  it('allows buyer license self-service channels for non-developer roles', () => {
+    demoSession.setSession('buyer', 'admin')
+
+    expect(shouldBlockChannel('license:getPublicPlans')).toBe(false)
+    expect(shouldBlockChannel('license:createManualPaymentRequest')).toBe(false)
+    expect(shouldBlockChannel('license:getPaymentStatus')).toBe(false)
+    expect(shouldBlockChannel('license:getPublicPopup')).toBe(false)
+    expect(shouldBlockChannel('license:syncBuyerLicense')).toBe(false)
+    expect(shouldBlockChannel('license:heartbeat')).toBe(false)
+    expect(shouldBlockChannel('license:logError')).toBe(false)
+
+    expect(isMutationChannel('license:getPublicPlans')).toBe(false)
+    expect(isMutationChannel('license:getPublicPopup')).toBe(false)
+    expect(isMutationChannel('license:createManualPaymentRequest')).toBe(false)
+  })
+
+  it('allows store admins to access operational admin channels but blocks developer channels', () => {
+    demoSession.setSession('admin', 'admin')
+
+    expect(shouldBlockChannel('backup:create')).toBe(false)
+    expect(shouldBlockChannel('activityLog:getAll')).toBe(false)
+    expect(shouldBlockChannel('ecommerce:getIntegration')).toBe(false)
+
+    expect(shouldBlockChannel('user:getAll')).toBe(true)
+    expect(shouldBlockChannel('license:getConfig')).toBe(true)
+    expect(shouldBlockChannel('security:get')).toBe(true)
+  })
+
+  it('allows public plans before a local session exists', () => {
+    expect(shouldBlockChannel('license:getPublicPlans')).toBe(false)
   })
 
   it('allows privileged users to access administration channels', () => {

@@ -16,6 +16,7 @@
 
 import { demoSession } from '../services/demoSessionManager.js'
 import type { IpcResponse } from '../../shared/types.js'
+import { canManageOperations, canOpenDeveloperPanel } from '../../shared/config/rbac.js'
 
 /** Standard blocked response — consistent across all layers */
 export const DEMO_BLOCKED_RESPONSE: IpcResponse = {
@@ -74,11 +75,7 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   // License / device / popup administration
   'license:testAndSave',
   'license:syncFromServer',
-  'license:syncBuyerLicense',
-  'license:createPaymentInvoice',
-  'license:createManualPaymentRequest',
   'license:deletePayment',
-  'license:getPublicPlans',
   'license:blockDevice',
   'license:unblockDevice',
   'license:suspendDeviceLicense',
@@ -161,6 +158,13 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   'payment:delete',
   'payment:createQris',
   'payment:cancelQris',
+  'payment:saveGatewaySettings',
+  'payment:markQrisPaid',
+
+  // Accounting
+  'accounting:saveAccount',
+  'accounting:deleteAccount',
+  'accounting:createJournalEntry',
 
   // Tax
   'tax:setActive',
@@ -257,6 +261,12 @@ const MUTATION_CHANNELS: Set<string> = new Set([
 
   'mobile:processScan',
 
+  // Marketplace omnichannel
+  'marketplace:saveChannel',
+  'marketplace:deleteChannel',
+  'marketplace:saveSkuMap',
+  'marketplace:runStockSync',
+
   // Note: strukSettings channels have custom role-based access control
 
   // See shouldBlockChannel() function
@@ -282,6 +292,14 @@ const READ_CHANNELS: Set<string> = new Set([
 'inventory:getBatches',
 'inventory:getSerials',
 'inventory:getTransfers',
+'inventory:getWarehouseStock',
+
+'ownerDashboard:getInsights',
+
+'accounting:getSummary',
+'accounting:getAccounts',
+'accounting:getJournalEntries',
+'accounting:getTrialBalance',
 
 'promo:getAll',
 'promo:getById',
@@ -391,6 +409,8 @@ const READ_CHANNELS: Set<string> = new Set([
   // Payment Methods
   'payment:getAll',
   'payment:checkStatus',
+  'payment:getGatewaySettings',
+  'payment:getQrisSessions',
 
   // Tax
   'tax:getActive',
@@ -432,6 +452,8 @@ const READ_CHANNELS: Set<string> = new Set([
   'branch:getActive',
   'branch:getWarehouses',
   'branch:getById',
+  'branch:getStockSummary',
+  'branch:getTransferHistory',
 
   // Loyalty
   'loyalty:getTiers',
@@ -455,9 +477,38 @@ const READ_CHANNELS: Set<string> = new Set([
 
   // Struk Settings (all users can read)
   'strukSettings:get',
+
+  // Marketplace
+  'marketplace:getChannels',
+  'marketplace:getSkuMap',
 ])
 
-const ADMIN_ROLES = new Set(['developer'])
+const OPERATIONAL_ADMIN_CHANNELS: Set<string> = new Set([
+  'backup:getAll',
+  'backup:create',
+  'backup:restore',
+  'backup:delete',
+  'backup:download',
+  'backup:import',
+  'activityLog:getAll',
+  'activityLog:getByUsername',
+  'activityLog:getByModul',
+  'activityLog:search',
+  'activityLog:delete',
+  'activityLog:deleteOldLogs',
+  'ecommerce:get',
+  'ecommerce:save',
+  'ecommerce:getIntegration',
+  'ecommerce:saveIntegration',
+  'ecommerce:syncNow',
+  'ecommerce:enqueueStockUpdate',
+  'marketplace:getChannels',
+  'marketplace:saveChannel',
+  'marketplace:deleteChannel',
+  'marketplace:getSkuMap',
+  'marketplace:saveSkuMap',
+  'marketplace:runStockSync',
+])
 
 const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
   // User administration
@@ -514,11 +565,6 @@ const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
   'license:testAndSave',
   'license:validateApplication',
   'license:syncFromServer',
-  'license:syncBuyerLicense',
-  'license:createPaymentInvoice',
-  'license:createManualPaymentRequest',
-  'license:getPaymentStatus',
-  'license:getPublicPlans',
   'license:getUsers',
   'license:createUser',
   'license:updateUser',
@@ -556,8 +602,6 @@ const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
   'license:createAnnouncement',
   'license:updateAnnouncement',
   'license:deleteAnnouncement',
-  'license:heartbeat',
-  'license:logError',
 
   // Audit maintenance
   'audit:getAll',
@@ -565,8 +609,20 @@ const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
   'audit:deleteOld',
 ])
 
+const PUBLIC_LICENSE_CHANNELS: Set<string> = new Set([
+  'license:syncBuyerLicense',
+  'license:createPaymentInvoice',
+  'license:createManualPaymentRequest',
+  'license:getPaymentStatus',
+  'license:getPublicPlans',
+  'license:getPublicPopup',
+  'license:checkAppUpdate',
+  'license:heartbeat',
+  'license:logError',
+])
+
 function canAccessAdminChannel(role: string | null): boolean {
-  return role !== null && ADMIN_ROLES.has(role)
+  return canOpenDeveloperPanel(role)
 }
 
 const FEATURE_CHANNELS: Array<{ match: (channel: string) => boolean; feature: string }> = [
@@ -581,6 +637,9 @@ const FEATURE_CHANNELS: Array<{ match: (channel: string) => boolean; feature: st
   { match: channel => channel.startsWith('branch:'), feature: 'multi_branch' },
   { match: channel => channel.startsWith('return:'), feature: 'return_refund' },
   { match: channel => channel.startsWith('ecommerce:'), feature: 'api_access' },
+  { match: channel => channel.startsWith('marketplace:'), feature: 'api_access' },
+  { match: channel => channel.startsWith('accounting:'), feature: 'reports' },
+  { match: channel => channel.startsWith('ownerDashboard:'), feature: 'reports' },
 ]
 
 function requiredFeatureForChannel(channel: string): string | null {
@@ -591,6 +650,8 @@ function requiredFeatureForChannel(channel: string): string | null {
  * Check if a channel is a mutation (write) operation.
  */
 export function isMutationChannel(channel: string): boolean {
+  if (PUBLIC_LICENSE_CHANNELS.has(channel)) return false
+
   // Explicit check against the mutation set
   if (MUTATION_CHANNELS.has(channel)) return true
 
@@ -619,7 +680,16 @@ export function isMutationChannel(channel: string): boolean {
 export function shouldBlockChannel(channel: string): boolean {
   const role = demoSession.getRole()
 
-  // Admin-only channels are blocked for every non-privileged role, including demo.
+  // Public license self-service endpoints must be reachable from the login,
+  // trial, and buyer flows. Admin-only license management remains below.
+  if (PUBLIC_LICENSE_CHANNELS.has(channel)) return false
+
+  // Operational admin channels can be used by store admins and developer roles.
+  if (OPERATIONAL_ADMIN_CHANNELS.has(channel)) {
+    return !canManageOperations(role)
+  }
+
+  // Developer-only channels are blocked for every non-developer role, including demo.
   if (ADMIN_ONLY_CHANNELS.has(channel)) {
     return !canAccessAdminChannel(role)
   }

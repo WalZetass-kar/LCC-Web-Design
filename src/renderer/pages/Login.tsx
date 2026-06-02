@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { User, Lock, Eye, EyeOff, Sparkles, Info, Key, Keyboard, Database, Globe, MessageCircle } from 'lucide-react'
+import { User, Lock, Eye, EyeOff, Sparkles, Info, Key, Keyboard, Database, Globe, MessageCircle, Sun, Moon } from 'lucide-react'
 import Button from '../components/Button'
 import Input from '../components/Input'
 import Modal from '../components/Modal'
 import appLogo from '../assets/app-logo.png'
 import { api } from '../utils/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { useToast } from '../contexts/ToastContext'
 import { openWhatsApp, openWhatsAppUpgrade, SUBSCRIPTION_UPGRADE_WA_NUMBER } from '../utils/whatsapp'
 import type { UserSession, Identitas } from '../../shared/types'
@@ -35,6 +36,7 @@ function getPlanPeriod(days: number): string {
 
 export default function Login() {
   const { login } = useAuth()
+  const { mode, toggleMode } = useTheme()
   const navigate = useNavigate()
   const toast = useToast()
   const [username, setUsername] = useState('')
@@ -331,7 +333,12 @@ export default function Login() {
   const handleForgotPassword = () => {
     openWhatsApp(
       SUBSCRIPTION_UPGRADE_WA_NUMBER,
-      'Halo Admin, saya lupa password akun MediaSoft POS'
+      [
+        'Halo Developer, saya lupa sandi akun MediaSoft POS.',
+        `Username: ${username.trim() || '-'}`,
+        '',
+        'Mohon bantu reset sandi akun saya.',
+      ].join('\n')
     )
   }
 
@@ -348,16 +355,25 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white lg:grid lg:grid-cols-[minmax(420px,0.9fr)_minmax(360px,520px)]">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white lg:grid lg:grid-cols-[minmax(420px,0.9fr)_minmax(360px,520px)] relative">
+      {/* Theme Toggle Button */}
+      <button 
+        type="button"
+        onClick={toggleMode}
+        className="absolute top-3 right-3 sm:top-5 sm:right-5 z-50 p-2.5 rounded-xl bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300 dark:hover:bg-white/10 transition-all shadow-lg"
+        title={mode === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+      >
+        {mode === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+      </button>
 
       {/* LEFT PANEL — branding, hidden on mobile */}
-      <div className="hidden min-h-screen flex-col justify-between border-r border-white/10 bg-slate-950 p-8 lg:flex">
+      <div className="hidden min-h-screen flex-col justify-between border-r border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-950 p-8 lg:flex">
         {/* Logo */}
         <div className="flex items-center gap-3">
           <img src={appLogo} alt="MediaSoft POS Zetass" className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-primary-500/20" />
           <div>
-            <span className="font-bold text-white text-lg block leading-tight">MediaSoft POS</span>
-            <span className="text-xs text-slate-500">by Zetass</span>
+            <span className="font-bold text-slate-900 dark:text-white text-lg block leading-tight">MediaSoft POS</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">by Zetass</span>
           </div>
         </div>
 
@@ -365,15 +381,15 @@ export default function Login() {
         <div className="space-y-6">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary-500/10 border border-primary-500/20 mb-4">
-              <Sparkles size={12} className="text-primary-400" />
-              <span className="text-xs text-primary-400 font-medium">Point of Sale System v2.0</span>
+              <Sparkles size={12} className="text-primary-600 dark:text-primary-400" />
+              <span className="text-xs text-primary-600 dark:text-primary-400 font-medium">Point of Sale System v2.0</span>
             </div>
-            <h2 className="text-4xl font-bold text-white leading-tight mb-4">
+            <h2 className="text-4xl font-bold text-slate-900 dark:text-white leading-tight mb-4">
               Kelola toko Anda<br />
-              <span className="text-primary-300">lebih rapi</span><br />
+              <span className="text-primary-600 dark:text-primary-300">lebih rapi</span><br />
               & lebih cepat.
             </h2>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
               Sistem kasir modern dengan fitur lengkap — transaksi, stok, laporan, dan manajemen pelanggan dalam satu aplikasi desktop.
             </p>
           </div>
@@ -388,11 +404,11 @@ export default function Login() {
               { icon: 'SUP', label: 'Supplier', desc: 'Manajemen pembelian' },
               { icon: 'BKP', label: 'Backup', desc: 'Keamanan data' },
             ].map(f => (
-              <div key={f.label} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <span className="w-9 rounded-md bg-slate-800 py-1.5 text-center text-[10px] font-bold tracking-wide text-primary-300">{f.icon}</span>
+              <div key={f.label} className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] p-3">
+                <span className="w-9 rounded-md bg-slate-200 dark:bg-slate-800 py-1.5 text-center text-[10px] font-bold tracking-wide text-primary-600 dark:text-primary-300">{f.icon}</span>
                 <div>
-                  <p className="text-white text-xs font-semibold">{f.label}</p>
-                  <p className="text-slate-500 text-xs">{f.desc}</p>
+                  <p className="text-slate-900 dark:text-white text-xs font-semibold">{f.label}</p>
+                  <p className="text-slate-500 dark:text-slate-500 text-xs">{f.desc}</p>
                 </div>
               </div>
             ))}
@@ -400,41 +416,41 @@ export default function Login() {
         </div>
 
         {/* Footer */}
-        <p className="text-slate-600 text-xs">© 2026 MediaSoft POS by Zetass</p>
+        <p className="text-slate-400 dark:text-slate-600 text-xs">© 2026 MediaSoft POS by Zetass</p>
       </div>
 
       {/* RIGHT PANEL — form */}
-      <div className="flex min-h-screen items-center justify-center overflow-y-auto bg-slate-900 p-4 lg:p-6">
+      <div className="flex min-h-screen items-center justify-center overflow-y-auto bg-white dark:bg-slate-900 p-4 lg:p-6">
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-5">
             <img src={appLogo} alt="MediaSoft POS Zetass" className="mx-auto mb-3 h-14 w-14 rounded-2xl object-cover shadow-lg shadow-primary-500/20" />
-            <p className="font-bold text-white text-xl">MediaSoft POS</p>
-            <p className="text-slate-500 text-xs mt-1">by Zetass</p>
+            <p className="font-bold text-slate-900 dark:text-white text-xl">MediaSoft POS</p>
+            <p className="text-slate-500 dark:text-xs mt-1">by Zetass</p>
           </div>
 
           {/* Loading Skeleton */}
           {authLoading ? (
-            <div className="rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/30">
+            <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.06] p-5 shadow-xl shadow-slate-200 dark:shadow-black/30">
               <div className="animate-pulse space-y-4">
-                <div className="w-12 h-12 bg-slate-700 rounded-2xl mb-4"></div>
-                <div className="h-6 bg-slate-700 rounded w-3/4"></div>
-                <div className="h-4 bg-slate-700 rounded w-1/2"></div>
+                <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-2xl mb-4"></div>
+                <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
                 <div className="space-y-3 mt-6">
-                  <div className="h-12 bg-slate-700 rounded-xl"></div>
-                  <div className="h-12 bg-slate-700 rounded-xl"></div>
-                  <div className="h-12 bg-slate-700 rounded-xl"></div>
+                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+                  <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
                 </div>
               </div>
             </div>
           ) : (
             /* Card */
-            <div className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/30 scrollbar-thin">
+            <div className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] p-5 shadow-xl shadow-slate-200 dark:shadow-black/30 scrollbar-thin">
               {/* Header */}
               <div className="mb-5">
                 <img src={appLogo} alt="MediaSoft POS Zetass" className="mb-3 h-11 w-11 rounded-lg object-cover shadow-lg shadow-primary-500/20" />
-                <h3 className="text-2xl font-bold text-white mb-1">{showRegisterForm ? 'Daftar Akun Trial' : 'Selamat datang'}</h3>
-                <p className="text-slate-400 text-sm">
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">{showRegisterForm ? 'Daftar Akun Trial' : 'Selamat datang'}</h3>
+                <p className="text-slate-600 dark:text-slate-400 text-sm">
                   {showRegisterForm ? 'Buat akun pembeli dan mulai trial terbatas 3 hari.' : 'Masuk ke akun Anda untuk melanjutkan'}
                 </p>
               </div>
@@ -442,16 +458,16 @@ export default function Login() {
               {showRegisterForm ? (
               <form onSubmit={handleTrialRegister} className="space-y-3.5">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Username</label>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Username</label>
                   <div className="relative group">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-primary-500 dark:group-focus-within:text-primary-400 transition-colors">
                       <User size={16} />
                     </span>
                     <input
                       value={setupForm.username}
                       onChange={e => setSetupForm(prev => ({ ...prev, username: e.target.value }))}
                       autoComplete="username"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                      className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 pl-10 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
                       placeholder="contoh: owner"
                     />
                   </div>
@@ -496,17 +512,17 @@ export default function Login() {
                   placeholder="Ulangi password"
                 />
 
-                <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-300">Trial terbatas</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                <div className="rounded-xl border border-amber-500/20 dark:border-amber-400/20 bg-amber-50 dark:bg-amber-400/10 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-300">Trial terbatas</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
                     Aktif 3 hari, 1 device, maksimal 20 transaksi per hari dan 30 produk. Laporan, export, backup, multi-user, dan fitur premium lain terkunci sampai upgrade.
                   </p>
                 </div>
 
                 {error && (
                   <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-                    <span className="text-red-400 mt-0.5 shrink-0">!</span>
-                    <p className="text-sm text-red-400">{error}</p>
+                    <span className="text-red-600 dark:text-red-400 mt-0.5 shrink-0">!</span>
+                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
                   </div>
                 )}
 
@@ -517,7 +533,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => { setAuthView('login'); setError('') }}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                  className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-4 py-3 text-sm font-semibold text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white"
                 >
                   Sudah punya akun? Masuk
                 </button>
@@ -525,12 +541,12 @@ export default function Login() {
               ) : (
               <>
               <form onSubmit={loginMode === 'pin' ? handlePinLogin : handleLogin} className="space-y-4">
-                <div className="grid grid-cols-2 gap-2 rounded-xl bg-white/5 p-1 border border-white/10">
+                <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 dark:bg-white/5 p-1 border border-slate-200 dark:border-white/10">
                   <button
                     type="button"
                     onClick={() => setLoginMode('password')}
                     className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                      loginMode === 'password' ? 'bg-primary-500 text-white' : 'text-slate-400 hover:text-white'
+                      loginMode === 'password' ? 'bg-primary-500 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     <Lock size={14} />
@@ -540,7 +556,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setLoginMode('pin')}
                     className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                      loginMode === 'pin' ? 'bg-primary-500 text-white' : 'text-slate-400 hover:text-white'
+                      loginMode === 'pin' ? 'bg-primary-500 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     <Key size={14} />
@@ -550,9 +566,9 @@ export default function Login() {
 
                 {/* Username */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Username</label>
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Username</label>
                   <div className="relative group">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-primary-500 dark:group-focus-within:text-primary-400 transition-colors">
                       <User size={16} />
                     </span>
                     <input
@@ -561,16 +577,16 @@ export default function Login() {
                       value={username}
                       onChange={e => setUsername(e.target.value)}
                       autoComplete="username"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                      className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 pl-10 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
                     />
                   </div>
                 </div>
 
                 {loginMode === 'password' ? (
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Password</label>
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Password</label>
                     <div className="relative group">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-primary-500 dark:group-focus-within:text-primary-400 transition-colors">
                         <Lock size={16} />
                       </span>
                       <input
@@ -579,18 +595,18 @@ export default function Login() {
                         value={password}
                         onChange={e => setPassword(e.target.value)}
                         autoComplete="current-password"
-                        className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-12 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 pl-10 pr-12 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
                       />
-                      <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1">
+                      <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-1">
                         {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">PIN Kasir</label>
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">PIN Kasir</label>
                     <div className="relative group">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-400 transition-colors">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 group-focus-within:text-primary-500 dark:group-focus-within:text-primary-400 transition-colors">
                         <Key size={16} />
                       </span>
                       <input
@@ -602,7 +618,7 @@ export default function Login() {
                         value={pin}
                         onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
                         autoComplete="off"
-                        className="w-full rounded-xl border border-white/10 bg-white/5 pl-10 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 pl-10 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500/40 transition-all"
                       />
                     </div>
                   </div>
@@ -610,35 +626,35 @@ export default function Login() {
 
                 {/* Remember Me & Forgot Password */}
                 <div className="flex items-center justify-between text-xs">
-                  <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
+                  <label className="flex items-center gap-2 text-slate-500 dark:text-slate-400 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={rememberMe}
                       onChange={e => setRememberMe(e.target.checked)}
-                      className="w-3 h-3 rounded border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500/40"
+                      className="w-3 h-3 rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-primary-500 focus:ring-primary-500/40"
                     />
                     Ingat Username
                   </label>
                   <button
                     type="button"
                     onClick={handleForgotPassword}
-                    className="text-primary-400 hover:text-primary-300 transition-colors"
+                    className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors font-medium"
                   >
-                    Lupa Password?
+                    Lupa Sandi?
                   </button>
                 </div>
 
                 {error && (
                   <div className="space-y-3">
                     <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-                      <span className="text-red-400 mt-0.5 shrink-0">!</span>
-                      <p className="text-sm text-red-400">{error}</p>
+                      <span className="text-red-600 dark:text-red-400 mt-0.5 shrink-0">!</span>
+                      <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
                     </div>
                     {isExpiredAccessError && (
-                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 p-3">
                         <div className="mb-3">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Perpanjangan Akses</p>
-                          <p className="mt-1 text-xs text-slate-300">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-300">Perpanjangan Akses</p>
+                          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
                             {renewalPlan
                               ? `${renewalPlan.name} ${formatPrice(renewalPlan.price)}${getPlanPeriod(renewalPlan.duration_days)}`
                               : 'Paket aktif belum tersedia. Chat admin untuk info harga terbaru.'}
@@ -647,7 +663,7 @@ export default function Login() {
                         <button
                           type="button"
                           onClick={handleRenewAccess}
-                          className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-600"
+                          className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-600 shadow-sm shadow-emerald-200 dark:shadow-none"
                         >
                           <MessageCircle size={16} />
                           Perpanjang via WhatsApp
@@ -664,14 +680,14 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => { setAuthView('register'); setError(''); setShowDefaultLogin(false) }}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/15 hover:text-white"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-200 dark:border-emerald-400/25 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-600 dark:text-emerald-200 transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-500/15 hover:text-emerald-700 dark:hover:text-white"
                 >
                   <User size={16} />
                   Daftar Akun
                 </button>
 
                 {/* Keyboard Hint */}
-                <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                <div className="flex items-center justify-center gap-2 text-xs text-slate-400 dark:text-slate-500">
                   <Keyboard size={12} />
                   Press Enter to login • F1 for account help
                 </div>
@@ -679,19 +695,19 @@ export default function Login() {
 
               {/* Login Help */}
               {showDefaultLogin && (
-                <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl">
                   <div className="flex items-start gap-2 mb-3">
-                    <Info size={16} className="text-blue-400 mt-0.5" />
+                    <Info size={16} className="text-blue-600 dark:text-blue-400 mt-0.5" />
                     <div>
-                      <p className="text-sm font-semibold text-blue-400">Bantuan Login</p>
-                      <p className="text-xs text-slate-400">
-                        Gunakan akun trial/berlangganan yang sudah dibuat atau hubungi admin untuk reset password.
+                      <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">Bantuan Login</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        Gunakan akun trial/berlangganan yang sudah dibuat. Jika lupa sandi, klik Lupa Sandi untuk chat WhatsApp developer.
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowDefaultLogin(false)}
-                    className="mt-2 text-xs text-slate-500 hover:text-slate-400"
+                    className="mt-2 text-xs text-slate-400 hover:text-slate-500 dark:text-slate-500 dark:hover:text-slate-400"
                   >
                     Tutup
                   </button>
@@ -704,14 +720,14 @@ export default function Login() {
               <div className="mt-4 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${dbStatus === 'connected' ? 'bg-green-500' : dbStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'}`}></div>
-                  <span className="text-slate-500">
+                  <span className="text-slate-400 dark:text-slate-500">
                     {dbStatus === 'connected' ? 'Database OK' : dbStatus === 'error' ? 'DB Error' : 'Checking...'}
                   </span>
                 </div>
-                <span className="text-slate-500">v2.0.0</span>
+                <span className="text-slate-400 dark:text-slate-500">v2.0.0</span>
               </div>
 
-              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500">
+              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-400 dark:text-slate-500">
                 <Sparkles size={12} className="text-primary-500" />
                 Powered by Electron + React
               </div>

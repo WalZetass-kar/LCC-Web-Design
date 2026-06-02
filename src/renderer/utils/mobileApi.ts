@@ -1660,6 +1660,12 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     case 'license:getPublicPlans':
       return mobileLicenseRequest<T>('GET', '/plans')
 
+    case 'license:getPublicPopup': {
+      const code = String(args[0] ?? '').trim()
+      if (!code) return fail('Kode popup tidak valid')
+      return mobileLicenseRequest<T>('GET', `/popup/${encodeURIComponent(code)}`)
+    }
+
     case 'license:getUsers': {
       const search = String(args[0] ?? '').trim()
       return mobileAdminLicenseRequest<T>('GET', `/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`)
@@ -1821,7 +1827,13 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       return ok({
         plan,
         feature_flags: plan?.feature_flags ?? {},
+        plan_name: plan?.name ?? null,
+        max_devices: plan?.max_devices ?? 1,
+        max_transactions_per_day: plan?.max_transactions_per_day ?? -1,
+        max_products: plan?.max_products ?? -1,
+        max_users: plan?.max_users ?? 1,
         subscription_expires_at: expiresAt,
+        expires_at: expiresAt,
         is_expired: Number.isFinite(expiresTime) ? expiresTime < Date.now() : false,
       } as T)
     }
@@ -1932,9 +1944,6 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
       if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) {
         return fail('Username minimal 3 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau strip')
-      }
-      if (store.users.some(item => Number(item.is_buyer ?? 0) === 1)) {
-        return fail('Akun pembeli trial sudah terdaftar. Silakan login atau upgrade akun yang sudah ada.')
       }
       if (store.users.some(item => item.nama_pengguna === username)) {
         return fail('Username sudah digunakan. Pilih username lain.')
@@ -2657,6 +2666,24 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const role = normalizeMobileLocalRole(data.hak_akses ?? 'kasir')
       if (pinEnabled && role !== 'kasir') return fail('PIN login hanya boleh diaktifkan untuk role kasir')
       if ((pin || pinEnabled) && !/^\d{4,8}$/.test(pin)) return fail('PIN kasir harus 4-8 digit angka')
+      const caller = store.users.find(item => item.nama_pengguna === String(data._caller ?? ''))
+      const callerPlan = store.plans.find(item => Number(item.id) === Number(caller?.subscription_plan_id))
+      const callerPlanManaged = caller && caller.hak_akses !== 'developer' && (Number(caller.is_buyer ?? 0) === 1 || !!caller.subscription_plan_id)
+      if (callerPlanManaged) {
+        const expiresAt = caller.subscription_expires_at ?? caller.access_expires_at ?? null
+        const expiresTime = expiresAt ? new Date(expiresAt).getTime() : Number.NaN
+        if (Number.isFinite(expiresTime) && expiresTime < Date.now()) {
+          return fail('Paket pembeli sudah berakhir. Upgrade atau perpanjang paket sebelum menambah pengguna lokal.')
+        }
+        if (callerPlan?.feature_flags?.multi_user === false) {
+          return fail('Paket pembeli belum mengaktifkan multi-user. Aktifkan fitur multi_user di Developer Panel -> Paket.')
+        }
+        const maxUsers = Number.isFinite(Number(callerPlan?.max_users)) ? Math.trunc(Number(callerPlan?.max_users)) : 1
+        const used = store.users.filter(item => item.hak_akses !== 'developer').length
+        if (maxUsers !== -1 && used >= maxUsers) {
+          return fail(`Paket pembeli hanya mengizinkan ${maxUsers} pengguna lokal termasuk owner. Ubah Max User di Developer Panel -> Paket untuk menambah kasir lagi.`)
+        }
+      }
 
       const row: MobileStore['users'][number] = {
         nama_pengguna: String(data.nama_pengguna),
@@ -3151,13 +3178,28 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       return ok(undefined as T)
 
     case 'warehouse:getAll':
-      return ok(store.warehouses as T)
+      return ok(store.warehouses.filter(row => row.is_active !== 0) as T)
 
     case 'warehouse:create':
-      return createSimpleRow(store, store.warehouses, 'warehouse', args[0] as AnyRecord) as IpcResponse<T>
+      return createSimpleRow(store, store.warehouses, 'warehouse', { ...(args[0] as AnyRecord), is_active: 1 }) as IpcResponse<T>
 
-    case 'inventory:getBatches':
-      return ok((store.batches[String(args[0])] ?? []) as T)
+    case 'warehouse:update':
+      return updateSimpleRow(store, store.warehouses, args[0], args[1] as AnyRecord) as IpcResponse<T>
+
+    case 'warehouse:delete':
+      return deleteSimpleRow(store, store.warehouses, args[0]) as IpcResponse<T>
+
+    case 'inventory:getBatches': {
+      const kd = String(args[0] ?? '').trim()
+      const rows = kd
+        ? (store.batches[kd] ?? [])
+        : Object.values(store.batches).flat()
+      const data = rows.map(row => ({
+        ...row,
+        warehouse_name: store.warehouses.find(w => String(w.id) === String(row.warehouse_id))?.name ?? null,
+      }))
+      return ok(data as T)
+    }
 
     case 'inventory:addBatch': {
       const data = args[0] as AnyRecord
@@ -3168,8 +3210,51 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       return ok(row as T)
     }
 
-    case 'inventory:getSerials':
-      return ok((store.serials[String(args[0])] ?? []) as T)
+    case 'inventory:updateBatch': {
+      const id = String(args[0] ?? '')
+      const data = args[1] as AnyRecord
+      let found: AnyRecord | null = null
+      let oldKd = ''
+      for (const [kd, rows] of Object.entries(store.batches)) {
+        const index = rows.findIndex(row => String(row.id) === id)
+        if (index >= 0) {
+          found = { ...rows[index], ...data, updated_at: now() }
+          rows.splice(index, 1)
+          oldKd = kd
+          break
+        }
+      }
+      if (!found) return fail('Batch tidak ditemukan')
+      const nextKd = String(found.kd_barang || oldKd)
+      store.batches[nextKd] = [found, ...(store.batches[nextKd] ?? [])]
+      saveStore(store)
+      return ok(found as T, 'Batch berhasil diperbarui')
+    }
+
+    case 'inventory:deleteBatch': {
+      const id = String(args[0] ?? '')
+      for (const rows of Object.values(store.batches)) {
+        const index = rows.findIndex(row => String(row.id) === id)
+        if (index >= 0) {
+          rows.splice(index, 1)
+          saveStore(store)
+          return ok(undefined as T, 'Batch berhasil dihapus')
+        }
+      }
+      return fail('Batch tidak ditemukan')
+    }
+
+    case 'inventory:getSerials': {
+      const kd = String(args[0] ?? '').trim()
+      const rows = kd
+        ? (store.serials[kd] ?? [])
+        : Object.values(store.serials).flat()
+      const data = rows.map(row => ({
+        ...row,
+        warehouse_name: store.warehouses.find(w => String(w.id) === String(row.warehouse_id))?.name ?? null,
+      }))
+      return ok(data as T)
+    }
 
     case 'inventory:addSerial': {
       const data = args[0] as AnyRecord
@@ -3178,6 +3263,40 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       store.serials[kd] = [...(store.serials[kd] ?? []), row]
       saveStore(store)
       return ok(row as T)
+    }
+
+    case 'inventory:updateSerial': {
+      const id = String(args[0] ?? '')
+      const data = args[1] as AnyRecord
+      let found: AnyRecord | null = null
+      let oldKd = ''
+      for (const [kd, rows] of Object.entries(store.serials)) {
+        const index = rows.findIndex(row => String(row.id) === id)
+        if (index >= 0) {
+          found = { ...rows[index], ...data, updated_at: now() }
+          rows.splice(index, 1)
+          oldKd = kd
+          break
+        }
+      }
+      if (!found) return fail('Serial tidak ditemukan')
+      const nextKd = String(found.kd_barang || oldKd)
+      store.serials[nextKd] = [found, ...(store.serials[nextKd] ?? [])]
+      saveStore(store)
+      return ok(found as T, 'Serial berhasil diperbarui')
+    }
+
+    case 'inventory:deleteSerial': {
+      const id = String(args[0] ?? '')
+      for (const rows of Object.values(store.serials)) {
+        const index = rows.findIndex(row => String(row.id) === id)
+        if (index >= 0) {
+          rows.splice(index, 1)
+          saveStore(store)
+          return ok(undefined as T, 'Serial berhasil dihapus')
+        }
+      }
+      return fail('Serial tidak ditemukan')
     }
 
     case 'inventory:transfer':

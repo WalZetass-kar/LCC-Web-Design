@@ -5,6 +5,7 @@ import { sqlite } from '../../database/connection.js'
 import { demoSession } from '../services/demoSessionManager.js'
 import { validatePasswordStrength } from '../../shared/passwordPolicy.js'
 import { hashPassword } from '../services/crypto.js'
+import { getSubscriptionStatus, hasSubscriptionBypass } from '../middleware/subscriptionGuard.js'
 
 // Role hierarchy: developer > admin > operator > kasir
 const ROLE_HIERARCHY = ['developer', 'admin', 'operator', 'kasir']
@@ -60,6 +61,52 @@ function addDays(base: Date, days: number): Date {
 function validatePin(pin?: string | null): string | null {
   if (!pin) return null
   return PIN_PATTERN.test(pin) ? null : 'PIN kasir harus 4-8 digit angka'
+}
+
+function getCallerAccount(username?: string | null) {
+  if (!username) return null
+  const row = sqlite.prepare(`
+    SELECT nama_pengguna, hak_akses, is_buyer, subscription_plan_id
+    FROM mediasoft_pengguna
+    WHERE nama_pengguna = ?
+  `).get(username) as { nama_pengguna: string; hak_akses?: string | null; is_buyer?: number | null; subscription_plan_id?: number | null } | undefined
+  return row ?? null
+}
+
+function countPlanManagedLocalUsers(): number {
+  const row = sqlite.prepare(`
+    SELECT COUNT(*) AS c
+    FROM mediasoft_pengguna
+    WHERE COALESCE(hak_akses, '') != 'developer'
+  `).get() as { c?: number } | undefined
+  return Number(row?.c ?? 0)
+}
+
+function validateLocalUserLimit(caller?: string | null): string | null {
+  if (!caller || hasSubscriptionBypass(caller)) return null
+
+  const account = getCallerAccount(caller)
+  if (!account) return null
+  const isPlanManaged = Number(account.is_buyer ?? 0) === 1 || !!account.subscription_plan_id
+  if (!isPlanManaged) return null
+
+  const status = getSubscriptionStatus(caller)
+  if (status.is_expired) {
+    return 'Paket pembeli sudah berakhir. Upgrade atau perpanjang paket sebelum menambah pengguna lokal.'
+  }
+  if (status.feature_flags.multi_user === false) {
+    return 'Paket pembeli belum mengaktifkan multi-user. Aktifkan fitur multi_user di Developer Panel -> Paket.'
+  }
+
+  const maxUsers = Number(status.max_users ?? 1)
+  if (maxUsers !== -1) {
+    const used = countPlanManagedLocalUsers()
+    if (used >= maxUsers) {
+      return `Paket pembeli hanya mengizinkan ${maxUsers} pengguna lokal termasuk owner. Ubah Max User di Developer Panel -> Paket untuk menambah kasir lagi.`
+    }
+  }
+
+  return null
 }
 
 export class UserController {
@@ -135,10 +182,13 @@ export class UserController {
 
       const pinError = validatePin(data.pin)
       if (pinError) return { success: false, message: pinError }
-      if (data.pin_enabled && data.hak_akses !== 'kasir') {
+      const role = normalizeLocalRole(data.hak_akses)
+      if (data.pin_enabled && role !== 'kasir') {
         return { success: false, message: 'PIN login hanya boleh diaktifkan untuk role kasir' }
       }
-      const role = normalizeLocalRole(data.hak_akses)
+
+      const localUserLimitError = validateLocalUserLimit(data._caller)
+      if (localUserLimitError) return { success: false, message: localUserLimitError }
 
       await PenggunaModel.create({
         nama_pengguna: data.nama_pengguna,

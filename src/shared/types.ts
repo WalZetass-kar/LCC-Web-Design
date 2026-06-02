@@ -42,7 +42,9 @@ export interface Penjualan {
   jenis_pembayaran: string | null
   shift_id?: number | null
   kd_customer: string | null
+  nama_customer?: string | null
 }
+
 
 export interface PenjualanDetailItem {
   kd_trans_jual_detail: number
@@ -264,6 +266,8 @@ export interface UserSession {
   remote_license_refresh_token?: string | null
   remote_customer_id?: string | null
   remote_auth_user_id?: string | null
+  remote_registration_status?: 'synced' | 'pending' | null
+  remote_registration_message?: string | null
   subscription_plan_id?: number | null
   subscription_expires_at?: string | null
 }

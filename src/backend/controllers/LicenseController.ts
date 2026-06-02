@@ -277,6 +277,7 @@ function syncLocalBuyerFromLicensePayload(username: string, payload: any) {
 function errorCodeFromLicenseResult(result: ApiResult<any>): string | undefined {
   return (result.data as any)?.error_code
     || (result.data as any)?.status
+    || (result.message?.toLowerCase().includes('tidak ditemukan') ? 'NOT_FOUND' : undefined)
     || undefined
 }
 
@@ -439,6 +440,9 @@ export class LicenseController {
     }
 
     const code = errorCodeFromLicenseResult(result)
+    if (String(code).toUpperCase() === 'NOT_FOUND') {
+      sqlite.prepare(`DELETE FROM mediasoft_pengguna WHERE nama_pengguna = ? AND is_buyer = 1`).run(username)
+    }
     if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED'].includes(String(code).toUpperCase())) {
       sqlite.prepare(`UPDATE mediasoft_pengguna SET status_user = 'Nonaktif' WHERE nama_pengguna = ?`).run(username)
     }
@@ -493,6 +497,18 @@ export class LicenseController {
       return await request<ApiResult<any[]>>('GET', '/plans', '', endpoint)
     } catch (e: any) {
       return { success: false, message: e?.message || 'Gagal memuat paket dari license server' }
+    }
+  }
+
+  static async getPublicPopup(code: string) {
+    const endpoint = getPublicLicenseUrl()
+    if (!endpoint) return { success: false, message: 'License server publik belum dikonfigurasi' }
+    const popupCode = String(code ?? '').trim()
+    if (!popupCode) return { success: false, message: 'Kode popup tidak valid' }
+    try {
+      return await request<ApiResult<any>>('GET', `/popup/${encodeURIComponent(popupCode)}`, '', endpoint)
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal memuat popup dari license server' }
     }
   }
 
@@ -655,7 +671,36 @@ export class LicenseController {
   }
 
   static async getUsers(search?: string) { return call('GET', `/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`) }
-  static async createUser(data: unknown) { return call('POST', '/admin/users', data) }
+  static async createUser(data: unknown) {
+    const result = await call('POST', '/admin/users', data)
+    if (result.success) return result
+
+    const payload = (data && typeof data === 'object') ? data as any : {}
+    const email = String(payload.email ?? '').trim()
+    const password = String(payload.password ?? '').trim()
+    const name = String(payload.name ?? payload.nama_lengkap ?? '').trim()
+    if (!email || !password || !name) return result
+
+    const fallback = await this.registerTrialCustomer({
+      email,
+      password,
+      nama_lengkap: name,
+      no_telp: payload.phone ? String(payload.phone) : undefined,
+    })
+
+    if (!fallback?.success) {
+      return {
+        ...result,
+        message: `${result.message || 'Gagal membuat akun via admin Supabase'}. Fallback daftar trial publik juga gagal: ${fallback?.message || 'license server publik tidak merespons'}`,
+      }
+    }
+
+    return {
+      success: true,
+      data: fallback.data,
+      message: 'Akun dibuat di Supabase melalui jalur trial publik. Untuk mengubah paket paid, login sebagai admin Supabase yang valid lalu ubah paketnya.',
+    }
+  }
   static async updateUser(id: string | number, data: unknown) { return call('PATCH', `/admin/users/${id}`, data) }
   static async deleteUser(id: string | number) { return call('DELETE', `/admin/users/${id}`) }
   static async changeUserPlan(id: string | number, data: unknown) { return call('PUT', `/admin/users/${id}/plan`, data) }

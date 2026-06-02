@@ -373,7 +373,7 @@ export default function LicensePlansPage() {
                     <Limit label="Device" value={limitLabel(plan.max_devices)} />
                     <Limit label="Transaksi/hari" value={limitLabel(plan.max_transactions_per_day)} />
                     <Limit label="Produk" value={limitLabel(plan.max_products)} />
-                    <Limit label="User" value={limitLabel(plan.max_users)} />
+                    <Limit label="Pengguna Lokal" value={limitLabel(plan.max_users)} />
                   </div>
                   <div className="mt-auto grid grid-cols-3 gap-2">
                     <button
@@ -533,7 +533,7 @@ function PlanFormModal({
               <Field label="Max Produk">
                 <input type="number" value={form.max_products} onChange={e => setForm(prev => ({ ...prev, max_products: e.target.value }))} className={input} />
               </Field>
-              <Field label="Max User">
+              <Field label="Max Pengguna Lokal">
                 <input type="number" value={form.max_users} onChange={e => setForm(prev => ({ ...prev, max_users: e.target.value }))} className={input} />
               </Field>
             </div>

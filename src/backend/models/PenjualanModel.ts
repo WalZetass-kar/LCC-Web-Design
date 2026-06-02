@@ -32,13 +32,14 @@ export class PenjualanModel {
       for (const d of details) {
         db.insert(penjualanDetail).values(d).run()
         if (d.kd_barang && d.qty) {
-          const item = db.select({ stok: barang.stok }).from(barang).where(eq(barang.kd_barang, d.kd_barang)).get()
-          if (item) {
-            const newStok = (item.stok ?? 0) - d.qty
-            if (newStok < 0) {
-              throw new Error(`Stok tidak mencukupi untuk barang ${d.kd_barang}`)
-            }
-            db.update(barang).set({ stok: newStok }).where(eq(barang.kd_barang, d.kd_barang)).run()
+          // SECURITY: Use atomic UPDATE to prevent race conditions in stock levels
+          const result = db.update(barang)
+            .set({ stok: sql`${barang.stok} - ${d.qty}` })
+            .where(and(eq(barang.kd_barang, d.kd_barang), gte(barang.stok, d.qty)))
+            .run()
+          
+          if (result.changes === 0) {
+            throw new Error(`Stok tidak mencukupi untuk barang ${d.kd_barang} atau barang tidak ditemukan`)
           }
         }
       }

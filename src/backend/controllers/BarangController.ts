@@ -254,8 +254,15 @@ export class BarangController {
     return { success: true, message: 'Produk berhasil diperbarui' }
   }
 
-  static delete(kd: string) {
-    // Note: delete doesn't receive username, will be blocked by api.ts wrapper
+  static delete(kd: string, username?: string) {
+    const demoError = validateDemoMode(username)
+    if (demoError) return demoError
+
+    BarangModel.delete(kd)
+    return { success: true, message: 'Produk berhasil dihapus' }
+  }
+}
+ote: delete doesn't receive username, will be blocked by api.ts wrapper
     BarangModel.delete(kd)
     return { success: true, message: 'Produk berhasil dihapus' }
   }

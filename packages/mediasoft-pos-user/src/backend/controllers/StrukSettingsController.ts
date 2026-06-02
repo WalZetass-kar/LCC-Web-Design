@@ -1,0 +1,195 @@
+import { sqlite } from '../../database/connection.js'
+
+const MAX_QRIS_IMAGE_BYTES = 5 * 1024 * 1024
+const QRIS_IMAGE_PATTERN = /^data:image\/(png|jpe?g|webp);base64,/i
+
+interface StrukSettings {
+  id: number
+  printer_type: string
+  paper_size: string
+  layout_type: string
+  show_logo: number
+  show_alamat: number
+  show_telepon: number
+  show_email: number
+  show_kasir: number
+  show_customer: number
+  footer_text: string
+  qris_image: string | null
+  qris_enabled: number
+  updated_at: string
+}
+
+export class StrukSettingsController {
+  static ensureRow() {
+    sqlite.prepare(`
+      INSERT OR IGNORE INTO mediasoft_struk_settings (id, updated_at)
+      VALUES (1, ?)
+    `).run(new Date().toISOString())
+  }
+
+  static normalizeQrisImage(base64Image: string): string {
+    const image = base64Image?.trim()
+    if (!image || !QRIS_IMAGE_PATTERN.test(image)) {
+      throw new Error('Format gambar QRIS harus PNG, JPG, JPEG, atau WEBP')
+    }
+
+    const base64Payload = image.split(',')[1]
+    if (!base64Payload) {
+      throw new Error('File QRIS tidak valid')
+    }
+
+    const estimatedBytes = Math.floor((base64Payload.length * 3) / 4)
+    if (estimatedBytes > MAX_QRIS_IMAGE_BYTES) {
+      throw new Error('Ukuran gambar QRIS maksimal 5MB')
+    }
+
+    return image
+  }
+
+  /**
+   * Get struk settings
+   */
+  static get(): { success: boolean; data?: StrukSettings; message?: string } {
+    try {
+      this.ensureRow()
+      const row = sqlite
+        .prepare('SELECT * FROM mediasoft_struk_settings WHERE id = 1')
+        .get() as StrukSettings | undefined
+
+      return { success: true, data: row }
+    } catch (error) {
+      return { success: false, message: String(error) }
+    }
+  }
+
+  /**
+   * Update struk settings
+   */
+  static update(data: Partial<StrukSettings>) {
+    try {
+      this.ensureRow()
+      const now = new Date().toISOString()
+      
+      const fields: string[] = []
+      const values: any[] = []
+
+      if (data.printer_type !== undefined) {
+        fields.push('printer_type = ?')
+        values.push(data.printer_type)
+      }
+      if (data.paper_size !== undefined) {
+        fields.push('paper_size = ?')
+        values.push(data.paper_size)
+      }
+      if (data.layout_type !== undefined) {
+        fields.push('layout_type = ?')
+        values.push(data.layout_type)
+      }
+      if (data.show_logo !== undefined) {
+        fields.push('show_logo = ?')
+        values.push(data.show_logo ? 1 : 0)
+      }
+      if (data.show_alamat !== undefined) {
+        fields.push('show_alamat = ?')
+        values.push(data.show_alamat ? 1 : 0)
+      }
+      if (data.show_telepon !== undefined) {
+        fields.push('show_telepon = ?')
+        values.push(data.show_telepon ? 1 : 0)
+      }
+      if (data.show_email !== undefined) {
+        fields.push('show_email = ?')
+        values.push(data.show_email ? 1 : 0)
+      }
+      if (data.show_kasir !== undefined) {
+        fields.push('show_kasir = ?')
+        values.push(data.show_kasir ? 1 : 0)
+      }
+      if (data.show_customer !== undefined) {
+        fields.push('show_customer = ?')
+        values.push(data.show_customer ? 1 : 0)
+      }
+      if (data.footer_text !== undefined) {
+        fields.push('footer_text = ?')
+        values.push(data.footer_text)
+      }
+      if (data.qris_image !== undefined) {
+        fields.push('qris_image = ?')
+        values.push(data.qris_image)
+      }
+      if (data.qris_enabled !== undefined) {
+        fields.push('qris_enabled = ?')
+        values.push(data.qris_enabled ? 1 : 0)
+      }
+
+      fields.push('updated_at = ?')
+      values.push(now)
+
+      if (fields.length === 1) {
+        return { success: false, message: 'Tidak ada data yang diubah' }
+      }
+
+      values.push(1) // WHERE id = 1
+
+      sqlite.prepare(`
+        UPDATE mediasoft_struk_settings 
+        SET ${fields.join(', ')}
+        WHERE id = ?
+      `).run(...values)
+
+      return { success: true, message: 'Pengaturan struk berhasil disimpan' }
+    } catch (error) {
+      return { success: false, message: String(error) }
+    }
+  }
+
+  /**
+   * Upload QRIS image (base64)
+   */
+  static uploadQris(base64Image: string) {
+    try {
+      this.ensureRow()
+      const now = new Date().toISOString()
+      const qrisImage = this.normalizeQrisImage(base64Image)
+      
+      sqlite.prepare(`
+        UPDATE mediasoft_struk_settings 
+        SET qris_image = ?, qris_enabled = 1, updated_at = ?
+        WHERE id = 1
+      `).run(qrisImage, now)
+
+      const row = sqlite
+        .prepare('SELECT * FROM mediasoft_struk_settings WHERE id = 1')
+        .get() as StrukSettings | undefined
+
+      return { success: true, message: 'QRIS berhasil diupload', data: row }
+    } catch (error) {
+      return { success: false, message: String(error) }
+    }
+  }
+
+  /**
+   * Remove QRIS image
+   */
+  static removeQris() {
+    try {
+      this.ensureRow()
+      const now = new Date().toISOString()
+      
+      sqlite.prepare(`
+        UPDATE mediasoft_struk_settings 
+        SET qris_image = NULL, qris_enabled = 0, updated_at = ?
+        WHERE id = 1
+      `).run(now)
+
+      const row = sqlite
+        .prepare('SELECT * FROM mediasoft_struk_settings WHERE id = 1')
+        .get() as StrukSettings | undefined
+
+      return { success: true, message: 'QRIS berhasil dihapus', data: row }
+    } catch (error) {
+      return { success: false, message: String(error) }
+    }
+  }
+}
