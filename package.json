@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
     "predev": "node scripts/ensure-native-deps.cjs",
+    "dev:desktop": "npm run dev",
+    "dev:mobile": "npm run dev:vite -- --host 0.0.0.0",
     "dev:license": "npm --prefix license-server run dev",
     "dev:with-license": "concurrently -k \"npm run dev:license\" \"npm run dev\"",
     "dev:vite": "vite",
@@ -21,13 +23,18 @@
     "build:desktop:windows": "npm run desktop:win:installer",
     "build:desktop:linux": "npm run desktop:linux",
     "build:desktop:mac": "npm run desktop:mac",
-    "build:android": "npm run verify:build-resources && npm run build:vite && npx cap sync android",
+    "build:win": "npm run build:desktop:windows",
+    "build:linux": "npm run build:desktop:linux",
+    "build:mac": "npm run build:desktop:mac",
+    "mobile:sync:android": "npm run verify:build-resources && npm run build:vite && npx cap sync android",
+    "build:android": "npm run build:mobile:android",
     "build:ios": "npm run verify:build-resources && npm run build:vite && npx cap sync ios",
     "build:mobile:android": "npm run android:release && npm run android:aab",
     "build:mobile:ios": "npm run build:ios",
+    "sync:test": "node scripts/sync-test.cjs",
     "android:sync": "npx cap sync android",
     "android:open": "npx cap open android",
-    "android:debug": "npm run build:android && node scripts/build-android.cjs assembleDebug",
+    "android:debug": "npm run mobile:sync:android && node scripts/build-android.cjs assembleDebug",
     "prepare:android-network-security": "node scripts/prepare-android-network-security.cjs",
     "prepare:android-signing": "node scripts/prepare-android-signing.cjs",
     "android:release": "npm run verify:build-resources && npm run build:vite && npm run prepare:android-network-security && npx cap sync android && npm run prepare:android-signing && node scripts/build-android.cjs assembleRelease",
@@ -41,7 +48,8 @@
     "mobile:android:aab": "npm run android:aab",
     "mobile:ios:sync": "npm run ios:sync",
     "desktop:win": "npm run build:desktop && electron-builder --win zip --publish never",
-    "desktop:win:installer": "npm run build:desktop && electron-builder --win --publish never",
+    "desktop:win:installer": "npm run build:desktop && electron-builder --win nsis --publish never",
+    "desktop:win:all": "npm run build:desktop && electron-builder --win --publish never",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm run test",
@@ -122,7 +130,7 @@
   },
   "build": {
     "appId": "com.mediasoft.pos.zetass",
-    "productName": "MediaSoft POS Zetass v2.0",
+    "productName": "MediaSoft POS Zetass",
     "directories": {
       "output": "release"
     },
@@ -151,10 +159,6 @@
       {
         "from": "src/renderer/assets",
         "to": "renderer-assets"
-      },
-      {
-        "from": ".env.production",
-        "to": ".env.production"
       }
     ],
     "protocols": [
@@ -199,7 +203,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "MediaSoft POS Zetass v2.0",
+      "shortcutName": "MediaSoft POS Zetass",
       "deleteAppDataOnUninstall": false
     },
     "msi": {
@@ -207,7 +211,7 @@
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "MediaSoft POS Zetass v2.0"
+      "shortcutName": "MediaSoft POS Zetass"
     }
   }
 }

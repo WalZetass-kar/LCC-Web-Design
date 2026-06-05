@@ -1,5 +1,51 @@
 import { sqlite } from '../../database/connection.js'
 
+const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+const TABLE_COLUMN_ALLOWLIST: Record<string, Set<string>> = {
+  mediasoft_barang: new Set([
+    'kd_barang',
+    'nama_barang',
+    'tgl_wkt_simpan',
+    'tgl_wkt_ubah',
+    'foto_barang',
+    'deskripsi_barang',
+    'nama_pengguna',
+    'stok',
+    'stok_minimum',
+    'kd_satuan',
+    'jenis_transaksi',
+    'kd_kategori_barang',
+    'barcode',
+    'expired_date',
+  ]),
+  mediasoft_harga: new Set([
+    'kd_barang',
+    'harga_barang',
+    'potongan',
+    'harga_modal',
+  ]),
+}
+
+function assertIdentifier(value: string, label: string) {
+  if (!IDENTIFIER_PATTERN.test(value)) {
+    throw new Error(`${label} tidak valid`)
+  }
+  return value
+}
+
+function safeColumns(table: string, columns: string[]) {
+  const allowed = TABLE_COLUMN_ALLOWLIST[table]
+  if (!allowed) throw new Error(`Tabel batch tidak diizinkan: ${table}`)
+
+  const unique = [...new Set(columns)]
+  for (const column of unique) {
+    assertIdentifier(column, 'Nama kolom')
+    if (!allowed.has(column)) throw new Error(`Kolom tidak diizinkan untuk ${table}: ${column}`)
+  }
+  return unique
+}
+
 /**
  * Execute multiple database operations in a transaction
  * Automatically rolls back on error
@@ -30,6 +76,8 @@ export function withOptimisticLock<T>(
   updateFn: () => T
 ): { success: true; data: T } | { success: false; error: string } {
   try {
+    assertIdentifier(table, 'Nama tabel')
+    assertIdentifier(idColumn, 'Kolom ID')
     // Check current version
     const row = sqlite.prepare(`SELECT version FROM ${table} WHERE ${idColumn} = ?`).get(id) as { version?: number } | undefined
     
@@ -67,7 +115,7 @@ export function batchInsert<T extends Record<string, any>>(
   try {
     sqlite.exec('BEGIN TRANSACTION')
     
-    const columns = Object.keys(records[0])
+    const columns = safeColumns(table, Object.keys(records[0]))
     const placeholders = columns.map(() => '?').join(', ')
     const stmt = sqlite.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`)
     
@@ -100,11 +148,13 @@ export function batchUpdate<T extends Record<string, any>>(
   
   try {
     sqlite.exec('BEGIN TRANSACTION')
+    assertIdentifier(idColumn, 'Kolom ID')
     
     let updated = 0
     for (const record of records) {
       const { [idColumn]: id, ...data } = record
-      const columns = Object.keys(data)
+      const columns = safeColumns(table, Object.keys(data))
+      if (columns.length === 0) continue
       const setClause = columns.map(col => `${col} = ?`).join(', ')
       const values = [...columns.map(col => (data as Record<string, unknown>)[col]), id]
       
@@ -134,6 +184,7 @@ export function batchDelete(
   
   try {
     sqlite.exec('BEGIN TRANSACTION')
+    safeColumns(table, [idColumn])
     
     const placeholders = ids.map(() => '?').join(', ')
     const result = sqlite.prepare(`DELETE FROM ${table} WHERE ${idColumn} IN (${placeholders})`).run(...ids)

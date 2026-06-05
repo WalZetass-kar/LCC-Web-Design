@@ -7,6 +7,7 @@ import { withTransaction } from '../utils/transaction.js'
 import { WhatsAppController } from './WhatsAppController.js'
 import { ActivityLogModel } from '../models/ActivityLogModel.js'
 import { checkTransactionLimit, getLimitPopup, getSubscriptionStatus, getUpgradePopup } from '../middleware/subscriptionGuard.js'
+import { PromoService } from '../services/promoService.js'
 
 interface CartItem {
   kd_barang: string
@@ -30,6 +31,94 @@ interface CreateTransaksiPayload {
 }
 
 export class PenjualanController {
+  private static dateKey(value = new Date()) {
+    const year = value.getFullYear()
+    const month = String(value.getMonth() + 1).padStart(2, '0')
+    const day = String(value.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  private static dateTimeLocal(value = new Date()) {
+    const hours = String(value.getHours()).padStart(2, '0')
+    const minutes = String(value.getMinutes()).padStart(2, '0')
+    const seconds = String(value.getSeconds()).padStart(2, '0')
+    return `${this.dateKey(value)} ${hours}:${minutes}:${seconds}`
+  }
+
+  private static asSafeNumber(value: unknown, fallback = 0) {
+    const numeric = Number(value ?? fallback)
+    return Number.isFinite(numeric) ? numeric : fallback
+  }
+
+  private static clampPercentage(value: unknown) {
+    return Math.max(0, Math.min(100, this.asSafeNumber(value)))
+  }
+
+  private static generateTransactionCode(now: Date) {
+    const dateStr = this.dateKey(now).replace(/-/g, '')
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const suffix = `${now.getTime().toString(36)}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`.toUpperCase()
+      const code = `FJ-${dateStr}-${suffix}`
+      const existing = sqlite
+        .prepare('SELECT 1 FROM mediasoft_penjualan WHERE kd_tansaksi_jual = ? LIMIT 1')
+        .get(code)
+      if (!existing) return code
+    }
+    throw new Error('Gagal membuat nomor transaksi unik')
+  }
+
+  private static getTaxAmount(subtotal: number) {
+    const row = sqlite
+      .prepare('SELECT COALESCE(pajak_persen, 0) AS rate FROM mediasoft_identitas LIMIT 1')
+      .get() as { rate?: number } | undefined
+    const rate = Math.max(0, Math.min(100, this.asSafeNumber(row?.rate)))
+    return Math.round(subtotal * rate / 100)
+  }
+
+  private static buildTrustedItems(items: CartItem[]) {
+    const merged = new Map<string, number>()
+    for (const item of items) {
+      const kd_barang = String(item?.kd_barang ?? '').trim()
+      const qty = this.asSafeNumber(item?.qty)
+      if (!kd_barang) throw new Error('Kode barang tidak valid')
+      if (!Number.isInteger(qty) || qty <= 0) throw new Error(`Qty ${kd_barang} harus bilangan bulat lebih dari 0`)
+      merged.set(kd_barang, (merged.get(kd_barang) ?? 0) + qty)
+    }
+
+    const trusted: CartItem[] = []
+    for (const [kd_barang, qty] of merged) {
+      const row = sqlite.prepare(`
+        SELECT
+          b.kd_barang,
+          b.nama_barang,
+          COALESCE(b.stok, 0) AS stok,
+          COALESCE(h.harga_barang, 0) AS harga_jual,
+          COALESCE(h.harga_modal, 0) AS harga_modal,
+          COALESCE(h.potongan, 0) AS disc
+        FROM mediasoft_barang b
+        LEFT JOIN mediasoft_harga h ON b.kd_barang = h.kd_barang
+        WHERE b.kd_barang = ?
+        LIMIT 1
+      `).get(kd_barang) as (CartItem & { stok?: number }) | undefined
+
+      if (!row) throw new Error(`Barang ${kd_barang} tidak ditemukan`)
+      if ((row.stok ?? 0) < qty) throw new Error(`Stok ${row.nama_barang || kd_barang} tidak mencukupi`)
+      const harga_jual = this.asSafeNumber(row.harga_jual)
+      if (harga_jual < 0) throw new Error(`Harga jual ${row.nama_barang || kd_barang} tidak valid`)
+
+      trusted.push({
+        kd_barang,
+        nama_barang: row.nama_barang || kd_barang,
+        harga_jual,
+        harga_modal: Math.max(0, this.asSafeNumber(row.harga_modal)),
+        qty,
+        disc: this.clampPercentage(row.disc),
+      })
+    }
+
+    return trusted
+  }
+
   private static getLowStockProducts(items: CartItem[]) {
     const productIds = [...new Set(items.map(item => item.kd_barang).filter(Boolean))]
     if (!productIds.length) return []
@@ -96,7 +185,11 @@ export class PenjualanController {
     const demoError = validateDemoMode(payload.username)
     if (demoError) return demoError
 
-    const username = payload.username || 'KASIR'
+    const username = String(payload.username || '').trim()
+    if (!username) {
+      return { success: false, message: 'Sesi kasir tidak valid. Silakan login ulang.' }
+    }
+
     const subscription = getSubscriptionStatus(username)
     if (subscription.is_expired) {
       ActivityLogModel.log(
@@ -157,29 +250,47 @@ export class PenjualanController {
       }
     }
 
-    const now = new Date()
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
-    const timeStr = now.getTime().toString().slice(-4)
-    const kd_transaksi = `FJ-${dateStr}${timeStr}`
+    let trustedItems: CartItem[]
+    try {
+      trustedItems = this.buildTrustedItems(payload.items)
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : String(error) }
+    }
 
-    const sub_total = payload.items.reduce((sum, item) => {
+    const now = new Date()
+    const kd_transaksi = this.generateTransactionCode(now)
+
+    const sub_total = trustedItems.reduce((sum, item) => {
       const disc_amount = (item.harga_jual * item.disc) / 100
       return sum + (item.harga_jual - disc_amount) * item.qty
     }, 0)
 
-    const pajak = payload.pajak ?? 0
-    const diskon_promo = payload.diskon_promo ?? 0
-    const total_bayar = sub_total + pajak - diskon_promo
-    const kembalian = payload.yang_dibayar - total_bayar
+    const pajak = this.getTaxAmount(sub_total)
+    let diskon_promo = 0
+    const kode_promo = String(payload.kode_promo ?? '').trim().toUpperCase()
+    if (kode_promo) {
+      const promoValidation = PromoService.validatePromo(kode_promo, sub_total, trustedItems)
+      if (!promoValidation.valid) {
+        return { success: false, message: promoValidation.message || 'Kode promo tidak valid' }
+      }
+      diskon_promo = Math.max(0, Math.min(sub_total, this.asSafeNumber(promoValidation.discount)))
+    }
+
+    const total_bayar = Math.max(0, sub_total + pajak - diskon_promo)
+    const yang_dibayar = Math.max(0, this.asSafeNumber(payload.yang_dibayar))
+    if (yang_dibayar < total_bayar) {
+      return { success: false, message: 'Pembayaran kurang dari total transaksi' }
+    }
+    const kembalian = yang_dibayar - total_bayar
 
     const header = {
       kd_tansaksi_jual: kd_transaksi,
-      tgl_wkt_transaksi: now.toISOString().replace('T', ' ').slice(0, 19),
-      username_transaksi: payload.username || 'KASIR',
-      total_qty: payload.items.reduce((s, i) => s + i.qty, 0),
+      tgl_wkt_transaksi: this.dateTimeLocal(now),
+      username_transaksi: username,
+      total_qty: trustedItems.reduce((s, i) => s + i.qty, 0),
       sub_total,
       pajak,
-      yang_dibayar: payload.yang_dibayar,
+      yang_dibayar,
       kembalian,
       jenis_pembayaran: payload.jenis_pembayaran || 'TUNAI',
       kd_customer: payload.kd_customer || null,
@@ -187,7 +298,7 @@ export class PenjualanController {
       shift_id: payload.shift_id ?? null,
     }
 
-    const details = payload.items.map(item => {
+    const details = trustedItems.map(item => {
       const disc_amount = (item.harga_jual * item.disc) / 100
       const harga_disc = disc_amount * item.qty
       const total_harga_jual = (item.harga_jual - disc_amount) * item.qty
@@ -200,7 +311,7 @@ export class PenjualanController {
         disc: item.disc,
         harga_disc,
         total_harga_jual,
-        nama_pengguna: payload.username || 'KASIR',
+        nama_pengguna: username,
         tgl_waktu_input: header.tgl_wkt_transaksi,
       }
     })
@@ -222,6 +333,11 @@ export class PenjualanController {
             total_transactions = COALESCE(total_transactions, 0) + 1
         WHERE id = ?
       `).run(total_bayar, payload.shift_id)
+
+      if (kode_promo) {
+        const promoApply = PromoService.applyPromo(kode_promo)
+        if (!promoApply.success) throw new Error(promoApply.message || 'Gagal menerapkan promo')
+      }
       
       return kd_transaksi
     })
@@ -230,7 +346,7 @@ export class PenjualanController {
       return { success: false, message: `Transaksi gagal: ${result.error}` }
     }
 
-    void PenjualanController.sendWhatsAppAfterSale(payload, kd_transaksi, total_bayar)
+    void PenjualanController.sendWhatsAppAfterSale({ ...payload, username, items: trustedItems }, kd_transaksi, total_bayar)
 
     return { success: true, message: 'Transaksi berhasil disimpan', kd_transaksi: result.data }
   }

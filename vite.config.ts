@@ -12,6 +12,7 @@ export default defineConfig({
       options: {
         compact: true,
         identifierNamesGenerator: 'hexadecimal',
+        ignoreImports: true,
         stringArray: true,
         stringArrayEncoding: ['base64'],
         stringArrayThreshold: 0.6,

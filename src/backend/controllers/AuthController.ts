@@ -179,7 +179,7 @@ function ensurePlanFromRemote(plan: any): number {
   const now = new Date().toISOString()
   const features = plan?.description ? [String(plan.description)] : []
   const price = Math.round(Number(plan?.price ?? 0))
-  const duration = Math.max(1, Math.trunc(Number(plan?.duration_days ?? TRIAL_DAYS)))
+  const duration = Math.max(0, Math.trunc(Number(plan?.duration_days ?? TRIAL_DAYS)))
   const isTrial = String(plan?.code ?? '').toUpperCase() === 'TRIAL_3_DAYS' || name === TRIAL_PLAN_NAME
   const featureFlags = JSON.stringify(plan?.feature_flags ?? (isTrial ? TRIAL_FEATURE_FLAGS : {}))
 

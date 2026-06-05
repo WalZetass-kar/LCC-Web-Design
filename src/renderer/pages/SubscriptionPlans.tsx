@@ -317,7 +317,7 @@ export default function SubscriptionPlans() {
                   </div>
                   <div>
                     <h3 className="font-bold text-lg text-slate-800 dark:text-white">{plan.name}</h3>
-                    <p className="text-xs text-slate-400">{plan.duration_days} hari</p>
+                    <p className="text-xs text-slate-400">{plan.duration_days === 0 ? 'Seumur hidup' : `${plan.duration_days} hari`}</p>
                   </div>
                 </div>
 
@@ -327,7 +327,7 @@ export default function SubscriptionPlans() {
                     {formatRupiah(plan.price)}
                   </span>
                   <span className="text-sm text-slate-400 ml-1">
-                    /{plan.duration_days === 1 ? 'hari' : plan.duration_days === 30 ? 'bulan' : plan.duration_days === 365 ? 'tahun' : `${plan.duration_days} hari`}
+                    /{plan.duration_days === 0 ? 'seumur hidup' : plan.duration_days === 1 ? 'hari' : plan.duration_days === 30 ? 'bulan' : plan.duration_days === 365 ? 'tahun' : `${plan.duration_days} hari`}
                   </span>
                   {plan.duration_days > 1 && (
                     <p className="text-xs text-slate-400 mt-0.5">

@@ -69,6 +69,23 @@ VALUES
     3, 
     NOW(), 
     NOW()
+  ),
+  (
+    'LIFETIME',
+    'Sekali Beli Seumur Hidup',
+    'Paket sekali bayar untuk akses permanen: semua fitur operasional, multi-user, backup/restore, stock opname, hutang/piutang, shift, API, multi cabang, dan retur/refund.',
+    4999000,
+    'IDR',
+    0,
+    true,
+    false,
+    5,
+    -1,
+    -1,
+    10,
+    4,
+    NOW(),
+    NOW()
   )
 ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name,
@@ -84,4 +101,3 @@ ON CONFLICT (code) DO UPDATE SET
   max_users = EXCLUDED.max_users,
   sort_order = EXCLUDED.sort_order,
   updated_at = NOW();
-

@@ -24,6 +24,8 @@ interface ApiConfig {
     provider: string
     serverKey: string
     clientKey: string
+    hasStoredServerKey?: boolean
+    hasStoredClientKey?: boolean
     isProduction: boolean
     enabled: boolean
   }
@@ -384,11 +386,13 @@ export default function EcommerceApi() {
               type={showSecret ? 'text' : 'password'}
               value={config.paymentGateway.serverKey}
               onChange={e => setConfig({ ...config, paymentGateway: { ...config.paymentGateway, serverKey: e.target.value } })}
+              placeholder={config.paymentGateway.hasStoredServerKey ? 'Sudah tersimpan. Kosongkan untuk mempertahankan key lama.' : 'SB-Mid-server-...'}
             />
             <Input
               label="Client Key"
               value={config.paymentGateway.clientKey}
               onChange={e => setConfig({ ...config, paymentGateway: { ...config.paymentGateway, clientKey: e.target.value } })}
+              placeholder={config.paymentGateway.hasStoredClientKey ? 'Sudah tersimpan. Kosongkan untuk mempertahankan key lama.' : 'SB-Mid-client-...'}
             />
           </div>
 

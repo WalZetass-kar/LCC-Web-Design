@@ -65,7 +65,7 @@ function createWindow() {
       preload: preloadPath,
       contextIsolation: true,      // SECURITY: Isolate renderer from Node.js
       nodeIntegration: false,       // SECURITY: No Node.js in renderer
-      sandbox: false,
+      sandbox: true,
       webSecurity: true,                   // SECURITY: Always enforce web security
       devTools: isDev,
     },

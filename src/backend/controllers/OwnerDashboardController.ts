@@ -10,37 +10,44 @@ function q(sql: string, params: unknown[] = []) {
   return n(row?.value)
 }
 
+function dateKey(value = new Date()) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export class OwnerDashboardController {
   static getInsights() {
     try {
       const now = new Date()
-      const today = now.toISOString().slice(0, 10)
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10)
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10)
+      const today = dateKey(now)
+      const monthStart = dateKey(new Date(now.getFullYear(), now.getMonth(), 1))
+      const thirtyDaysAgo = dateKey(new Date(now.getTime() - 30 * 86400000))
+      const sevenDaysAgo = dateKey(new Date(now.getTime() - 6 * 86400000))
 
       const salesMonth = q(`
         SELECT COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)), 0) AS value
         FROM mediasoft_penjualan
-        WHERE date(tgl_wkt_transaksi) >= date(?)
+        WHERE substr(tgl_wkt_transaksi, 1, 10) >= ?
       `, [monthStart])
       const salesToday = q(`
         SELECT COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)), 0) AS value
         FROM mediasoft_penjualan
-        WHERE date(tgl_wkt_transaksi) = date(?)
+        WHERE substr(tgl_wkt_transaksi, 1, 10) = ?
       `, [today])
       const cogsMonth = q(`
         SELECT COALESCE(SUM(COALESCE(pd.harga_modal, 0) * COALESCE(pd.qty, 0)), 0) AS value
         FROM mediasoft_penjualan_detail pd
         JOIN mediasoft_penjualan p ON p.kd_tansaksi_jual = pd.kd_tansaksi_jual
-        WHERE date(p.tgl_wkt_transaksi) >= date(?)
+        WHERE substr(p.tgl_wkt_transaksi, 1, 10) >= ?
       `, [monthStart])
       const avgDaily = q(`
         SELECT COALESCE(AVG(total), 0) AS value FROM (
-          SELECT date(tgl_wkt_transaksi) AS d, SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)) AS total
+          SELECT substr(tgl_wkt_transaksi, 1, 10) AS d, SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)) AS total
           FROM mediasoft_penjualan
-          WHERE date(tgl_wkt_transaksi) >= date(?)
-          GROUP BY date(tgl_wkt_transaksi)
+          WHERE substr(tgl_wkt_transaksi, 1, 10) >= ?
+          GROUP BY substr(tgl_wkt_transaksi, 1, 10)
         )
       `, [sevenDaysAgo])
 
@@ -48,7 +55,7 @@ export class OwnerDashboardController {
         SELECT strftime('%H:00', tgl_wkt_transaksi) AS hour, COUNT(*) AS count,
           COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)), 0) AS total
         FROM mediasoft_penjualan
-        WHERE date(tgl_wkt_transaksi) >= date(?)
+        WHERE substr(tgl_wkt_transaksi, 1, 10) >= ?
         GROUP BY hour
         ORDER BY count DESC
         LIMIT 5
@@ -58,7 +65,7 @@ export class OwnerDashboardController {
         SELECT username_transaksi AS username, COUNT(*) AS count,
           COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)), 0) AS total
         FROM mediasoft_penjualan
-        WHERE date(tgl_wkt_transaksi) >= date(?)
+        WHERE substr(tgl_wkt_transaksi, 1, 10) >= ?
         GROUP BY username_transaksi
         ORDER BY total DESC
         LIMIT 5
@@ -70,7 +77,7 @@ export class OwnerDashboardController {
         LEFT JOIN mediasoft_penjualan_detail pd ON pd.kd_barang = b.kd_barang
         LEFT JOIN mediasoft_penjualan p ON p.kd_tansaksi_jual = pd.kd_tansaksi_jual
         GROUP BY b.kd_barang
-        HAVING last_sold_at = '' OR date(last_sold_at) < date(?)
+        HAVING last_sold_at = '' OR substr(last_sold_at, 1, 10) < ?
         ORDER BY b.stok DESC
         LIMIT 8
       `).all(thirtyDaysAgo)
@@ -91,7 +98,7 @@ export class OwnerDashboardController {
         JOIN mediasoft_penjualan p ON p.kd_tansaksi_jual = pd.kd_tansaksi_jual
         LEFT JOIN mediasoft_barang b ON b.kd_barang = pd.kd_barang
         LEFT JOIN mediasoft_kategori_barang k ON k.kd_kategori_barang = b.kd_kategori_barang
-        WHERE date(p.tgl_wkt_transaksi) >= date(?)
+        WHERE substr(p.tgl_wkt_transaksi, 1, 10) >= ?
         GROUP BY category
         ORDER BY margin DESC
         LIMIT 6

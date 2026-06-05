@@ -185,7 +185,7 @@ function planIdFromRemote(plan: any): number | null {
     : JSON.stringify(plan.feature_flags ?? {})
   const values = {
     price: Math.round(Number(plan.price ?? 0)),
-    duration: Math.max(1, Math.trunc(Number(plan.duration_days ?? 30))),
+    duration: Math.max(0, Math.trunc(Number(plan.duration_days ?? 30))),
     features: JSON.stringify(plan.description ? [String(plan.description)] : []),
     active: plan.is_active === false || plan.is_active === 0 ? 0 : 1,
     recommended: plan.is_recommended === true || plan.is_recommended === 1 ? 1 : 0,
@@ -252,22 +252,25 @@ function planIdFromRemote(plan: any): number | null {
 
 function syncLocalBuyerFromLicensePayload(username: string, payload: any) {
   const planId = planIdFromRemote(payload?.plan)
+  const hasSubscriptionPayload = payload?.subscription && typeof payload.subscription === 'object'
   const expiresAt = typeof payload?.subscription?.expires_at === 'string'
     ? payload.subscription.expires_at
-    : null
+    : hasSubscriptionPayload
+      ? null
+      : undefined
 
-  if (planId || expiresAt) {
+  if (planId || hasSubscriptionPayload) {
     sqlite.prepare(`
       UPDATE mediasoft_pengguna
       SET subscription_plan_id = COALESCE(?, subscription_plan_id),
-          subscription_expires_at = COALESCE(?, subscription_expires_at),
-          access_expires_at = COALESCE(?, access_expires_at),
+          subscription_expires_at = ?,
+          access_expires_at = ?,
           status_user = CASE WHEN ? = 'active' THEN 'Aktif' ELSE status_user END
       WHERE nama_pengguna = ?
     `).run(
       planId,
-      expiresAt,
-      expiresAt,
+      expiresAt ?? null,
+      expiresAt ?? null,
       payload?.customer?.status ?? 'active',
       username,
     )
@@ -599,7 +602,7 @@ export class LicenseController {
         for (const p of rows) {
           const name = p.name ?? p.code ?? 'Paket'
           const price = Math.round(Number(p.price ?? 0))
-          const duration = Math.max(1, Math.trunc(Number(p.duration_days ?? 30)))
+          const duration = Math.max(0, Math.trunc(Number(p.duration_days ?? 30)))
           const features = JSON.stringify(Array.isArray(p.features) ? p.features : (p.description ? [String(p.description)] : []))
           const active = p.is_active === false || p.is_active === 0 ? 0 : 1
           const recommended = p.is_recommended === true || p.is_recommended === 1 ? 1 : 0

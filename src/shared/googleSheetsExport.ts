@@ -21,14 +21,14 @@ export function dashboardSummaryToSheetsPayload(summary: DashboardSummary): Goog
   const chartData = summary.chartData || []
 
   return {
-    app: 'MediaSoft POS Zetass v2.0',
+    app: 'MediaSoft POS Zetass',
     action: 'append_dashboard',
     generatedAt,
     sheets: [
       {
         name: 'Ringkasan',
         rows: [
-          ['MediaSoft POS Zetass v2.0'],
+          ['MediaSoft POS Zetass'],
           ['Export Dashboard', generatedAt],
           [],
           ['Ringkasan', 'Transaksi', 'Pemasukan'],
@@ -87,7 +87,7 @@ export function dashboardSummaryToTsv(summary: DashboardSummary) {
 
 export function testGoogleSheetsPayload(): GoogleSheetsPayload {
   return {
-    app: 'MediaSoft POS Zetass v2.0',
+    app: 'MediaSoft POS Zetass',
     action: 'test',
     generatedAt: new Date().toLocaleString('id-ID'),
     sheets: [

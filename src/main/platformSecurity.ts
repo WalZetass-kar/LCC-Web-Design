@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import dotenv from 'dotenv'
+import { fileURLToPath } from 'url'
 
 const DEEP_LINK_SCHEME = 'mediasoftposzetass'
 const DEFAULT_SUPABASE_URL = 'https://azhkvmkmimepmflzqqty.supabase.co'
@@ -36,7 +37,11 @@ export function loadDesktopEnv() {
 function isTrustedRendererOrigin(rawUrl: string, isDev: boolean) {
   try {
     const parsed = new URL(rawUrl)
-    if (parsed.protocol === 'file:') return true
+    if (parsed.protocol === 'file:') {
+      const filePath = fileURLToPath(parsed)
+      const appPath = app.getAppPath()
+      return filePath === appPath || filePath.startsWith(`${appPath}${path.sep}`)
+    }
     if (isDev && TRUSTED_DEV_ORIGINS.has(parsed.origin)) return true
     return false
   } catch {

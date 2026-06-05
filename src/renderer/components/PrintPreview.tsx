@@ -29,7 +29,7 @@ export default function PrintPreview({ isOpen, onClose, children, title = 'Previ
 
         <div className="flex gap-2">
           <Button onClick={handlePrint} icon={<Printer size={16} />} className="flex-1">
-            Print
+            Cetak
           </Button>
           <Button variant="secondary" onClick={onClose} icon={<X size={16} />} className="flex-1">
             Tutup

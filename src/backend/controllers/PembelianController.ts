@@ -10,10 +10,17 @@ export class PembelianController {
     const month = String(now.getMonth() + 1).padStart(2, '0')
     const day = String(now.getDate()).padStart(2, '0')
     const time = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0')
-    const random = Math.floor(Math.random() * 1000)
-      .toString()
-      .padStart(3, '0')
-    return `PO${year}${month}${day}${time}${random}`
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const random = Math.floor(Math.random() * 100000)
+        .toString()
+        .padStart(5, '0')
+      const code = `PO${year}${month}${day}${time}${random}`
+      const existing = sqlite
+        .prepare('SELECT 1 FROM mediasoft_pembelian WHERE kd_tansaksi_beli = ? LIMIT 1')
+        .get(code)
+      if (!existing) return code
+    }
+    throw new Error('Gagal membuat kode pembelian unik')
   }
 
   static getAll() {
@@ -116,38 +123,46 @@ export class PembelianController {
         sub_total += item.qty * item.harga_beli
       }
 
-      const yang_dibayar = data.yang_dibayar || 0
+      const yang_dibayar = Number(data.yang_dibayar || 0)
+      if (!Number.isFinite(yang_dibayar) || yang_dibayar < 0) {
+        return { success: false, message: 'Pembayaran pembelian tidak valid' }
+      }
+      if (yang_dibayar > sub_total) {
+        return { success: false, message: 'Pembayaran pembelian tidak boleh melebihi subtotal' }
+      }
       const sisa_hutang = sub_total - yang_dibayar
       const status = sisa_hutang > 0 ? 'HUTANG' : 'LUNAS'
 
-      // Insert header - gunakan mapping kolom yang benar
-      const stmt = sqlite.prepare(`
-        INSERT INTO mediasoft_pembelian 
-        (kd_tansaksi_beli, tgl_wkt_transaksi, kd_suplier, total_qty, sub_total, yang_dibayar, sisa_hutang, status, username_transaksi, catatan)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      stmt.run(kd_pembelian, tgl_pembelian, data.kd_suplier, total_qty, sub_total, yang_dibayar, sisa_hutang, status, data.username, data.catatan || null)
+      const save = sqlite.transaction(() => {
+        sqlite.prepare(`
+          INSERT INTO mediasoft_pembelian 
+          (kd_tansaksi_beli, tgl_wkt_transaksi, kd_suplier, total_qty, sub_total, yang_dibayar, sisa_hutang, status, username_transaksi, catatan)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(kd_pembelian, tgl_pembelian, data.kd_suplier, total_qty, sub_total, yang_dibayar, sisa_hutang, status, data.username, data.catatan || null)
 
-      // Insert details and update stock
-      for (const item of data.items) {
-        const total = item.qty * item.harga_beli
+        for (const item of data.items) {
+          const product = sqlite
+            .prepare('SELECT kd_barang FROM mediasoft_barang WHERE kd_barang = ? LIMIT 1')
+            .get(item.kd_barang)
+          if (!product) throw new Error(`Barang ${item.kd_barang} tidak ditemukan`)
 
-        db.insert(pembelianDetail).values({
-          kd_pembelian,
-          kd_barang: item.kd_barang,
-          qty: item.qty,
-          harga_beli: item.harga_beli,
-          total,
-        }).run()
+          const total = item.qty * item.harga_beli
+          sqlite.prepare(`
+            INSERT INTO mediasoft_pembelian_detail
+              (kd_tansaksi_beli, kd_barang, qty, harga_beli, total_harga_beli, nama_pengguna, tgl_waktu_input)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).run(kd_pembelian, item.kd_barang, item.qty, item.harga_beli, total, data.username, tgl_pembelian)
 
-        // Update stock
-        db.update(barang)
-          .set({
-            stok: sql`${barang.stok} + ${item.qty}`,
-          })
-          .where(eq(barang.kd_barang, item.kd_barang))
-          .run()
-      }
+          const updated = sqlite.prepare(`
+            UPDATE mediasoft_barang
+            SET stok = COALESCE(stok, 0) + ?
+            WHERE kd_barang = ?
+          `).run(item.qty, item.kd_barang)
+          if (updated.changes === 0) throw new Error(`Gagal update stok ${item.kd_barang}`)
+        }
+      })
+
+      save()
 
       return { success: true, message: 'Pembelian berhasil disimpan', data: { kd_pembelian } }
     } catch (error) {
@@ -157,13 +172,20 @@ export class PembelianController {
 
   static updateStatus(kd_pembelian: string, yang_dibayar: number) {
     try {
+      const tambahanBayar = Number(yang_dibayar)
+      if (!Number.isFinite(tambahanBayar) || tambahanBayar <= 0) {
+        return { success: false, message: 'Nominal pembayaran harus lebih dari 0' }
+      }
       const existing = db.select().from(pembelian).where(eq(pembelian.kd_pembelian, kd_pembelian)).get()
 
       if (!existing) {
         return { success: false, message: 'Pembelian tidak ditemukan' }
       }
 
-      const total_dibayar = (existing.yang_dibayar || 0) + yang_dibayar
+      const total_dibayar = (existing.yang_dibayar || 0) + tambahanBayar
+      if (total_dibayar > (existing.sub_total || 0)) {
+        return { success: false, message: 'Total pembayaran tidak boleh melebihi subtotal pembelian' }
+      }
       const sisa_hutang = (existing.sub_total || 0) - total_dibayar
       const status = sisa_hutang > 0 ? 'HUTANG' : 'LUNAS'
 
@@ -184,6 +206,11 @@ export class PembelianController {
 
   static delete(kd_pembelian: string) {
     try {
+      const existing = db.select().from(pembelian).where(eq(pembelian.kd_pembelian, kd_pembelian)).get()
+      if (!existing) {
+        return { success: false, message: 'Pembelian tidak ditemukan' }
+      }
+
       // Get details first to restore stock
       const details = db
         .select()
@@ -191,21 +218,27 @@ export class PembelianController {
         .where(eq(pembelianDetail.kd_pembelian, kd_pembelian))
         .all()
 
-      // Restore stock
-      for (const detail of details) {
-        db.update(barang)
-          .set({
-            stok: sql`${barang.stok} - ${detail.qty}`,
-          })
-          .where(eq(barang.kd_barang, detail.kd_barang!))
-          .run()
-      }
+      const remove = sqlite.transaction(() => {
+        for (const detail of details) {
+          const qty = Number(detail.qty || 0)
+          const productId = String(detail.kd_barang || '')
+          if (!productId || qty <= 0) throw new Error('Detail pembelian tidak valid')
 
-      // Delete details
-      db.delete(pembelianDetail).where(eq(pembelianDetail.kd_pembelian, kd_pembelian)).run()
+          const result = sqlite.prepare(`
+            UPDATE mediasoft_barang
+            SET stok = COALESCE(stok, 0) - ?
+            WHERE kd_barang = ? AND COALESCE(stok, 0) >= ?
+          `).run(qty, productId, qty)
+          if (result.changes === 0) {
+            throw new Error(`Stok ${productId} tidak cukup untuk menghapus pembelian`)
+          }
+        }
 
-      // Delete header
-      db.delete(pembelian).where(eq(pembelian.kd_pembelian, kd_pembelian)).run()
+        sqlite.prepare('DELETE FROM mediasoft_pembelian_detail WHERE kd_tansaksi_beli = ?').run(kd_pembelian)
+        sqlite.prepare('DELETE FROM mediasoft_pembelian WHERE kd_tansaksi_beli = ?').run(kd_pembelian)
+      })
+
+      remove()
 
       return { success: true, message: 'Pembelian berhasil dihapus' }
     } catch (error) {

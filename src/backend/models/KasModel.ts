@@ -71,6 +71,7 @@ export class KasModel {
       tgl_tutup: null,
       status: 'OPEN',
       total_penjualan: 0,
+      total_pemasukan: 0,
       total_pengeluaran: 0,
       saldo_akhir: data.modal_awal,
       selisih: 0,
@@ -113,6 +114,14 @@ export class KasModel {
     if (!kas) return
     return db.update(kasDrawer).set({
       total_pengeluaran: (kas.total_pengeluaran ?? 0) + jumlah,
+    }).where(eq(kasDrawer.kd_kas, kd)).run()
+  }
+
+  static updateTotalPemasukan(kd: string, jumlah: number) {
+    const kas = this.getById(kd)
+    if (!kas) return
+    return db.update(kasDrawer).set({
+      total_pemasukan: (kas.total_pemasukan ?? 0) + jumlah,
     }).where(eq(kasDrawer.kd_kas, kd)).run()
   }
 

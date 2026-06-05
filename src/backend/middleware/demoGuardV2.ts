@@ -29,6 +29,12 @@ const ACCESS_DENIED_RESPONSE: IpcResponse = {
   message: 'Akses ditolak. Akun Anda tidak memiliki izin untuk menjalankan aksi ini.',
 }
 
+const LOGIN_REQUIRED_RESPONSE: IpcResponse = {
+  success: false,
+  error_code: 'AUTH_REQUIRED',
+  message: 'Sesi login tidak ditemukan. Silakan login ulang.',
+}
+
 /**
  * EXHAUSTIVE list of all mutation IPC channels.
  * If a channel is in this set, it is BLOCKED for demo users.
@@ -478,12 +484,37 @@ const READ_CHANNELS: Set<string> = new Set([
   // Struk Settings (all users can read)
   'strukSettings:get',
 
+  // System / local desktop utilities
+  'system:checkDb',
+  'dialog:showSaveDialog',
+  'print:getPrinters',
+  'print:execute',
+
   // Marketplace
   'marketplace:getChannels',
   'marketplace:getSkuMap',
 ])
 
 const OPERATIONAL_ADMIN_CHANNELS: Set<string> = new Set([
+  'sync:getStatus',
+  'sync:saveConfig',
+  'sync:saveClientConfig',
+  'sync:testConnection',
+  'sync:testClientConnection',
+  'sync:rotateToken',
+  'user:getAll',
+  'user:create',
+  'user:update',
+  'user:resetPassword',
+  'user:delete',
+  'user:toggleStatus',
+  'user:block',
+  'user:extendAccess',
+  'user:getPermissions',
+  'payment:getGatewaySettings',
+  'payment:saveGatewaySettings',
+  'payment:getQrisSessions',
+  'payment:markQrisPaid',
   'backup:getAll',
   'backup:create',
   'backup:restore',
@@ -515,12 +546,14 @@ const ADMIN_ONLY_CHANNELS: Set<string> = new Set([
   'user:getAll',
   'user:create',
   'user:update',
+  'user:changePassword',
   'user:resetPassword',
   'user:delete',
   'user:toggleStatus',
   'user:block',
   'user:extendAccess',
   'user:savePermissions',
+  'user:getPermissions',
 
   // App administration
   'backup:getAll',
@@ -621,8 +654,70 @@ const PUBLIC_LICENSE_CHANNELS: Set<string> = new Set([
   'license:logError',
 ])
 
+const PRE_AUTH_CHANNELS: Set<string> = new Set([
+  'app:openExternal',
+  'auth:hasUsers',
+  'auth:createInitialAdmin',
+  'auth:registerTrial',
+  'auth:login',
+  'auth:loginPin',
+  'auth:changePassword',
+  'auth:checkIdentitas',
+  'auth:restoreSession',
+  'auth:logout',
+  'demo:getStatus',
+  'license:checkAppUpdate',
+  'license:getPublicPlans',
+  'license:getPublicPopup',
+  'license:getPaymentStatus',
+  'license:createPaymentInvoice',
+  'license:createManualPaymentRequest',
+  'license:syncBuyerLicense',
+  'license:heartbeat',
+  'license:logError',
+])
+
+const REMOTE_SYNC_DENIED_PREFIXES = [
+  'auth:',
+  'demo:',
+  'sync:',
+  'license:',
+  'device:',
+  'popup:',
+  'security:',
+  'ecommerce:',
+  'marketplace:',
+  'whatsapp:',
+  'user:',
+]
+
+const REMOTE_SYNC_DENIED_CHANNELS = new Set([
+  'app:openExternal',
+  'dialog:showSaveDialog',
+  'print:getPrinters',
+  'print:execute',
+  'backup:restore',
+  'backup:import',
+  'backup:download',
+  'system:resetData',
+  'payment:getGatewaySettings',
+  'payment:saveGatewaySettings',
+  'payment:markQrisPaid',
+])
+
 function canAccessAdminChannel(role: string | null): boolean {
   return canOpenDeveloperPanel(role)
+}
+
+function isPreAuthChannel(channel: string) {
+  return PRE_AUTH_CHANNELS.has(channel) || PUBLIC_LICENSE_CHANNELS.has(channel)
+}
+
+export function canInvokeRemoteSyncChannel(channel: string): boolean {
+  if (!channel || REMOTE_SYNC_DENIED_CHANNELS.has(channel)) return false
+  if (REMOTE_SYNC_DENIED_PREFIXES.some(prefix => channel.startsWith(prefix))) return false
+  if (ADMIN_ONLY_CHANNELS.has(channel) || OPERATIONAL_ADMIN_CHANNELS.has(channel)) return false
+  return READ_CHANNELS.has(channel) || MUTATION_CHANNELS.has(channel)
 }
 
 const FEATURE_CHANNELS: Array<{ match: (channel: string) => boolean; feature: string }> = [
@@ -682,7 +777,9 @@ export function shouldBlockChannel(channel: string): boolean {
 
   // Public license self-service endpoints must be reachable from the login,
   // trial, and buyer flows. Admin-only license management remains below.
-  if (PUBLIC_LICENSE_CHANNELS.has(channel)) return false
+  if (isPreAuthChannel(channel)) return false
+
+  if (!role) return true
 
   // Operational admin channels can be used by store admins and developer roles.
   if (OPERATIONAL_ADMIN_CHANNELS.has(channel)) {
@@ -743,6 +840,11 @@ export function withDemoGuard<T extends (...args: any[]) => any>(
       if (demoSession.isDemoMode()) {
         demoSession.logViolation(channel, args.slice(1)) // Skip IPC event arg
         return { ...DEMO_BLOCKED_RESPONSE }
+      }
+
+      if (!demoSession.getRole()) {
+        console.warn(`🚫 AUTH REQUIRED: channel="${channel}"`)
+        return { ...LOGIN_REQUIRED_RESPONSE }
       }
 
       console.warn(`🚫 ACCESS DENIED: channel="${channel}" user="${demoSession.getUsername()}" role="${demoSession.getRole()}"`)

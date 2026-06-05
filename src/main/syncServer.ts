@@ -4,6 +4,7 @@ import http, { type IncomingMessage, type ServerResponse } from 'http'
 import os from 'os'
 import fs from 'fs'
 import path from 'path'
+import { canInvokeRemoteSyncChannel } from '../backend/middleware/demoGuardV2.js'
 
 interface SyncServerConfig {
   enabled: boolean
@@ -90,7 +91,7 @@ function decryptConfig(raw: string): Partial<SyncServerConfig> {
 
 function defaultConfig(): SyncServerConfig {
   return {
-    enabled: true,
+    enabled: false,
     port: DEFAULT_PORT,
     token: randomToken(),
   }
@@ -319,7 +320,7 @@ class SyncServer {
       sendJson(res, 200, {
         success: true,
         data: {
-          app: 'MediaSoft POS Zetass v2.0',
+          app: 'MediaSoft POS Zetass',
           serverTime: new Date().toISOString(),
           tokenRequired: true,
         },
@@ -345,6 +346,11 @@ class SyncServer {
       }
 
       const channel = String(body.channel ?? '')
+      if (!canInvokeRemoteSyncChannel(channel)) {
+        sendJson(res, 403, { success: false, message: 'Channel sinkronisasi tidak diizinkan' })
+        return
+      }
+
       const args = Array.isArray(body.args) ? body.args : []
       this.requestCount += 1
       this.lastRequestAt = new Date().toISOString()

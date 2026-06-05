@@ -149,7 +149,7 @@ export default function PaymentInvoice() {
                     <p className="mt-3 text-xl font-extrabold text-slate-900 dark:text-white">
                       Rp {Number(plan.price).toLocaleString('id-ID')}
                     </p>
-                    <p className="text-xs text-slate-500">{plan.duration_days} hari</p>
+                    <p className="text-xs text-slate-500">{plan.duration_days === 0 ? 'Seumur hidup' : `${plan.duration_days} hari`}</p>
                     {plan.description && <p className="mt-3 text-xs leading-5 text-slate-500">{plan.description}</p>}
                   </button>
                 )

@@ -47,6 +47,18 @@ const EMPTY_INSIGHTS: InsightData = {
   customerSegments: { vip: 0, active: 0, inactive: 0 },
 }
 
+const EMPTY_SUMMARY: DashboardSummary = {
+  today: { count: 0, total: 0 },
+  week: { count: 0, total: 0 },
+  month: { count: 0, total: 0 },
+  totalBarang: 0,
+  lowStockCount: 0,
+  chartData: [],
+  predictedTomorrow: 0,
+  topProducts: [],
+  lowStockProducts: [],
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function useCountUp(target: number, duration = 800) {
@@ -101,6 +113,50 @@ async function copyTextToClipboard(text: string) {
   throw new Error('Clipboard tidak tersedia')
 }
 
+function asNumber(value: unknown, fallback = 0) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : fallback
+}
+
+function normalizeDashboardSummary(value: Partial<DashboardSummary> | null | undefined): DashboardSummary {
+  return {
+    today: {
+      count: asNumber(value?.today?.count),
+      total: asNumber(value?.today?.total),
+    },
+    week: {
+      count: asNumber(value?.week?.count),
+      total: asNumber(value?.week?.total),
+    },
+    month: {
+      count: asNumber(value?.month?.count),
+      total: asNumber(value?.month?.total),
+    },
+    totalBarang: asNumber(value?.totalBarang),
+    lowStockCount: asNumber(value?.lowStockCount),
+    chartData: Array.isArray(value?.chartData)
+      ? value.chartData.map(item => ({ label: String(item?.label ?? '-'), total: asNumber(item?.total) }))
+      : [],
+    predictedTomorrow: asNumber(value?.predictedTomorrow),
+    topProducts: Array.isArray(value?.topProducts)
+      ? value.topProducts.map(item => ({
+        kd_barang: item?.kd_barang ?? null,
+        nama_barang: item?.nama_barang ?? null,
+        total_qty: asNumber(item?.total_qty),
+        total_revenue: asNumber(item?.total_revenue),
+      }))
+      : [],
+    lowStockProducts: Array.isArray(value?.lowStockProducts)
+      ? value.lowStockProducts.map(item => ({
+        kd_barang: String(item?.kd_barang ?? ''),
+        nama_barang: item?.nama_barang ?? null,
+        stok: asNumber(item?.stok),
+        stok_minimum: asNumber(item?.stok_minimum, 5),
+      }))
+      : [],
+  }
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -123,7 +179,7 @@ export default function Dashboard() {
     try {
       const r = await api<DashboardSummary>('dashboard:getSummary')
       if (r.success && r.data) {
-        setSummary(r.data)
+        setSummary(normalizeDashboardSummary(r.data))
         if (showToast) toast('Data dashboard diperbarui', 'success')
       } else {
         setError(true)
@@ -190,6 +246,8 @@ export default function Dashboard() {
     }
   }, [summary, toast])
 
+  const dashboard = summary ?? EMPTY_SUMMARY
+
   return (
     <div className="space-y-4 sm:space-y-5">
 
@@ -241,13 +299,13 @@ export default function Dashboard() {
                   : (
                     <>
                       <StatCard icon={<ShoppingCart size={20} />} label="Transaksi Hari Ini"
-                        value={summary!.today.count} sub={formatRupiah(summary!.today.total)} color="bg-primary-500" />
+                        value={dashboard.today.count} sub={formatRupiah(dashboard.today.total)} color="bg-primary-500" />
                       <StatCard icon={<TrendingUp size={20} />} label="Pendapatan Bulan Ini"
-                        value={summary!.month.total} sub={`${summary!.month.count} transaksi`} color="bg-emerald-500" isCurrency />
+                        value={dashboard.month.total} sub={`${dashboard.month.count} transaksi`} color="bg-emerald-500" isCurrency />
                       <StatCard icon={<Package size={20} />} label="Total Produk"
-                        value={summary!.totalBarang} sub="produk terdaftar" color="bg-pink-400" />
+                        value={dashboard.totalBarang} sub="produk terdaftar" color="bg-pink-400" />
                       <StatCard icon={<AlertTriangle size={20} />} label="Stok Menipis"
-                        value={summary!.lowStockCount} sub="produk ≤ 5 unit" color="bg-amber-500" />
+                        value={dashboard.lowStockCount} sub="produk ≤ 5 unit" color="bg-amber-500" />
                     </>
                   )}
               </div>
@@ -263,7 +321,7 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2">
                         <div className="hidden sm:flex flex-col items-end mr-2">
                           <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Prediksi Besok</p>
-                          <p className="text-sm font-bold text-emerald-500">{formatRupiah(summary!.predictedTomorrow || 0)}</p>
+                          <p className="text-sm font-bold text-emerald-500">{formatRupiah(dashboard.predictedTomorrow || 0)}</p>
                         </div>
                         <Button variant="secondary" size="sm" onClick={handleExportGoogleSheets}
                           icon={<Table2 size={14} />} loading={exportingSheets} disabled={!summary}>
@@ -273,7 +331,7 @@ export default function Dashboard() {
                     }
                   >
                     <ResponsiveContainer width="100%" height={240}>
-                      <AreaChart data={summary!.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <AreaChart data={dashboard.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <defs>
                           <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3} />
@@ -303,9 +361,9 @@ export default function Dashboard() {
                 ) : (
                   <Card title="Ringkasan Minggu Ini">
                     <div className="space-y-3 sm:space-y-4 mt-1">
-                      <SummaryRow icon={<Calendar size={16} />} label="Total Transaksi" value={String(summary!.week.count)} />
-                      <SummaryRow icon={<TrendingUp size={16} />} label="Total Pendapatan" value={formatRupiah(summary!.week.total)} />
-                      <SummaryRow icon={<BarChart2 size={16} />} label="Rata-rata/Hari" value={formatRupiah(Math.round(summary!.week.total / 7))} />
+                      <SummaryRow icon={<Calendar size={16} />} label="Total Transaksi" value={String(dashboard.week.count)} />
+                      <SummaryRow icon={<TrendingUp size={16} />} label="Total Pendapatan" value={formatRupiah(dashboard.week.total)} />
+                      <SummaryRow icon={<BarChart2 size={16} />} label="Rata-rata/Hari" value={formatRupiah(Math.round(dashboard.week.total / 7))} />
                     </div>
                     <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
                       <Button variant="secondary" className="w-full" onClick={() => navigate('/riwayat')}>
@@ -330,8 +388,8 @@ export default function Dashboard() {
                           </div>
                         </div>
                       ))
-                      : (summary!.topProducts || []).length > 0
-                        ? (summary!.topProducts || []).map((product, idx) => (
+                      : (dashboard.topProducts || []).length > 0
+                        ? (dashboard.topProducts || []).map((product, idx) => (
                           <div key={product.kd_barang} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${
                               idx === 0 ? 'bg-gradient-to-br from-amber-400 to-yellow-500 text-white' :
@@ -367,8 +425,8 @@ export default function Dashboard() {
                           </div>
                         </div>
                       ))
-                      : (summary!.lowStockProducts || []).length > 0
-                        ? (summary!.lowStockProducts || []).map(product => (
+                      : (dashboard.lowStockProducts || []).length > 0
+                        ? (dashboard.lowStockProducts || []).map(product => (
                           <div key={product.kd_barang} className="flex items-center gap-3 p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800/30 hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors">
                             <div className="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
                               <AlertTriangle size={16} className="text-red-500" />

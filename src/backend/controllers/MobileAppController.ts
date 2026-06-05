@@ -8,6 +8,13 @@ function safeTokenCompare(a: string, b: string): boolean {
 }
 
 export class MobileAppController {
+  private static dateKey(value = new Date()) {
+    const year = value.getFullYear()
+    const month = String(value.getMonth() + 1).padStart(2, '0')
+    const day = String(value.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
   private static isValidToken(token: string) {
     if (!token?.trim()) return false
 
@@ -31,9 +38,12 @@ export class MobileAppController {
     }
 
     try {
-      const now = new Date().toISOString().slice(0, 10)
-      const sales = sqlite.prepare('SELECT SUM(sub_total) as total FROM mediasoft_penjualan WHERE tgl_wkt_transaksi LIKE ?')
-        .get(`${now}%`) as { total: number }
+      const today = this.dateKey()
+      const sales = sqlite.prepare(`
+        SELECT COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)), 0) as total
+        FROM mediasoft_penjualan
+        WHERE substr(tgl_wkt_transaksi, 1, 10) = ?
+      `).get(today) as { total: number }
       
       const stockAlerts = sqlite.prepare('SELECT COUNT(*) as count FROM mediasoft_barang WHERE stok <= stok_minimum').get() as { count: number }
 

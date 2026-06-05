@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLicense } from './FeatureContext';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 /**
  * Popup upgrade yang isi nya datang dari server (dari tabel popup_settings).
@@ -12,6 +13,8 @@ import { useLicense } from './FeatureContext';
 export const UpgradePopup: React.FC = () => {
   const { popup, closePopup, plan } = useLicense();
   if (!popup) return null;
+  const ctaUrl = safeHttpsUrl(popup.cta_url);
+  const whatsappNumber = popup.whatsapp_number?.replace(/[^\d]/g, '');
 
   return (
     <div
@@ -43,7 +46,7 @@ export const UpgradePopup: React.FC = () => {
           {popup.pricing_html && (
             <div
               className="mt-4 rounded-lg bg-indigo-50 p-3 text-sm text-indigo-900"
-              dangerouslySetInnerHTML={{ __html: sanitize(popup.pricing_html) }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(popup.pricing_html) }}
             />
           )}
 
@@ -54,9 +57,9 @@ export const UpgradePopup: React.FC = () => {
             >
               Nanti Saja
             </button>
-            {popup.cta_url && (
+            {ctaUrl && (
               <a
-                href={popup.cta_url}
+                href={ctaUrl}
                 target="_blank"
                 rel="noreferrer"
                 onClick={closePopup}
@@ -67,9 +70,9 @@ export const UpgradePopup: React.FC = () => {
             )}
           </div>
 
-          {popup.whatsapp_number && (
+          {whatsappNumber && (
             <a
-              href={`https://wa.me/${popup.whatsapp_number}?text=Halo,%20saya%20mau%20upgrade%20paket%20MediaSoft%20POS`}
+              href={`https://wa.me/${whatsappNumber}?text=Halo,%20saya%20mau%20upgrade%20paket%20MediaSoft%20POS`}
               target="_blank"
               rel="noreferrer"
               onClick={closePopup}
@@ -84,13 +87,12 @@ export const UpgradePopup: React.FC = () => {
   );
 };
 
-/** Sanitasi HTML sangat ringkas — hanya allow tag dasar. */
-function sanitize(html: string): string {
-  // strip tag berbahaya
-  return html
-    .replace(/<\s*(script|iframe|object|embed|style)[\s\S]*?>[\s\S]*?<\/\s*\1\s*>/gi, '')
-    .replace(/<\s*(script|iframe|object|embed|style)[^>]*?\/?>/gi, '')
-    .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
-    .replace(/on\w+\s*=\s*'[^']*'/gi, '')
-    .replace(/javascript:/gi, '');
+function safeHttpsUrl(value?: string | null): string | null {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
 }

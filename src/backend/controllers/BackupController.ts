@@ -75,6 +75,28 @@ function createConsistentDatabaseCopy(destinationPath: string) {
   }
 }
 
+function removeWalArtifacts(targetDb: string) {
+  for (const suffix of ['-wal', '-shm']) {
+    const artifact = `${targetDb}${suffix}`
+    if (fs.existsSync(artifact)) fs.rmSync(artifact, { force: true })
+  }
+}
+
+function replaceLiveDatabase(sourcePath: string, targetDb: string) {
+  sqlite.pragma('wal_checkpoint(TRUNCATE)')
+  sqlite.close()
+  removeWalArtifacts(targetDb)
+  fs.copyFileSync(sourcePath, targetDb)
+  removeWalArtifacts(targetDb)
+}
+
+function scheduleRestart() {
+  setTimeout(() => {
+    app.relaunch()
+    app.exit(0)
+  }, 750)
+}
+
 function cleanOldBackupFiles(retentionDays: number) {
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString()
   const oldBackups = BackupModel.getOlderThan(cutoff)
@@ -184,8 +206,8 @@ export class BackupController {
       const currentBackupPath = path.join(backupDir(), `before_restore_${Date.now()}.db`)
       createConsistentDatabaseCopy(currentBackupPath)
 
-      // Restore from backup
-      fs.copyFileSync(backupPath, targetDb)
+      replaceLiveDatabase(backupPath, targetDb)
+      scheduleRestart()
 
       return {
         success: true,
@@ -240,8 +262,9 @@ export class BackupController {
         fs.rmSync(importTempPath, { force: true })
         return { success: false, message: `File import bukan database SQLite yang valid: ${importValidation.message}` }
       }
-      fs.copyFileSync(importTempPath, targetDb)
+      replaceLiveDatabase(importTempPath, targetDb)
       fs.rmSync(importTempPath, { force: true })
+      scheduleRestart()
       
       return {
         success: true,

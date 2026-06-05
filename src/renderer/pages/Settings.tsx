@@ -119,7 +119,7 @@ export default function Settings() {
     const baseUrl = syncForm.baseUrl || (syncStatus?.urls ?? []).find((url: string) => !url.includes('127.0.0.1')) || syncStatus?.urls?.[0] || ''
     return JSON.stringify({
       type: 'mediasoft-pos-zetass-sync',
-      app: 'MediaSoft POS Zetass v2.0',
+      app: 'MediaSoft POS Zetass',
       baseUrl,
       token: syncForm.token,
       generatedAt: new Date().toISOString(),
@@ -1029,7 +1029,7 @@ export default function Settings() {
         </Card>
       </div>
 
-      <p className="text-xs text-slate-400 text-center lg:col-span-2">MediaSoft POS v2.0.0 — Preferensi tema disimpan otomatis</p>
+      <p className="text-xs text-slate-400 text-center lg:col-span-2">MediaSoft POS — Preferensi tema disimpan otomatis</p>
 
       {/* Confirm Reset Dialog */}
       <Modal

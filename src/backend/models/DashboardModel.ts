@@ -1,21 +1,42 @@
 import { db } from '../../database/connection.js'
 import { penjualan, barang, penjualanDetail } from '../../database/schema.js'
-import { sql, gte, lte } from 'drizzle-orm'
+import { sql, lte } from 'drizzle-orm'
+
+function dateKey(value = new Date()) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function recordDateKey(value: unknown) {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  if (/^\d{4}-\d{2}-\d{2}(?:$| )/.test(text)) return text.slice(0, 10)
+  const parsed = new Date(text)
+  if (!Number.isNaN(parsed.getTime())) return dateKey(parsed)
+  return text.slice(0, 10)
+}
+
+function toNumber(value: unknown, fallback = 0) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : fallback
+}
 
 export class DashboardModel {
   static getSummary() {
     const now = new Date()
-    const todayStr = now.toISOString().slice(0, 10)
-    const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10)
-    const monthStr = now.toISOString().slice(0, 7)
+    const todayStr = dateKey(now)
+    const weekAgo = dateKey(new Date(now.getTime() - 6 * 86400000))
+    const monthStr = todayStr.slice(0, 7)
 
     const allSales = db.select().from(penjualan).all()
 
-    const todaySales = allSales.filter(s => s.tgl_wkt_transaksi?.startsWith(todayStr))
-    const weekSales = allSales.filter(s => (s.tgl_wkt_transaksi ?? '') >= weekAgo)
-    const monthSales = allSales.filter(s => s.tgl_wkt_transaksi?.startsWith(monthStr))
+    const todaySales = allSales.filter(s => recordDateKey(s.tgl_wkt_transaksi) === todayStr)
+    const weekSales = allSales.filter(s => recordDateKey(s.tgl_wkt_transaksi) >= weekAgo)
+    const monthSales = allSales.filter(s => recordDateKey(s.tgl_wkt_transaksi).slice(0, 7) === monthStr)
 
-    const sum = (arr: typeof allSales) => arr.reduce((a, b) => a + (b.sub_total ?? 0), 0)
+    const sum = (arr: typeof allSales) => arr.reduce((a, b) => a + toNumber(b.sub_total), 0)
 
     const totalBarang = db.select({ count: sql<number>`count(*)` }).from(barang).get()
     const lowStock = db.select().from(barang).where(lte(barang.stok, 5)).all()
@@ -23,9 +44,9 @@ export class DashboardModel {
     // Last 7 days chart data
     const chartData = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(now.getTime() - (6 - i) * 86400000)
-      const dateStr = d.toISOString().slice(0, 10)
+      const dateStr = dateKey(d)
       const label = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' })
-      const total = allSales.filter(s => s.tgl_wkt_transaksi?.startsWith(dateStr)).reduce((a, b) => a + (b.sub_total ?? 0), 0)
+      const total = allSales.filter(s => recordDateKey(s.tgl_wkt_transaksi) === dateStr).reduce((a, b) => a + toNumber(b.sub_total), 0)
       return { label, total }
     })
 
@@ -43,7 +64,7 @@ export class DashboardModel {
         LEFT JOIN mediasoft_barang b ON pd.kd_barang = b.kd_barang
         WHERE pd.kd_tansaksi_jual IN (
           SELECT kd_tansaksi_jual FROM mediasoft_penjualan 
-          WHERE tgl_wkt_transaksi >= ${weekAgo}
+          WHERE substr(tgl_wkt_transaksi, 1, 10) >= ${weekAgo}
         )
         GROUP BY pd.kd_barang, b.nama_barang
         ORDER BY total_qty DESC

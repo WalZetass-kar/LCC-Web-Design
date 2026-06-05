@@ -2,6 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as https from 'https'
 import { createRequire } from 'module'
+import { app } from 'electron'
 const require = createRequire(import.meta.url)
 const { jsPDF } = require('jspdf')
 const autoTable = require('jspdf-autotable').default
@@ -162,8 +163,17 @@ function salesAnalytics(data: any[]) {
 }
 
 function exportPath(defaultName: string, customPath?: string) {
-  if (customPath) return customPath
-  const exportDir = path.join(process.cwd(), 'exports')
+  if (customPath) {
+    const expectedExt = path.extname(defaultName).toLowerCase()
+    const target = path.resolve(customPath)
+    if (expectedExt && path.extname(target).toLowerCase() !== expectedExt) {
+      throw new Error(`Ekstensi file export harus ${expectedExt}`)
+    }
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    return target
+  }
+  const baseDir = app.isPackaged ? app.getPath('documents') : process.cwd()
+  const exportDir = path.join(baseDir, 'MediaSoft POS', 'exports')
   if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true })
   return path.join(exportDir, defaultName)
 }
@@ -479,18 +489,8 @@ export class ExportService {
         doc.line(14, pageHeight - 15, pageWidth - 14, pageHeight - 15)
       }
 
-      let filepath: string
-      if (customPath) {
-        filepath = customPath
-      } else {
-        const exportDir = path.join(process.cwd(), 'exports')
-        if (!fs.existsSync(exportDir)) {
-          fs.mkdirSync(exportDir, { recursive: true })
-        }
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-        const fullFilename = `${filename}_${timestamp}.pdf`
-        filepath = path.join(exportDir, fullFilename)
-      }
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const filepath = exportPath(`${filename}_${timestamp}.pdf`, customPath)
 
       // Save to file system using buffer
       const pdfBuffer = doc.output('arraybuffer')
@@ -1811,17 +1811,8 @@ export class ExportService {
       }
 
       // Save file
-      let filepath: string
-      if (customPath) {
-        filepath = customPath
-      } else {
-        const exportDir = path.join(process.cwd(), 'exports')
-        if (!fs.existsSync(exportDir)) {
-          fs.mkdirSync(exportDir, { recursive: true })
-        }
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-        filepath = path.join(exportDir, `laporan_stok_${timestamp}.xlsx`)
-      }
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const filepath = exportPath(`laporan_stok_${timestamp}.xlsx`, customPath)
 
       await workbook.xlsx.writeFile(filepath)
 
@@ -1963,17 +1954,8 @@ export class ExportService {
       doc.text('Inventory Management System', pageWidth / 2, pageHeight - 8, { align: 'center' })
       doc.text(`Halaman 1`, pageWidth - 14, pageHeight - 8, { align: 'right' })
 
-      let filepath: string
-      if (customPath) {
-        filepath = customPath
-      } else {
-        const exportDir = path.join(process.cwd(), 'exports')
-        if (!fs.existsSync(exportDir)) {
-          fs.mkdirSync(exportDir, { recursive: true })
-        }
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-        filepath = path.join(exportDir, `laporan_stok_${timestamp}.pdf`)
-      }
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const filepath = exportPath(`laporan_stok_${timestamp}.pdf`, customPath)
 
       const pdfBuffer = doc.output('arraybuffer')
       fs.writeFileSync(filepath, Buffer.from(pdfBuffer))

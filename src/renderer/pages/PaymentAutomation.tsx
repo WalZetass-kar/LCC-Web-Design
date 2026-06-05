@@ -15,6 +15,8 @@ interface GatewaySettings {
   isProduction: boolean
   enabled: boolean
   hasEnvServerKey: boolean
+  hasStoredServerKey?: boolean
+  hasStoredClientKey?: boolean
 }
 
 interface QrisSession {
@@ -153,8 +155,8 @@ export default function PaymentAutomation() {
                 <span className="text-sm font-medium">Aktifkan gateway otomatis</span>
               </label>
             </div>
-            <Input label="Server Key" type="password" value={settings.serverKey} onChange={e => setSettings({ ...settings, serverKey: e.target.value })} placeholder={settings.hasEnvServerKey ? 'Terisi dari .env jika dikosongkan' : 'SB-Mid-server-...'} />
-            <Input label="Client Key" type="password" value={settings.clientKey} onChange={e => setSettings({ ...settings, clientKey: e.target.value })} placeholder="SB-Mid-client-..." />
+            <Input label="Server Key" type="password" value={settings.serverKey} onChange={e => setSettings({ ...settings, serverKey: e.target.value })} placeholder={settings.hasStoredServerKey || settings.hasEnvServerKey ? 'Sudah tersimpan. Kosongkan untuk mempertahankan key lama.' : 'SB-Mid-server-...'} />
+            <Input label="Client Key" type="password" value={settings.clientKey} onChange={e => setSettings({ ...settings, clientKey: e.target.value })} placeholder={settings.hasStoredClientKey ? 'Sudah tersimpan. Kosongkan untuk mempertahankan key lama.' : 'SB-Mid-client-...'} />
             <label className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2.5">
               <input type="checkbox" checked={settings.isProduction} onChange={e => setSettings({ ...settings, isProduction: e.target.checked })} />
               <span className="text-sm font-medium">Mode production</span>
@@ -166,7 +168,7 @@ export default function PaymentAutomation() {
         <Card title="Status Alur">
           <div className="space-y-3 text-sm">
             <StatusRow label="Gateway aktif" ok={settings.enabled || settings.hasEnvServerKey} />
-            <StatusRow label="Server key tersedia" ok={!!settings.serverKey || settings.hasEnvServerKey} />
+            <StatusRow label="Server key tersedia" ok={!!settings.serverKey || !!settings.hasStoredServerKey || settings.hasEnvServerKey} />
             <StatusRow label="Fallback QRIS statis" ok={!!staticQris} />
             <p className="text-xs text-slate-500">Jika Midtrans belum dikonfigurasi, kasir memakai QRIS statis dari upload di bawah.</p>
           </div>

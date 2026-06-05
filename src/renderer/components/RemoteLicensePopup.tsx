@@ -15,6 +15,7 @@ import {
 import { api } from '../utils/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useDemo } from '../contexts/DemoContext'
+import { sanitizeHtml } from '../utils/sanitizeHtml'
 import { SUBSCRIPTION_UPGRADE_WA_NUMBER, normalizePhoneNumber } from '../utils/whatsapp'
 
 interface PublicPlan {
@@ -66,6 +67,7 @@ function buildWhatsAppUrl(phone: string | null | undefined, message: string): st
 }
 
 function getPlanPeriod(plan: PublicPlan): string {
+  if (plan.duration_days === 0) return '/seumur hidup'
   if (plan.duration_days <= 1) return '/hari'
   if (plan.duration_days >= 360) return '/tahun'
   if (plan.duration_days >= 28 && plan.duration_days <= 31) return '/bulan'
@@ -73,6 +75,7 @@ function getPlanPeriod(plan: PublicPlan): string {
 }
 
 function getDailyPrice(plan: PublicPlan): string | null {
+  if (plan.duration_days === 0) return 'Sekali bayar'
   if (plan.duration_days <= 1) return null
   const daily = Math.max(1, Math.round(Number(plan.price) / plan.duration_days))
   return `= Rp ${daily.toLocaleString('id-ID')}/hari`
@@ -80,6 +83,9 @@ function getDailyPrice(plan: PublicPlan): string | null {
 
 function getPlanVisual(plan: PublicPlan, index: number) {
   const text = `${plan.name} ${plan.code}`.toLowerCase()
+  if (plan.duration_days === 0 || text.includes('lifetime') || text.includes('seumur')) {
+    return { Icon: Star, accent: 'from-amber-400 to-yellow-500', glow: 'shadow-amber-500/30' }
+  }
   if (text.includes('hari') || text.includes('daily') || index === 0) {
     return { Icon: Zap, accent: 'from-violet-500 to-fuchsia-500', glow: 'shadow-violet-500/30' }
   }
@@ -96,7 +102,9 @@ function getPlanFeatures(plan: PublicPlan, index: number): string[] {
     .filter(Boolean)
     .slice(0, 7)
 
-  const defaults = plan.duration_days >= 360 || index >= 2
+  const defaults = plan.duration_days === 0
+    ? ['Sekali bayar', 'Akses permanen', 'Semua fitur Pro', 'Multi-user', 'Multi cabang', 'Backup/restore', 'Support prioritas']
+    : plan.duration_days >= 360 || index >= 2
     ? ['Semua fitur Bulanan', 'Multi-user unlimited', 'Stok opname', 'Manajemen hutang', 'Shift management', 'API access', 'Support prioritas']
     : plan.duration_days >= 28 || index === 1
       ? ['Semua fitur Harian', 'Multi-user 3 akun', 'Export Excel & PDF', 'Laporan lanjutan', 'Backup otomatis', 'Support prioritas']
@@ -203,7 +211,7 @@ export default function RemoteLicensePopup() {
         '',
         `Paket: ${plan.name} (${plan.code})`,
         `Harga: ${formatPlanPrice(plan)}`,
-        `Durasi: ${plan.duration_days} hari`,
+        `Durasi: ${plan.duration_days === 0 ? 'Seumur hidup' : `${plan.duration_days} hari`}`,
         `Nama akun: ${user?.nama_lengkap ?? user?.nama_pengguna ?? '-'}`,
         `Email: ${user?.email ?? '-'}`,
         '',
@@ -285,7 +293,7 @@ export default function RemoteLicensePopup() {
           {popup.pricing_html && (
             <div
               className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-200"
-              dangerouslySetInnerHTML={{ __html: sanitize(popup.pricing_html) }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(popup.pricing_html) }}
             />
           )}
 
@@ -427,13 +435,4 @@ export default function RemoteLicensePopup() {
       </div>
     </div>
   )
-}
-
-function sanitize(html: string): string {
-  return html
-    .replace(/<\s*(script|iframe|object|embed|style)[\s\S]*?>[\s\S]*?<\/\s*\1\s*>/gi, '')
-    .replace(/<\s*(script|iframe|object|embed|style)[^>]*?\/?>/gi, '')
-    .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
-    .replace(/on\w+\s*=\s*'[^']*'/gi, '')
-    .replace(/javascript:/gi, '')
 }

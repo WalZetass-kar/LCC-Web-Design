@@ -1,6 +1,6 @@
 import { db } from '../../database/connection.js'
 import { penjualan, penjualanDetail, barang } from '../../database/schema.js'
-import { eq, desc } from 'drizzle-orm'
+import { and, desc, eq, gte, sql } from 'drizzle-orm'
 
 export class PenjualanModel {
   static getAll() {
@@ -30,6 +30,9 @@ export class PenjualanModel {
     try {
       db.insert(penjualan).values(header).run()
       for (const d of details) {
+        if (!d.kd_barang || !Number.isInteger(Number(d.qty)) || Number(d.qty) <= 0) {
+          throw new Error(`Qty transaksi tidak valid untuk barang ${d.kd_barang ?? '-'}`)
+        }
         db.insert(penjualanDetail).values(d).run()
         if (d.kd_barang && d.qty) {
           // SECURITY: Use atomic UPDATE to prevent race conditions in stock levels

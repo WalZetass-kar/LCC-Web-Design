@@ -7,6 +7,10 @@ import { authMiddleware, AuthedRequest, requireAdmin } from '../middleware/auth'
 const router = Router();
 router.use(authMiddleware, requireAdmin);
 
+function expiresAtFromDuration(days: number): string | null {
+  return days <= 0 ? null : new Date(Date.now() + days * 86400000).toISOString();
+}
+
 // =====================================================================
 // USERS
 // =====================================================================
@@ -85,7 +89,7 @@ const createUserSchema = z.object({
   password: z.string().min(8),
   phone: z.string().optional(),
   plan_code: z.string().min(1),
-  duration_days: z.number().int().positive().optional(),
+  duration_days: z.number().int().nonnegative().optional(),
   notes: z.string().optional(),
 });
 
@@ -114,7 +118,7 @@ router.post('/users', async (req: AuthedRequest, res) => {
   const userId = result.lastInsertRowid as number;
 
   const days = duration_days ?? plan.duration_days;
-  const expired = new Date(Date.now() + days * 86400000).toISOString();
+  const expired = expiresAtFromDuration(days);
   db.prepare(
     `INSERT INTO user_subscriptions (user_id, plan_id, status, expired_at, notes, created_by)
      VALUES (?, ?, 'active', ?, ?, ?)`,
@@ -175,7 +179,7 @@ router.put('/users/:id/plan', (req: AuthedRequest, res) => {
   const id = Number(req.params.id);
   const schema = z.object({
     plan_code: z.string(),
-    duration_days: z.number().int().positive().optional(),
+    duration_days: z.number().int().nonnegative().optional(),
     notes: z.string().optional(),
   });
   const parsed = schema.safeParse(req.body);
@@ -190,7 +194,7 @@ router.put('/users/:id/plan', (req: AuthedRequest, res) => {
   db.prepare(`UPDATE user_subscriptions SET status = 'expired' WHERE user_id = ? AND status = 'active'`).run(id);
 
   const days = parsed.data.duration_days ?? plan.duration_days;
-  const expired = new Date(Date.now() + days * 86400000).toISOString();
+  const expired = expiresAtFromDuration(days);
   db.prepare(
     `INSERT INTO user_subscriptions (user_id, plan_id, status, expired_at, notes, created_by)
      VALUES (?, ?, 'active', ?, ?, ?)`,
@@ -237,7 +241,7 @@ router.post('/plans', (req, res) => {
     description: z.string().optional(),
     price: z.number().nonnegative().optional(),
     currency: z.string().optional(),
-    duration_days: z.number().int().positive().optional(),
+    duration_days: z.number().int().nonnegative().optional(),
     sort_order: z.number().int().optional(),
   });
   const parsed = schema.safeParse(req.body);
@@ -263,7 +267,7 @@ router.patch('/plans/:id', (req, res) => {
     description: z.string().optional(),
     price: z.number().optional(),
     currency: z.string().optional(),
-    duration_days: z.number().int().positive().optional(),
+    duration_days: z.number().int().nonnegative().optional(),
     is_active: z.boolean().optional(),
     sort_order: z.number().int().optional(),
   });
@@ -546,7 +550,7 @@ router.post('/payments/:id/approve', (req: AuthedRequest, res) => {
     const plan = db.prepare(`SELECT duration_days FROM plans WHERE id = ?`).get(payment.plan_id) as { duration_days: number };
     db.prepare(`UPDATE user_subscriptions SET status = 'expired' WHERE user_id = ? AND status = 'active'`)
       .run(payment.user_id);
-    const expired = new Date(Date.now() + plan.duration_days * 86400000).toISOString();
+    const expired = expiresAtFromDuration(plan.duration_days);
     db.prepare(
       `INSERT INTO user_subscriptions (user_id, plan_id, status, expired_at, notes, created_by)
        VALUES (?, ?, 'active', ?, ?, ?)`,

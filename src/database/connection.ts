@@ -584,6 +584,27 @@ runMigrations()
 
 // Add license server config columns to identitas table
 ;(function addLicenseColumns() {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_identitas (
+      kode INTEGER PRIMARY KEY,
+      namatoko TEXT,
+      alamattoko TEXT,
+      nomortelptoko TEXT,
+      nomorwaowner TEXT,
+      alamatemailowner TEXT,
+      logo TEXT,
+      npwp TEXT,
+      pajak_persen REAL DEFAULT 0,
+      auto_barcode INTEGER DEFAULT 1,
+      barcode_prefix TEXT DEFAULT 'POS',
+      auto_print INTEGER DEFAULT 0,
+      struk_footer TEXT DEFAULT 'Terima kasih atas kunjungan Anda',
+      auto_backup INTEGER DEFAULT 1,
+      backup_retention INTEGER DEFAULT 7,
+      notif_stok INTEGER DEFAULT 1,
+      min_stok INTEGER DEFAULT 5
+    )
+  `)
   const cols = sqlite.prepare('PRAGMA table_info(mediasoft_identitas)').all() as Array<{ name: string }>
   const names = cols.map(c => c.name)
   if (!names.includes('license_server_url')) {
@@ -602,8 +623,27 @@ runMigrations()
   function addCol(table: string, col: string, def: string) {
     const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
     if (!cols.some(c => c.name === col)) {
-      try { sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`) } catch {}
+      try {
+        sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`)
+      } catch (err: any) {
+        console.error(`⚠️ License migration failed for ${table}.${col}:`, err.message)
+      }
     }
+  }
+
+  function tableExists(table: string): boolean {
+    const row = sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(table) as { name?: string } | undefined
+    return !!row?.name
+  }
+
+  function ensureSyncMetadata(table: string) {
+    if (!tableExists(table)) return
+    addCol(table, 'created_at', 'TEXT DEFAULT NULL')
+    addCol(table, 'updated_at', 'TEXT DEFAULT NULL')
+    addCol(table, 'synced_at', 'TEXT DEFAULT NULL')
+    addCol(table, 'device_id', 'TEXT DEFAULT NULL')
   }
 
   // mediasoft_pengguna
@@ -685,6 +725,51 @@ runMigrations()
     multi_branch: true,
     return_refund: true,
   }))
+
+  const lifetimeFlags = JSON.stringify({
+    reports: true,
+    export_excel: true,
+    export_pdf: true,
+    multi_user: true,
+    backup: true,
+    restore: true,
+    stock_opname: true,
+    debt_management: true,
+    shift_management: true,
+    api_access: true,
+    multi_branch: true,
+    return_refund: true,
+  })
+  const lifetimePlan = sqlite.prepare(
+    `SELECT id FROM mediasoft_subscription_plans WHERE name = 'Sekali Beli Seumur Hidup' LIMIT 1`
+  ).get() as { id: number } | undefined
+  if (!lifetimePlan) {
+    sqlite.prepare(`
+      INSERT INTO mediasoft_subscription_plans
+        (name, price, duration_days, features, is_active, is_recommended, created_at,
+         max_devices, max_transactions_per_day, max_products, max_users, feature_flags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'Sekali Beli Seumur Hidup',
+      4999000,
+      0,
+      JSON.stringify([
+        'Sekali bayar',
+        'Akses permanen tanpa tanggal habis',
+        'Semua fitur operasional aktif',
+        'Multi-user dan multi cabang',
+        'Backup/restore, laporan, retur, hutang/piutang, shift, dan API',
+      ]),
+      1,
+      0,
+      new Date().toISOString(),
+      5,
+      -1,
+      -1,
+      10,
+      lifetimeFlags,
+    )
+  }
 
   const trialFlags = JSON.stringify({
     reports: false,
@@ -796,6 +881,40 @@ runMigrations()
     `INSERT OR IGNORE INTO mediasoft_popup_rules (code, title, description) VALUES (?, ?, ?)`
   )
   for (const [code, title, desc] of popups) insertPopup.run(code, title, desc)
+
+  for (const table of [
+    'mediasoft_pengguna',
+    'mediasoft_barang',
+    'mediasoft_harga',
+    'mediasoft_kategori_barang',
+    'mediasoft_satuan',
+    'mediasoft_supplier',
+    'mediasoft_customer',
+    'mediasoft_penjualan',
+    'mediasoft_penjualan_detail',
+    'mediasoft_payment_details',
+    'mediasoft_payment_methods',
+    'mediasoft_tax_rates',
+    'mediasoft_returns',
+    'mediasoft_return_items',
+    'mediasoft_pembelian',
+    'mediasoft_pembelian_detail',
+    'mediasoft_kas_drawer',
+    'mediasoft_kas_transaksi',
+    'mediasoft_stock_opnames',
+    'mediasoft_stock_opname_items',
+    'mediasoft_backup',
+    'mediasoft_activity_log',
+    'mediasoft_identitas',
+    'mediasoft_subscription_plans',
+    'mediasoft_struk_settings',
+    'mediasoft_popup_rules',
+    'mediasoft_branches',
+    'mediasoft_warehouses',
+    'mediasoft_promos',
+  ]) {
+    ensureSyncMetadata(table)
+  }
 })()
 
 ;(function normalizeLocalDeveloperRole() {

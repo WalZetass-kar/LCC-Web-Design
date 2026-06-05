@@ -25,6 +25,23 @@ export interface PromoValidation {
   promo?: Promo
 }
 
+const PROMO_UPDATE_COLUMNS = new Set([
+  'code',
+  'name',
+  'type',
+  'value',
+  'min_purchase',
+  'max_discount',
+  'start_date',
+  'end_date',
+  'start_time',
+  'end_time',
+  'usage_limit',
+  'usage_count',
+  'is_active',
+  'conditions',
+])
+
 export class PromoService {
   /**
    * Validate and apply promo code
@@ -137,11 +154,17 @@ export class PromoService {
    */
   static applyPromo(code: string) {
     try {
-      sqlite.prepare(`
-        UPDATE mediasoft_promos 
-        SET usage_count = usage_count + 1 
+      const result = sqlite.prepare(`
+        UPDATE mediasoft_promos
+        SET usage_count = usage_count + 1
         WHERE code = ?
+          AND is_active = 1
+          AND (usage_limit IS NULL OR usage_count < usage_limit)
       `).run(code)
+
+      if (result.changes === 0) {
+        return { success: false, message: 'Promo tidak tersedia atau kuotanya sudah habis' }
+      }
 
       return { success: true }
     } catch (error) {
@@ -209,7 +232,7 @@ export class PromoService {
       const values: any[] = []
 
       Object.entries(data).forEach(([key, value]) => {
-        if (key !== 'id' && key !== 'created_at' && value !== undefined) {
+        if (value !== undefined && PROMO_UPDATE_COLUMNS.has(key)) {
           fields.push(`${key} = ?`)
           values.push(value)
         }

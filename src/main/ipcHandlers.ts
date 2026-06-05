@@ -8,8 +8,9 @@
  * The guard checks the server-side session — NOT client data.
  */
 
-import type { IpcMain } from 'electron'
+import type { IpcMain, IpcMainInvokeEvent } from 'electron'
 import { dialog, BrowserWindow } from 'electron'
+import path from 'path'
 import { BarangController } from '../backend/controllers/BarangController.js'
 import { KategoriController } from '../backend/controllers/KategoriController.js'
 import { SatuanController } from '../backend/controllers/SatuanController.js'
@@ -67,6 +68,17 @@ import type { PaginationParams } from '../backend/utils/pagination.js'
 type ChannelHandler = (...args: any[]) => any
 
 const channelHandlers = new Map<string, ChannelHandler>()
+const approvedSavePaths = new Set<string>()
+
+function consumeApprovedSavePath(customPath?: string) {
+  if (!customPath) return undefined
+  const resolved = path.resolve(customPath)
+  if (!approvedSavePaths.has(resolved)) {
+    throw new Error('Path export tidak berasal dari dialog simpan aplikasi.')
+  }
+  approvedSavePaths.delete(resolved)
+  return resolved
+}
 
 function isDatabaseCorruptionError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
@@ -273,8 +285,8 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   })
   ipcMain.handle('demo:getViolationLog', () => demoGetViolationLog())
 
-  // ─── SYNC SERVER (always allowed) ──────────────────────────────────
-  ipcMain.handle('sync:getStatus', () => ({
+  // ─── SYNC SERVER ──────────────────────────────────────────────────
+  handle(ipcMain, 'sync:getStatus', () => ({
     success: true,
     data: {
       mode: 'desktop',
@@ -282,7 +294,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
       client: SyncClientService.getStatus(),
     },
   }))
-  ipcMain.handle('sync:saveConfig', (_e, config: { enabled?: boolean; port?: number; token?: string }) => {
+  handle(ipcMain, 'sync:saveConfig', (config: { enabled?: boolean; port?: number; token?: string }) => {
     if (config.enabled) {
       SyncClientService.saveConfig({ enabled: false })
     }
@@ -296,7 +308,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
       message: 'Pengaturan sinkronisasi disimpan',
     }
   })
-  ipcMain.handle('sync:saveClientConfig', (_e, config: { enabled?: boolean; baseUrl?: string; token?: string; deviceName?: string }) => {
+  handle(ipcMain, 'sync:saveClientConfig', (config: { enabled?: boolean; baseUrl?: string; token?: string; deviceName?: string }) => {
     const result = SyncClientService.saveConfig(config)
     if (result.success && result.data.enabled) {
       SyncServerService.saveConfig({ enabled: false })
@@ -310,7 +322,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
       },
     }
   })
-  ipcMain.handle('sync:testConnection', () => {
+  handle(ipcMain, 'sync:testConnection', () => {
     const status = SyncServerService.getStatus()
     return {
       success: status.running,
@@ -320,10 +332,10 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
         : 'Server sinkronisasi desktop belum aktif',
     }
   })
-  ipcMain.handle('sync:testClientConnection', (_e, config?: { baseUrl?: string; token?: string; deviceName?: string }) => (
+  handle(ipcMain, 'sync:testClientConnection', (config?: { baseUrl?: string; token?: string; deviceName?: string }) => (
     SyncClientService.testConnection(config)
   ))
-  ipcMain.handle('sync:rotateToken', () => ({
+  handle(ipcMain, 'sync:rotateToken', () => ({
     success: true,
     data: {
       mode: 'desktop',
@@ -387,16 +399,22 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
 
   // ─── USER MANAGEMENT ──────────────────────────────────────────────
   handle(ipcMain, 'user:getAll', () => UserController.getAll())
-  handle(ipcMain, 'user:create', (data: any) => UserController.create(data))
-  handle(ipcMain, 'user:update', (username: string, data: any) => UserController.update(username, data))
+  handle(ipcMain, 'user:create', (data: any) => UserController.create({
+    ...data,
+    _caller: demoSession.getUsername() ?? data?._caller,
+  }))
+  handle(ipcMain, 'user:update', (username: string, data: any) => UserController.update(username, {
+    ...data,
+    _caller: demoSession.getUsername() ?? data?._caller,
+  }))
   handle(ipcMain, 'user:changePassword', (username: string, oldPass: string, newPass: string) => 
     UserController.changePassword(username, oldPass, newPass))
   handle(ipcMain, 'user:resetPassword', (username: string, newPass: string, caller?: string) => 
-    UserController.resetPassword(username, newPass, caller))
-  handle(ipcMain, 'user:delete', (username: string, caller?: string) => UserController.delete(username, caller))
-  handle(ipcMain, 'user:toggleStatus', (username: string, caller?: string) => UserController.toggleStatus(username, caller))
-  handle(ipcMain, 'user:block', (username: string, blocked: boolean, caller?: string) => UserController.block(username, blocked, caller))
-  handle(ipcMain, 'user:extendAccess', (username: string, days: number, caller?: string) => UserController.extendAccess(username, days, caller))
+    UserController.resetPassword(username, newPass, demoSession.getUsername() ?? caller))
+  handle(ipcMain, 'user:delete', (username: string, caller?: string) => UserController.delete(username, demoSession.getUsername() ?? caller))
+  handle(ipcMain, 'user:toggleStatus', (username: string, caller?: string) => UserController.toggleStatus(username, demoSession.getUsername() ?? caller))
+  handle(ipcMain, 'user:block', (username: string, blocked: boolean, caller?: string) => UserController.block(username, blocked, demoSession.getUsername() ?? caller))
+  handle(ipcMain, 'user:extendAccess', (username: string, days: number, caller?: string) => UserController.extendAccess(username, days, demoSession.getUsername() ?? caller))
   handle(ipcMain, 'user:getPermissions', (username: string) => UserController.getPermissions(username))
   handle(ipcMain, 'user:savePermissions', (username: string, permissions: Record<string, boolean>) => UserController.savePermissions(username, permissions))
 
@@ -488,15 +506,15 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
 
   // ─── EXPORT ────────────────────────────────────────────────────────
   handle(ipcMain, 'export:penjualanExcel', (startDate: string, endDate: string, customPath?: string) => 
-    ExportController.exportPenjualanExcel(startDate, endDate, customPath))
+    ExportController.exportPenjualanExcel(startDate, endDate, consumeApprovedSavePath(customPath)))
   handle(ipcMain, 'export:penjualanPDF', (startDate: string, endDate: string, customPath?: string) => 
-    ExportController.exportPenjualanPDF(startDate, endDate, customPath))
-  handle(ipcMain, 'export:stokExcel', (customPath?: string) => ExportController.exportStokExcel(customPath))
-  handle(ipcMain, 'export:stokPDF', (customPath?: string) => ExportController.exportStokPDF(customPath))
+    ExportController.exportPenjualanPDF(startDate, endDate, consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:stokExcel', (customPath?: string) => ExportController.exportStokExcel(consumeApprovedSavePath(customPath)))
+  handle(ipcMain, 'export:stokPDF', (customPath?: string) => ExportController.exportStokPDF(consumeApprovedSavePath(customPath)))
   handle(ipcMain, 'export:toExcel', (data: any[], filename: string, sheetName?: string, customPath?: string) => 
-    ExportController.exportToExcel(data, filename, sheetName, customPath))
+    ExportController.exportToExcel(data, filename, sheetName, consumeApprovedSavePath(customPath)))
   handle(ipcMain, 'export:toPDF', (title: string, headers: string[], data: any[][], filename: string, orientation?: 'portrait' | 'landscape', customPath?: string) => 
-    ExportController.exportToPDF(title, headers, data, filename, orientation, customPath))
+    ExportController.exportToPDF(title, headers, data, filename, orientation, consumeApprovedSavePath(customPath)))
 
   // ─── INDUSTRY INTEGRATIONS ─────────────────────────────────────────
   handle(ipcMain, 'integrations:get', () => IndustrySettingsController.get())
@@ -811,11 +829,14 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── DIALOG ────────────────────────────────────────────────────────
   handle(ipcMain, 'dialog:showSaveDialog', async (options: any) => {
     const result = await dialog.showSaveDialog(options)
+    if (!result.canceled && result.filePath) {
+      approvedSavePaths.add(path.resolve(result.filePath))
+    }
     return { success: true, data: result }
   })
 
   // ─── PRINT ─────────────────────────────────────────────────────────
-  ipcMain.handle('print:getPrinters', async (event) => {
+  const printGetPrinters = registerChannel('print:getPrinters', async (event: IpcMainInvokeEvent) => {
     try {
       const win = BrowserWindow.fromWebContents(event.sender)
       if (!win) return { success: false, message: 'Window not found' }
@@ -825,8 +846,9 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
       return { success: false, message: String(error) }
     }
   })
+  ipcMain.handle('print:getPrinters', withDemoGuard('print:getPrinters', printGetPrinters))
 
-  ipcMain.handle('print:execute', async (event, options: { printerName?: string; silent?: boolean; copies?: number }) => {
+  const printExecute = registerChannel('print:execute', async (event: IpcMainInvokeEvent, options: { printerName?: string; silent?: boolean; copies?: number }) => {
     try {
       const win = BrowserWindow.fromWebContents(event.sender)
       if (!win) return { success: false, message: 'Window not found' }
@@ -848,4 +870,5 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
       return { success: false, message: String(error) }
     }
   })
+  ipcMain.handle('print:execute', withDemoGuard('print:execute', printExecute))
 }

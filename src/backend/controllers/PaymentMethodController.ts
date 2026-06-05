@@ -160,12 +160,14 @@ export class PaymentMethodController {
         success: true,
         data: {
           provider: row?.provider || 'midtrans',
-          serverKey: row?.server_key || '',
-          clientKey: row?.client_key || '',
+          serverKey: '',
+          clientKey: '',
           isProduction: !!row?.is_production,
           enabled: !!row?.enabled,
           updatedAt: row?.updated_at || null,
           hasEnvServerKey: !!process.env.MIDTRANS_SERVER_KEY,
+          hasStoredServerKey: !!row?.server_key,
+          hasStoredClientKey: !!row?.client_key,
         },
       }
     } catch (error) {
@@ -176,14 +178,23 @@ export class PaymentMethodController {
   static saveGatewaySettings(data: any) {
     try {
       this.ensureGatewayTable()
+      const current = sqlite
+        .prepare('SELECT server_key, client_key FROM mediasoft_payment_gateway_settings WHERE id = 1')
+        .get() as GatewaySettings | undefined
+      const nextServerKey = typeof data.serverKey === 'string' && data.serverKey.trim()
+        ? data.serverKey.trim()
+        : current?.server_key || ''
+      const nextClientKey = typeof data.clientKey === 'string' && data.clientKey.trim()
+        ? data.clientKey.trim()
+        : current?.client_key || ''
       sqlite.prepare(`
         UPDATE mediasoft_payment_gateway_settings
         SET provider = ?, server_key = ?, client_key = ?, is_production = ?, enabled = ?, updated_at = ?
         WHERE id = 1
       `).run(
         data.provider || 'midtrans',
-        data.serverKey || '',
-        data.clientKey || '',
+        nextServerKey,
+        nextClientKey,
         data.isProduction ? 1 : 0,
         data.enabled ? 1 : 0,
         new Date().toISOString()
@@ -392,12 +403,18 @@ export class PaymentMethodController {
 
   static markQrisPaid(orderId: string) {
     try {
+      if (!orderId?.trim()) {
+        return { success: false, message: 'Order ID tidak valid' }
+      }
       this.ensureGatewayTable()
-      sqlite.prepare(`
+      const result = sqlite.prepare(`
         UPDATE mediasoft_payment_qris_sessions
         SET status = 'paid', transaction_status = 'manual_paid', paid_at = ?, updated_at = ?
         WHERE order_id = ?
       `).run(new Date().toISOString(), new Date().toISOString(), orderId)
+      if (result.changes === 0) {
+        return { success: false, message: 'Sesi QRIS tidak ditemukan' }
+      }
       return { success: true, message: 'QRIS ditandai lunas' }
     } catch (error) {
       return { success: false, message: String(error) }

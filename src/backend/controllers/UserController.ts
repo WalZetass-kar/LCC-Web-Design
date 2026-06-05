@@ -12,6 +12,7 @@ const ROLE_HIERARCHY = ['developer', 'admin', 'operator', 'kasir']
 const CAN_MANAGE_PERMISSIONS = ['developer'] // Can set permissions for others
 const UNLIMITED_ACCESS_ROLES = ['developer']
 const LOCAL_ROLES = new Set(ROLE_HIERARCHY)
+const ADMIN_MANAGED_ROLES = new Set(['operator', 'kasir'])
 const PIN_PATTERN = /^\d{4,8}$/
 
 type UserRoleRecord = { hak_akses?: string | null } | null | undefined
@@ -109,6 +110,14 @@ function validateLocalUserLimit(caller?: string | null): string | null {
   return null
 }
 
+function validateRoleAssignment(caller: string | undefined, targetRole: string): string | null {
+  const callerAccount = getCallerAccount(caller)
+  const callerRole = callerAccount?.hak_akses ?? null
+  if (callerRole === 'developer' || callerRole === 'super_admin') return null
+  if (callerRole === 'admin' && ADMIN_MANAGED_ROLES.has(targetRole)) return null
+  return 'Akun Anda tidak memiliki izin untuk membuat atau mengubah role tersebut.'
+}
+
 export class UserController {
   static getAll() {
     try {
@@ -183,6 +192,9 @@ export class UserController {
       const pinError = validatePin(data.pin)
       if (pinError) return { success: false, message: pinError }
       const role = normalizeLocalRole(data.hak_akses)
+      const roleError = validateRoleAssignment(data._caller, role)
+      if (roleError) return { success: false, message: roleError }
+
       if (data.pin_enabled && role !== 'kasir') {
         return { success: false, message: 'PIN login hanya boleh diaktifkan untuk role kasir' }
       }

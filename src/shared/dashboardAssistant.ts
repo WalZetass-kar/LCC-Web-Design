@@ -70,7 +70,7 @@ export function buildLocalAssistantResponse(question: string, summary: Dashboard
 
 export function buildAssistantPrompt(question: string, summary: DashboardSummary) {
   return [
-    'Kamu adalah Asisten Zetass-Kar untuk aplikasi MediaSoft POS Zetass v2.0.',
+    'Kamu adalah Asisten Zetass-Kar untuk aplikasi MediaSoft POS Zetass.',
     'Jawab singkat, praktis, dalam Bahasa Indonesia, dan hanya gunakan data JSON yang diberikan.',
     'Jika data tidak tersedia, katakan data belum tersedia dan beri langkah yang bisa dilakukan user.',
     '',

@@ -13,6 +13,10 @@ import { authMiddleware, AuthedRequest } from '../middleware/auth';
 
 const router = Router();
 
+function expiresAtFromDuration(days: number): string | null {
+  return days <= 0 ? null : new Date(Date.now() + days * 86400000).toISOString();
+}
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
@@ -111,7 +115,7 @@ router.post('/register-demo', async (req, res) => {
     | undefined;
   if (!plan) return res.status(500).json({ success: false, message: 'Plan DEMO belum ada di server' });
 
-  const expired = new Date(Date.now() + plan.duration_days * 86400000).toISOString();
+  const expired = expiresAtFromDuration(plan.duration_days);
   db.prepare(
     `INSERT INTO user_subscriptions (user_id, plan_id, status, expired_at) VALUES (?, ?, 'active', ?)`,
   ).run(userId, plan.id, expired);

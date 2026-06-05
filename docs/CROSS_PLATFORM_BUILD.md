@@ -38,7 +38,6 @@ Preflight ini memastikan resource wajib tersedia:
 
 - `sistem_pos.db`
 - `migrations/`
-- `.env.production`
 - `build/icon.png`
 - `build/icon.ico`
 - `src/renderer/assets/`
@@ -53,7 +52,6 @@ Electron Builder memasukkan resource berikut ke package desktop:
 - `build/icon.png` ke `resources/app-icon.png`
 - `build/icon.ico` ke `resources/app-icon.ico`
 - `src/renderer/assets/` ke `resources/renderer-assets`
-- `.env.production` ke `resources/.env.production`
 
 ## Desktop
 
@@ -65,9 +63,17 @@ npm run build:desktop:linux
 npm run build:desktop:mac
 ```
 
+Alias wajib yang setara:
+
+```bash
+npm run build:win
+npm run build:linux
+npm run build:mac
+```
+
 Output:
 
-- Windows: `release/*.exe` installer NSIS, `release/*.msi`, dan `release/*.zip`
+- Windows: `release/*.exe` installer NSIS dari `build:win`; ZIP bisa dibuat dengan `desktop:win`; semua target Windows tersedia lewat `desktop:win:all`
 - Linux: `release/*.AppImage` dan `release/*.deb`
 - macOS: `release/*.dmg` dan `release/*.zip`
 
@@ -76,6 +82,7 @@ Alias lama masih tersedia:
 ```bash
 npm run desktop:win
 npm run desktop:win:installer
+npm run desktop:win:all
 npm run desktop:linux
 npm run desktop:mac
 ```
@@ -110,10 +117,11 @@ npm run android:debug
 Build mobile Android lengkap memakai alias:
 
 ```bash
-npm run build:mobile:android
+npm run build:android
 ```
 
-Alias tersebut menjalankan release APK dan AAB. Jika hanya butuh salah satu:
+Alias tersebut menjalankan release APK dan AAB. Alias lama `build:mobile:android`
+tetap tersedia. Jika hanya butuh salah satu:
 
 Release APK:
 
@@ -163,12 +171,13 @@ npm run ios:add
 Sync web assets ke project iOS:
 
 ```bash
-npm run build:mobile:ios
+npm run build:ios
 ```
 
 Alias lama:
 
 ```bash
+npm run build:mobile:ios
 npm run ios:sync
 ```
 
@@ -195,14 +204,11 @@ Project Xcode berada di:
 ios/App/App.xcodeproj
 ```
 
-## Application Split
+## Aplikasi Terpadu
 
-Routing utama sekarang dipisah:
-
-- `/app` untuk User Panel / POS operasional.
-- `/developer` untuk Developer Panel.
-- `/login` untuk login utama.
-- `/license` diarahkan ke alur pembayaran/aktivasi lisensi di User Panel.
+Project tetap satu aplikasi. POS operasional, login pembeli, Developer Panel,
+lisensi, paket, backup, laporan, dan pengaturan berjalan dalam satu flow React
+yang sama melalui `src/renderer/main.tsx` dan layout aplikasi yang sudah ada.
 
 Route Developer Panel dilindungi RBAC di frontend dan channel administrasi
 dilindungi di backend IPC guard. Link menu Developer Panel hanya tampil untuk
@@ -230,6 +236,7 @@ npm run typecheck
 npm test
 npm run desktop:linux
 npm run android:debug
+npm run sync:test
 ```
 
 Untuk release Android, pastikan environment certificate pinning sudah diisi.

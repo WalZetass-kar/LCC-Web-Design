@@ -68,8 +68,8 @@ export class PlanController {
     if (!data.price || data.price <= 0) {
       return { success: false, message: 'Harga harus lebih dari 0' }
     }
-    if (!data.duration_days || data.duration_days <= 0) {
-      return { success: false, message: 'Durasi harus lebih dari 0 hari' }
+    if (data.duration_days === undefined || data.duration_days < 0) {
+      return { success: false, message: 'Durasi harus 0 untuk seumur hidup atau lebih dari 0 hari' }
     }
 
     PlanModel.create({
@@ -116,6 +116,9 @@ export class PlanController {
     }
     if (data.price !== undefined && data.price <= 0) {
       return { success: false, message: 'Harga harus lebih dari 0' }
+    }
+    if (data.duration_days !== undefined && data.duration_days < 0) {
+      return { success: false, message: 'Durasi harus 0 untuk seumur hidup atau lebih dari 0 hari' }
     }
 
     PlanModel.update(id, {

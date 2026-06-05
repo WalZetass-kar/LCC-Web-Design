@@ -72,6 +72,8 @@ const PLAN_COLORS: Record<string, string> = {
   PRO_MONTHLY: 'from-primary-600 to-primary-400',
   PRO_ANNUAL: 'from-emerald-600 to-teal-400',
   TAHUNAN: 'from-emerald-600 to-teal-400',
+  LIFETIME: 'from-amber-500 to-yellow-500',
+  SEUMUR_HIDUP: 'from-amber-500 to-yellow-500',
   ENTERPRISE: 'from-violet-600 to-purple-400',
 }
 
@@ -107,6 +109,23 @@ const ANNUAL_PLAN_PAYLOAD = {
   feature_flags: Object.fromEntries(ALL_FEATURE_CODES.map(code => [code, true])),
 }
 
+const LIFETIME_PLAN_PAYLOAD = {
+  code: 'LIFETIME',
+  name: 'Sekali Beli Seumur Hidup',
+  description: 'Paket sekali bayar untuk akses permanen: semua fitur operasional, multi-user, backup/restore, stock opname, hutang/piutang, shift, API, multi cabang, dan retur/refund.',
+  price: 4999000,
+  currency: 'IDR',
+  duration_days: 0,
+  max_devices: 5,
+  max_transactions_per_day: -1,
+  max_products: -1,
+  max_users: 10,
+  sort_order: 40,
+  is_active: true,
+  is_recommended: false,
+  feature_flags: Object.fromEntries(ALL_FEATURE_CODES.map(code => [code, true])),
+}
+
 const PLAN_FEATURE_SUMMARIES: Record<'trial' | 'basic' | 'pro' | 'enterprise', string[]> = {
   trial: [
     'Akses coba terbatas',
@@ -130,7 +149,7 @@ const PLAN_FEATURE_SUMMARIES: Record<'trial' | 'basic' | 'pro' | 'enterprise', s
     'Semua fitur Pro',
     'Multi cabang',
     'Produk dan transaksi unlimited',
-    'Akses tahunan untuk operasional lengkap',
+    'Akses penuh untuk operasional lengkap',
   ],
 }
 
@@ -142,6 +161,12 @@ function limitLabel(value?: number | null) {
   if (value === -1) return 'Unlimited'
   if (value === null || value === undefined) return '-'
   return Number(value).toLocaleString('id-ID')
+}
+
+function durationLabel(days?: number | null) {
+  if (days === 0) return 'Seumur hidup'
+  if (days === null || days === undefined) return '-'
+  return `${days} hari`
 }
 
 function toNumber(value: string, fallback: number) {
@@ -178,7 +203,7 @@ function payloadFromForm(form: PlanFormState, includeCode: boolean) {
     description: form.description.trim() || null,
     price: Math.max(0, toNumber(form.price, 0)),
     currency: form.currency.trim() || 'IDR',
-    duration_days: Math.max(1, toNumber(form.duration_days, 30)),
+    duration_days: Math.max(0, toNumber(form.duration_days, 30)),
     max_devices: toNumber(form.max_devices, 1),
     max_transactions_per_day: toNumber(form.max_transactions_per_day, -1),
     max_products: toNumber(form.max_products, -1),
@@ -208,6 +233,7 @@ function featurePresetForPlan(plan: PlanRow): 'trial' | 'basic' | 'pro' | 'enter
   const code = cleanCode(plan.code)
   const name = plan.name.toLowerCase()
   if (code.includes('TRIAL') || code.includes('DEMO') || name.includes('trial') || name === 'harian') return 'trial'
+  if (code.includes('LIFETIME') || code.includes('SEUMUR') || name.includes('seumur') || name.includes('lifetime')) return 'enterprise'
   if (code.includes('ENTERPRISE') || code.includes('TAHUNAN') || code.includes('ANNUAL') || name.includes('enterprise') || name.includes('tahunan')) return 'enterprise'
   if (code.includes('PRO') || name.includes('pro')) return 'pro'
   if (code.includes('BASIC') || name.includes('basic') || name === 'bulanan') return 'basic'
@@ -238,6 +264,7 @@ export default function LicensePlansPage() {
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [addingAnnual, setAddingAnnual] = useState(false)
+  const [addingLifetime, setAddingLifetime] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -271,6 +298,12 @@ export default function LicensePlansPage() {
     return code.includes('ANNUAL') || code.includes('TAHUNAN') || name.includes('tahunan')
   })
 
+  const hasLifetimePlan = plans.some(plan => {
+    const code = cleanCode(plan.code)
+    const name = plan.name.toLowerCase()
+    return code.includes('LIFETIME') || code.includes('SEUMUR') || name.includes('seumur') || name.includes('lifetime') || plan.duration_days === 0
+  })
+
   async function addAnnualPlan() {
     setAddingAnnual(true)
     const result = await api<PlanRow>('license:createPlan', ANNUAL_PLAN_PAYLOAD)
@@ -290,6 +323,25 @@ export default function LicensePlansPage() {
     void load()
   }
 
+  async function addLifetimePlan() {
+    setAddingLifetime(true)
+    const result = await api<PlanRow>('license:createPlan', LIFETIME_PLAN_PAYLOAD)
+    if (!result.success || !result.data?.id) {
+      setAddingLifetime(false)
+      return toast(result.message || 'Gagal menambahkan paket lifetime', 'error')
+    }
+
+    const features = await api<FeatureRow[]>('license:getPlanFeatures', result.data.id)
+    if (features.success && features.data?.length) {
+      await api('license:setPlanFeatures', result.data.id, {
+        features: features.data.map(feature => ({ code: feature.code, enabled: true, limit: feature.limit_value })),
+      })
+    }
+    setAddingLifetime(false)
+    toast('Paket Lifetime berhasil ditambahkan', 'success')
+    void load()
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -305,6 +357,16 @@ export default function LicensePlansPage() {
             >
               <Plus className="h-4 w-4" />
               {addingAnnual ? 'Menambahkan...' : 'Tambah Paket Tahunan'}
+            </button>
+          )}
+          {!hasLifetimePlan && (
+            <button
+              onClick={addLifetimePlan}
+              disabled={addingLifetime}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-900/60 dark:text-amber-300 dark:hover:bg-amber-950/30"
+            >
+              <Plus className="h-4 w-4" />
+              {addingLifetime ? 'Menambahkan...' : 'Tambah Paket Lifetime'}
             </button>
           )}
           <button
@@ -347,7 +409,7 @@ export default function LicensePlansPage() {
                   <p className="text-2xl font-bold text-white">
                     {plan.price === 0 ? 'Gratis' : `Rp ${Number(plan.price).toLocaleString('id-ID')}`}
                   </p>
-                  <p className="mt-0.5 text-xs text-white/70">{plan.duration_days} hari</p>
+                  <p className="mt-0.5 text-xs text-white/70">{durationLabel(plan.duration_days)}</p>
                   {isOn(plan.is_recommended) && (
                     <span className="mt-3 inline-flex rounded-full bg-white/20 px-2 py-1 text-[10px] font-bold uppercase text-white">
                       Rekomendasi
@@ -507,7 +569,7 @@ function PlanFormModal({
               <input type="number" min={0} value={form.price} onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))} className={input} />
             </Field>
             <Field label="Durasi Hari">
-              <input type="number" min={1} value={form.duration_days} onChange={e => setForm(prev => ({ ...prev, duration_days: e.target.value }))} className={input} />
+              <input type="number" min={0} value={form.duration_days} onChange={e => setForm(prev => ({ ...prev, duration_days: e.target.value }))} className={input} />
             </Field>
             <Field label="Currency">
               <input value={form.currency} onChange={e => setForm(prev => ({ ...prev, currency: e.target.value.toUpperCase() }))} className={input} />
@@ -537,7 +599,7 @@ function PlanFormModal({
                 <input type="number" value={form.max_users} onChange={e => setForm(prev => ({ ...prev, max_users: e.target.value }))} className={input} />
               </Field>
             </div>
-            <p className="mt-2 text-xs text-slate-400">Isi -1 untuk unlimited.</p>
+            <p className="mt-2 text-xs text-slate-400">Isi -1 untuk limit unlimited. Durasi 0 berarti seumur hidup.</p>
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -351,7 +351,7 @@ function CreateUserModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Durasi (hari)</label>
-              <input type="number" value={form.duration_days} onChange={e => setForm({ ...form, duration_days: Number(e.target.value) })}
+              <input type="number" min={0} value={form.duration_days} onChange={e => setForm({ ...form, duration_days: Number(e.target.value) })}
                 className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500" />
             </div>
           </div>
@@ -417,7 +417,7 @@ function PlanAccessPreview({ plan, compact = false }: { plan?: PlanRow; compact?
         </div>
         <div className="shrink-0 text-left text-xs text-slate-500 dark:text-slate-400 sm:text-right">
           <p className="font-semibold text-slate-800 dark:text-slate-100">Rp {Number(plan.price ?? 0).toLocaleString('id-ID')}</p>
-          <p>{plan.duration_days} hari</p>
+          <p>{plan.duration_days === 0 ? 'Seumur hidup' : `${plan.duration_days} hari`}</p>
         </div>
       </div>
 
@@ -499,7 +499,7 @@ function ChangePlanModal({ user, onClose, onSaved }: { user: UserRow; onClose: (
             <select value={planCode} onChange={e => {
               const nextPlan = plans.find(plan => plan.code === e.target.value)
               setPlanCode(e.target.value)
-              if (nextPlan?.duration_days) setDays(nextPlan.duration_days)
+              if (nextPlan) setDays(nextPlan.duration_days)
             }}
               className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500">
               {plans.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
@@ -508,7 +508,7 @@ function ChangePlanModal({ user, onClose, onSaved }: { user: UserRow; onClose: (
           <PlanAccessPreview plan={selectedPlan} compact />
           <div>
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Durasi (hari)</label>
-            <input type="number" value={days} onChange={e => setDays(Number(e.target.value))}
+            <input type="number" min={0} value={days} onChange={e => setDays(Number(e.target.value))}
               className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500" />
           </div>
           <div>

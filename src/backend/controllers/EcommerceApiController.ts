@@ -330,10 +330,12 @@ export class EcommerceApiController {
           activationPlanId: row?.activation_plan_id ?? null,
           paymentGateway: {
             provider: gateway?.provider ?? 'midtrans',
-            serverKey: decryptSecret(gateway?.server_key),
-            clientKey: decryptSecret(gateway?.client_key),
+            serverKey: '',
+            clientKey: '',
             isProduction: !!gateway?.is_production,
             enabled: !!gateway?.enabled,
+            hasStoredServerKey: !!gateway?.server_key,
+            hasStoredClientKey: !!gateway?.client_key,
           },
         },
       }
@@ -344,6 +346,9 @@ export class EcommerceApiController {
 
   static save(data: any, caller?: string | null) {
     try {
+      const currentGateway = sqlite.prepare(`SELECT server_key, client_key FROM ${GATEWAY_TABLE} WHERE id = 1`).get() as any
+      const incomingServerKey = typeof data.paymentGateway?.serverKey === 'string' ? data.paymentGateway.serverKey.trim() : ''
+      const incomingClientKey = typeof data.paymentGateway?.clientKey === 'string' ? data.paymentGateway.clientKey.trim() : ''
       sqlite.prepare(`
         UPDATE ${TABLE} SET
           api_key = ?,
@@ -378,8 +383,8 @@ export class EcommerceApiController {
         WHERE id = 1
       `).run(
         data.paymentGateway?.provider ?? 'midtrans',
-        encryptSecret(data.paymentGateway?.serverKey),
-        encryptSecret(data.paymentGateway?.clientKey),
+        incomingServerKey ? encryptSecret(incomingServerKey) : currentGateway?.server_key || '',
+        incomingClientKey ? encryptSecret(incomingClientKey) : currentGateway?.client_key || '',
         data.paymentGateway?.isProduction ? 1 : 0,
         data.paymentGateway?.enabled ? 1 : 0,
         new Date().toISOString()

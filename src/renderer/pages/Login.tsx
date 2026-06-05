@@ -27,6 +27,7 @@ function formatPrice(n: number): string {
 }
 
 function getPlanPeriod(days: number): string {
+  if (days === 0) return '/seumur hidup'
   if (days === 1) return '/hari'
   if (days === 7) return '/minggu'
   if (days >= 28 && days <= 31) return '/bulan'
@@ -79,6 +80,11 @@ export default function Login() {
     const checkStatus = async () => {
       try {
         await secureStorage.ready(['rememberMe', 'pos_session', 'auth_device_id'])
+      } catch {
+        // Android Preferences is only a storage mirror; localStorage/mobile store can still work.
+      }
+
+      try {
         // Check if remembered. Keep only the username; never restore a saved password.
         const remembered = secureStorage.getItem('rememberMe')
         if (remembered) {
@@ -89,11 +95,18 @@ export default function Login() {
           }
           setRememberMe(true)
         }
-        
-        // Check DB status
+      } catch {
+        secureStorage.removeItem('rememberMe')
+      }
+
+      try {
         const dbCheck = await api('system:checkDb')
         setDbStatus(dbCheck.success ? 'connected' : 'error')
+      } catch {
+        setDbStatus('error')
+      }
 
+      try {
         const userCheck = await api<{ hasUsers: boolean }>('auth:hasUsers')
         if (userCheck.success) {
           const hasExistingUsers = !!userCheck.data?.hasUsers
@@ -101,7 +114,8 @@ export default function Login() {
           setAuthView(hasExistingUsers ? 'login' : 'register')
         }
       } catch {
-        setDbStatus('error')
+        setHasUsers(false)
+        setAuthView('register')
       } finally {
         setAuthLoading(false)
         usernameRef.current?.focus()
@@ -382,7 +396,7 @@ export default function Login() {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary-500/10 border border-primary-500/20 mb-4">
               <Sparkles size={12} className="text-primary-600 dark:text-primary-400" />
-              <span className="text-xs text-primary-600 dark:text-primary-400 font-medium">Point of Sale System v2.0</span>
+              <span className="text-xs text-primary-600 dark:text-primary-400 font-medium">Point of Sale System</span>
             </div>
             <h2 className="text-4xl font-bold text-slate-900 dark:text-white leading-tight mb-4">
               Kelola toko Anda<br />
@@ -724,7 +738,7 @@ export default function Login() {
                     {dbStatus === 'connected' ? 'Database OK' : dbStatus === 'error' ? 'DB Error' : 'Checking...'}
                   </span>
                 </div>
-                <span className="text-slate-400 dark:text-slate-500">v2.0.0</span>
+                <span className="text-slate-400 dark:text-slate-500">MediaSoft POS</span>
               </div>
 
               <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-400 dark:text-slate-500">

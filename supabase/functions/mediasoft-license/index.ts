@@ -129,6 +129,17 @@ function toPositiveInt(value: unknown, fallback: number) {
   return n > 0 ? n : fallback
 }
 
+function toPlanDurationDays(value: unknown, fallback: number) {
+  const n = Math.trunc(toNumber(value, fallback))
+  return n >= 0 ? n : fallback
+}
+
+function isLifetimePlan(plan: any, durationDays = Number(plan?.duration_days ?? 0)) {
+  const code = normalizePlanCode(plan?.code)
+  const name = cleanText(plan?.name).toLowerCase()
+  return durationDays <= 0 || code.includes('LIFETIME') || code.includes('SEUMUR') || name.includes('seumur') || name.includes('lifetime')
+}
+
 function nowIso() {
   return new Date().toISOString()
 }
@@ -237,6 +248,8 @@ function planAliases(code: string) {
     PRO: ['PRO_MONTHLY'],
     ANNUAL: ['PRO_ANNUAL', 'TAHUNAN'],
     TAHUNAN: ['PRO_ANNUAL'],
+    LIFETIME: ['LIFETIME', 'SEUMUR_HIDUP'],
+    SEUMUR_HIDUP: ['LIFETIME'],
     TRIAL: ['TRIAL_3_DAYS'],
     DEMO: ['TRIAL_3_DAYS'],
   }
@@ -286,6 +299,23 @@ const PRO_FEATURE_FLAGS = {
 }
 const ENTERPRISE_FEATURE_FLAGS = trueFeatureFlags()
 
+const DEFAULT_TRIAL_PLAN = {
+  code: 'TRIAL_3_DAYS',
+  name: 'Trial 3 Hari',
+  description: 'Trial terbatas 3 hari untuk akun pembeli baru.',
+  price: 0,
+  currency: 'IDR',
+  duration_days: 3,
+  is_active: true,
+  is_recommended: false,
+  max_devices: 1,
+  max_transactions_per_day: 20,
+  max_products: 30,
+  max_users: 1,
+  feature_flags: TRIAL_FEATURE_FLAGS,
+  sort_order: 0,
+}
+
 const DEFAULT_ANNUAL_PLAN = {
   code: 'PRO_ANNUAL',
   name: 'Tahunan',
@@ -303,6 +333,23 @@ const DEFAULT_ANNUAL_PLAN = {
   sort_order: 30,
 }
 
+const DEFAULT_LIFETIME_PLAN = {
+  code: 'LIFETIME',
+  name: 'Sekali Beli Seumur Hidup',
+  description: 'Paket sekali bayar untuk akses permanen: semua fitur operasional, multi-user, backup/restore, stock opname, hutang/piutang, shift, API, multi cabang, dan retur/refund.',
+  price: 4999000,
+  currency: 'IDR',
+  duration_days: 0,
+  is_active: true,
+  is_recommended: false,
+  max_devices: 5,
+  max_transactions_per_day: -1,
+  max_products: -1,
+  max_users: 10,
+  feature_flags: ENTERPRISE_FEATURE_FLAGS,
+  sort_order: 40,
+}
+
 let defaultFeatureCatalogEnsured = false
 
 function parseFeatureFlags(value: unknown): Record<string, boolean> {
@@ -317,6 +364,7 @@ function defaultFeatureFlagsForPlan(plan: any): Record<string, boolean> | null {
   const name = cleanText(plan?.name).toLowerCase()
 
   if (code.includes('TRIAL') || code.includes('DEMO') || name.includes('trial') || name === 'harian') return TRIAL_FEATURE_FLAGS
+  if (isLifetimePlan(plan)) return ENTERPRISE_FEATURE_FLAGS
   if (code.includes('ENTERPRISE') || code.includes('TAHUNAN') || code.includes('ANNUAL') || name.includes('enterprise') || name.includes('tahunan')) return ENTERPRISE_FEATURE_FLAGS
   if (code.includes('PRO') || name.includes('pro')) return PRO_FEATURE_FLAGS
   if (code.includes('BASIC') || name.includes('basic') || name === 'bulanan') return BASIC_FEATURE_FLAGS
@@ -341,12 +389,30 @@ async function ensureDefaultFeatureCatalog() {
   defaultFeatureCatalogEnsured = true
 }
 
+async function ensureDefaultTrialPlan() {
+  const rows = await rest<any[]>('GET', 'subscription_plans?code=eq.TRIAL_3_DAYS&select=id&limit=1')
+  if (rows[0]) return
+  await rest('POST',
+    'subscription_plans?on_conflict=code',
+    DEFAULT_TRIAL_PLAN,
+    'resolution=merge-duplicates,return=minimal')
+}
+
 async function ensureDefaultAnnualPlan() {
   const rows = await rest<any[]>('GET', 'subscription_plans?code=eq.PRO_ANNUAL&select=id&limit=1')
   if (rows[0]) return
   await rest('POST',
     'subscription_plans?on_conflict=code',
     DEFAULT_ANNUAL_PLAN,
+    'resolution=merge-duplicates,return=minimal')
+}
+
+async function ensureDefaultLifetimePlan() {
+  const rows = await rest<any[]>('GET', 'subscription_plans?code=eq.LIFETIME&select=id&limit=1')
+  if (rows[0]) return
+  await rest('POST',
+    'subscription_plans?on_conflict=code',
+    DEFAULT_LIFETIME_PLAN,
     'resolution=merge-duplicates,return=minimal')
 }
 
@@ -501,6 +567,8 @@ async function handleAdminRefresh(req: Request) {
 }
 
 async function getTrialPlan() {
+  await ensureDefaultFeatureCatalog()
+  await ensureDefaultTrialPlan()
   const plans = await rest<any[]>('GET',
     'subscription_plans?code=eq.TRIAL_3_DAYS&select=*&limit=1'
   )
@@ -511,7 +579,9 @@ async function getTrialPlan() {
 
 async function listPlansRaw() {
   await ensureDefaultFeatureCatalog()
+  await ensureDefaultTrialPlan()
   await ensureDefaultAnnualPlan()
+  await ensureDefaultLifetimePlan()
   const plans = await rest<any[]>('GET', 'subscription_plans?select=*&order=sort_order.asc')
   return await applyDefaultFeatureFlags(plans)
 }
@@ -556,13 +626,16 @@ async function getCustomer(identifier: { customer_id?: string; email?: string; a
 
 async function getActiveSubscription(customerId: string) {
   const now = nowIso()
-  const active = await rest<any[]>('GET',
-    `customer_subscriptions?customer_id=eq.${encodeURIComponent(customerId)}&status=eq.active&expires_at=gte.${encodeURIComponent(now)}&select=*,subscription_plans(*)&order=expires_at.desc&limit=1`
+  const activeRows = await rest<any[]>('GET',
+    `customer_subscriptions?customer_id=eq.${encodeURIComponent(customerId)}&status=eq.active&select=*,subscription_plans(*)&order=expires_at.desc.nullsfirst&limit=10`
   )
-  if (active[0]) return active[0]
+  const lifetime = activeRows.find(row => !row.expires_at)
+  if (lifetime) return lifetime
+  const active = activeRows.find(row => row.expires_at && new Date(row.expires_at).getTime() >= new Date(now).getTime())
+  if (active) return active
 
   const latest = await rest<any[]>('GET',
-    `customer_subscriptions?customer_id=eq.${encodeURIComponent(customerId)}&select=*,subscription_plans(*)&order=expires_at.desc&limit=1`
+    `customer_subscriptions?customer_id=eq.${encodeURIComponent(customerId)}&select=*,subscription_plans(*)&order=created_at.desc&limit=1`
   )
   if (latest[0]?.status === 'active' && latest[0]?.expires_at && new Date(latest[0].expires_at).getTime() < Date.now()) {
     await rest('PATCH',
@@ -576,7 +649,7 @@ async function getActiveSubscription(customerId: string) {
 
 async function getLatestSubscription(customerId: string) {
   const rows = await rest<any[]>('GET',
-    `customer_subscriptions?customer_id=eq.${encodeURIComponent(customerId)}&select=*,subscription_plans(*)&order=expires_at.desc&limit=1`
+    `customer_subscriptions?customer_id=eq.${encodeURIComponent(customerId)}&select=*,subscription_plans(*)&order=created_at.desc&limit=1`
   )
   return rows[0] ?? null
 }
@@ -693,7 +766,7 @@ function subscriptionPayload(customer: any, subscription: any, deviceCheck?: any
       max_users: Number(plan.max_users ?? 1),
       feature_flags: plan.feature_flags ?? {},
     } : null,
-    is_expired: !subscription || (expiresAt ? new Date(expiresAt).getTime() < Date.now() : true),
+    is_expired: !subscription || subscription.status !== 'active' || (expiresAt ? new Date(expiresAt).getTime() < Date.now() : false),
     device: deviceCheck ?? null,
     server_time: nowIso(),
   }
@@ -960,7 +1033,7 @@ function serializePlan(plan: any) {
 }
 
 async function serializeCustomer(customer: any) {
-  const subscription = await getLatestSubscription(customer.id)
+  const subscription = await getActiveSubscription(customer.id)
   const activeDevices = await rest<any[]>('GET',
     `customer_devices?customer_id=eq.${encodeURIComponent(customer.id)}&status=eq.active&select=id`
   )
@@ -1026,7 +1099,7 @@ async function getProfileById(id?: string | null) {
 async function serializeAppDevice(device: any) {
   const profile = await getProfileById(device.profile_id)
   const customer = device.customer_id ? await getCustomerById(device.customer_id) : null
-  const subscription = device.customer_id ? await getLatestSubscription(device.customer_id) : null
+  const subscription = device.customer_id ? await getActiveSubscription(device.customer_id) : null
   const expiresAt = subscription?.expires_at ?? null
   const licenseStatus = customer?.status && customer.status !== 'active'
     ? customer.status
@@ -1128,7 +1201,8 @@ async function createSubscription(input: {
   notes?: string | null
   replaceActive?: boolean
 }) {
-  const durationDays = toPositiveInt(input.durationDays, Number(input.plan.duration_days ?? 30))
+  const durationDays = toPlanDurationDays(input.durationDays, Number(input.plan.duration_days ?? 30))
+  const lifetime = isLifetimePlan(input.plan, durationDays)
   const now = new Date()
   const currentRows = await rest<any[]>('GET',
     `customer_subscriptions?customer_id=eq.${encodeURIComponent(input.customerId)}&status=eq.active&select=expires_at&order=expires_at.desc&limit=1`
@@ -1137,12 +1211,14 @@ async function createSubscription(input: {
   const requestedExpiry = input.expiresAt ? new Date(input.expiresAt) : null
   const startsAt = requestedExpiry
     ? now
-    : Number.isFinite(currentExpiryMs) && currentExpiryMs > now.getTime()
+    : !lifetime && Number.isFinite(currentExpiryMs) && currentExpiryMs > now.getTime()
       ? new Date(currentExpiryMs)
       : now
-  const expiresAt = requestedExpiry && Number.isFinite(requestedExpiry.getTime())
-    ? requestedExpiry.toISOString()
-    : new Date(startsAt.getTime() + durationDays * 86400000).toISOString()
+  const expiresAt = lifetime
+    ? null
+    : requestedExpiry && Number.isFinite(requestedExpiry.getTime())
+      ? requestedExpiry.toISOString()
+      : new Date(startsAt.getTime() + durationDays * 86400000).toISOString()
 
   if (input.replaceActive) {
     await rest('PATCH',
@@ -1180,7 +1256,7 @@ function planPayloadFromBody(body: any, partial = false) {
   if (!partial || body.description !== undefined) assign('description', nullableText(body.description))
   if (!partial || body.price !== undefined) assign('price', toNumber(body.price, 0))
   if (!partial || body.currency !== undefined) assign('currency', cleanText(body.currency) || 'IDR')
-  if (!partial || body.duration_days !== undefined) assign('duration_days', toPositiveInt(body.duration_days, 30))
+  if (!partial || body.duration_days !== undefined) assign('duration_days', toPlanDurationDays(body.duration_days, 30))
   if (!partial || body.is_active !== undefined) assign('is_active', toBoolean(body.is_active, true))
   if (!partial || body.is_recommended !== undefined) assign('is_recommended', toBoolean(body.is_recommended, false))
   if (!partial || body.max_devices !== undefined) assign('max_devices', Math.trunc(toNumber(body.max_devices, 1)))

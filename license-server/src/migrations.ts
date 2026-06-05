@@ -58,7 +58,7 @@ export function migrate() {
       plan_id    INTEGER NOT NULL,
       status     TEXT    NOT NULL DEFAULT 'active', -- active | expired | suspended | cancelled
       started_at TEXT    NOT NULL DEFAULT (datetime('now')),
-      expired_at TEXT    NOT NULL,
+      expired_at TEXT,
       notes      TEXT,
       created_by INTEGER,
       created_at TEXT    NOT NULL DEFAULT (datetime('now')),
@@ -202,6 +202,7 @@ export function seed() {
   insertPlan.run('PRO', 'Pro', 'Toko menengah', 249000, 30, 2);
   insertPlan.run('ENTERPRISE', 'Enterprise', 'Multi cabang & unlimited', 599000, 30, 3);
   insertPlan.run('PRO_ANNUAL', 'Tahunan', 'Paket 1 tahun dengan fitur lengkap untuk operasional toko dan multi cabang', 1999000, 365, 4);
+  insertPlan.run('LIFETIME', 'Sekali Beli Seumur Hidup', 'Sekali bayar untuk akses permanen dengan semua fitur operasional aktif', 4999000, 0, 5);
 
   // ===== Plan ↔ Features =====
   const planFeatureMap: Record<string, Array<[string, boolean, number | null]>> = {
@@ -249,11 +250,13 @@ export function seed() {
     ],
     ENTERPRISE: [], // diisi semua di bawah
     PRO_ANNUAL: [], // diisi semua di bawah
+    LIFETIME: [], // diisi semua di bawah
   };
 
   const allFeatureCodes = featureMaster.map(([c]) => c);
   planFeatureMap.ENTERPRISE = allFeatureCodes.map((c) => [c, true, null]);
   planFeatureMap.PRO_ANNUAL = allFeatureCodes.map((c) => [c, true, null]);
+  planFeatureMap.LIFETIME = allFeatureCodes.map((c) => [c, true, null]);
 
   const upsertPF = db.prepare(`
     INSERT INTO plan_features (plan_id, feature_id, is_enabled, limit_value)
@@ -282,7 +285,7 @@ export function seed() {
       'Upgrade Sekarang',
       config.APP_BILLING_URL,
       config.APP_WHATSAPP,
-      `<ul><li><b>Basic</b> Rp 99.000/bln</li><li><b>Pro</b> Rp 249.000/bln</li><li><b>Enterprise</b> Rp 599.000/bln</li><li><b>Tahunan</b> Rp 1.999.000/thn</li></ul>`,
+      `<ul><li><b>Basic</b> Rp 99.000/bln</li><li><b>Pro</b> Rp 249.000/bln</li><li><b>Enterprise</b> Rp 599.000/bln</li><li><b>Tahunan</b> Rp 1.999.000/thn</li><li><b>Lifetime</b> Rp 4.999.000 sekali bayar</li></ul>`,
     );
     insertPopup.run(
       'EXPIRED',

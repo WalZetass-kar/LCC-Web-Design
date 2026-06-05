@@ -178,7 +178,7 @@ async function askOpenAiCompatible(settings: IndustrySettings, prompt: string) {
       'Authorization': `Bearer ${settings.aiApiKey}`,
       'Content-Type': 'application/json',
       ...(referer ? { 'HTTP-Referer': referer } : {}),
-      'X-Title': 'MediaSoft POS Zetass v2.0',
+      'X-Title': 'MediaSoft POS Zetass',
     },
     {
       model,
@@ -218,7 +218,7 @@ async function listOpenAiCompatibleModels(settings: IndustrySettings) {
       'Authorization': `Bearer ${settings.aiApiKey}`,
       'Content-Type': 'application/json',
       ...(referer ? { 'HTTP-Referer': referer } : {}),
-      'X-Title': 'MediaSoft POS Zetass v2.0',
+      'X-Title': 'MediaSoft POS Zetass',
     })
 
   const data = response.data

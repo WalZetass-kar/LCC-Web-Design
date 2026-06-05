@@ -5,6 +5,16 @@ const rootDir = path.resolve(__dirname, '..')
 const packageJson = require(path.join(rootDir, 'package.json'))
 
 const requiredScripts = [
+  'dev',
+  'dev:desktop',
+  'build',
+  'build:win',
+  'build:linux',
+  'build:mac',
+  'dev:mobile',
+  'build:android',
+  'build:ios',
+  'sync:test',
   'build:desktop:windows',
   'build:desktop:linux',
   'build:desktop:mac',
@@ -16,7 +26,6 @@ const requiredFiles = [
   'package.json',
   'capacitor.config.ts',
   'sistem_pos.db',
-  '.env.production',
   'build/icon.png',
   'build/icon.ico',
   'src/main/preload.cjs',

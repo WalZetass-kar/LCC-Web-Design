@@ -395,7 +395,6 @@ export default function Transaksi() {
       ...payload,
     })
     if (r.success) {
-      if (payload.kode_promo) await api('promo:apply', payload.kode_promo.toUpperCase())
       setLastKd(r.kd_transaksi ?? null)
       toast(r.message as string)
       setShowStruk(true)
@@ -799,12 +798,10 @@ export default function Transaksi() {
                 <span className="font-semibold">+{formatRupiah(pajakAmount)}</span>
               </div>
             )}
-            {pajakPersen > 0 && (
-              <div className="flex justify-between text-sm font-bold border-t border-slate-200 dark:border-slate-600 pt-2">
-                <span className="text-slate-700 dark:text-slate-200">Total</span>
-                <span className="text-slate-800 dark:text-white">{formatRupiah(totalBayar)}</span>
-              </div>
-            )}
+            <div className="flex justify-between text-sm font-bold border-t border-slate-200 dark:border-slate-600 pt-2">
+              <span className="text-slate-700 dark:text-slate-200">Total</span>
+              <span className="text-slate-800 dark:text-white">{formatRupiah(totalBayar)}</span>
+            </div>
             {selectedCustomer && poinEarned > 0 && (
               <div className="flex justify-between text-xs text-amber-600 dark:text-amber-400">
                 <span>Poin didapat</span>

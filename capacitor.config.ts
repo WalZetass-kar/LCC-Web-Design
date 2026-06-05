@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.mediasoft.pos.zetass',
-  appName: 'MediaSoft POS Zetass v2.0',
+  appName: 'MediaSoft POS Zetass',
   webDir: 'dist',
   bundledWebRuntime: false,
   android: {

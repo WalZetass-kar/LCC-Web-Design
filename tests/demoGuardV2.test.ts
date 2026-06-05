@@ -7,6 +7,13 @@ afterEach(() => {
 })
 
 describe('demoGuardV2 role checks', () => {
+  it('blocks internal channels before a local session exists', () => {
+    expect(shouldBlockChannel('auth:login')).toBe(false)
+    expect(shouldBlockChannel('license:getPublicPlans')).toBe(false)
+    expect(shouldBlockChannel('barang:getAll')).toBe(true)
+    expect(shouldBlockChannel('penjualan:create')).toBe(true)
+  })
+
   it('blocks demo users from mutations but allows reads', () => {
     demoSession.setSession('demo', 'demo')
 
@@ -75,7 +82,8 @@ describe('demoGuardV2 role checks', () => {
     expect(shouldBlockChannel('activityLog:getAll')).toBe(false)
     expect(shouldBlockChannel('ecommerce:getIntegration')).toBe(false)
 
-    expect(shouldBlockChannel('user:getAll')).toBe(true)
+    expect(shouldBlockChannel('user:getAll')).toBe(false)
+    expect(shouldBlockChannel('user:create')).toBe(false)
     expect(shouldBlockChannel('license:getConfig')).toBe(true)
     expect(shouldBlockChannel('security:get')).toBe(true)
   })

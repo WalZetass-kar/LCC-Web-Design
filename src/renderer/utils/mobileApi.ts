@@ -117,6 +117,11 @@ const STORE_VERSION = 3
 const DEFAULT_LICENSE_SERVER_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
 const LICENSE_LAST_SUCCESS_KEY = 'license_last_success_at'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const REMOTE_READ_FALLBACK_CHANNELS = new Set([
+  'dashboard:getSummary',
+  'ownerDashboard:getInsights',
+  'mobile:getSummary',
+])
 
 let memoryStore: MobileStore | null = null
 
@@ -151,7 +156,34 @@ function appConfigRefererUrl() {
 }
 
 function dateKey(value = new Date()) {
-  return value.toISOString().slice(0, 10)
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function localDateTime(value = new Date()) {
+  const hours = String(value.getHours()).padStart(2, '0')
+  const minutes = String(value.getMinutes()).padStart(2, '0')
+  const seconds = String(value.getSeconds()).padStart(2, '0')
+  return `${dateKey(value)} ${hours}:${minutes}:${seconds}`
+}
+
+function recordDateKey(value: unknown) {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  if (/^\d{4}-\d{2}-\d{2}(?:$| )/.test(text)) return text.slice(0, 10)
+  const parsed = new Date(text)
+  if (!Number.isNaN(parsed.getTime())) return dateKey(parsed)
+  return text.slice(0, 10)
+}
+
+function recordHourLabel(value: unknown) {
+  const text = String(value ?? '').trim()
+  if (/^\d{4}-\d{2}-\d{2} (\d{2})/.test(text)) return `${text.slice(11, 13)}:00`
+  const parsed = new Date(text)
+  if (!Number.isNaN(parsed.getTime())) return `${String(parsed.getHours()).padStart(2, '0')}:00`
+  return '00:00'
 }
 
 function compactDateKey() {
@@ -677,7 +709,7 @@ function rangeFilter<T extends { tgl_wkt_transaksi?: string | null; tgl_pembelia
   const startKey = start || '0000-00-00'
   const endKey = end || '9999-99-99'
   return rows.filter(row => {
-    const key = (row.tgl_wkt_transaksi ?? row.tgl_pembelian ?? row.created_at ?? '').slice(0, 10)
+    const key = recordDateKey(row.tgl_wkt_transaksi ?? row.tgl_pembelian ?? row.created_at)
     return key >= startKey && key <= endKey
   })
 }
@@ -687,6 +719,10 @@ function saleTotal(details: PenjualanDetailItem[], pajak = 0, discount = 0) {
   return subtotal + toNumber(pajak) - toNumber(discount)
 }
 
+function saleAmount(row: Partial<Penjualan>) {
+  return toNumber(row.sub_total) - toNumber(row.discount_amount) + toNumber(row.pajak)
+}
+
 function dashboardSummary(store: MobileStore): DashboardSummary {
   const today = dateKey()
   const nowDate = new Date()
@@ -694,9 +730,9 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
   weekStart.setDate(nowDate.getDate() - 6)
   const monthKey = today.slice(0, 7)
 
-  const todaySales = store.penjualan.filter(item => (item.tgl_wkt_transaksi ?? '').slice(0, 10) === today)
-  const weekSales = store.penjualan.filter(item => (item.tgl_wkt_transaksi ?? '').slice(0, 10) >= dateKey(weekStart))
-  const monthSales = store.penjualan.filter(item => (item.tgl_wkt_transaksi ?? '').slice(0, 7) === monthKey)
+  const todaySales = store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) === today)
+  const weekSales = store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) >= dateKey(weekStart))
+  const monthSales = store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi).slice(0, 7) === monthKey)
 
   const total = (rows: Penjualan[]) => rows.reduce((sum, item) => sum + toNumber(item.sub_total), 0)
 
@@ -707,7 +743,7 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
     const label = date.toLocaleDateString('id-ID', { weekday: 'short' })
     return {
       label,
-      total: total(store.penjualan.filter(item => (item.tgl_wkt_transaksi ?? '').slice(0, 10) === key)),
+      total: total(store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) === key)),
     }
   })
 
@@ -744,6 +780,122 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
   }
 }
 
+function ownerDashboardInsights(store: MobileStore) {
+  const nowDate = new Date()
+  const today = dateKey(nowDate)
+  const monthStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), 1)
+  const monthStartKey = dateKey(monthStart)
+  const thirtyDaysAgo = new Date(nowDate)
+  thirtyDaysAgo.setDate(nowDate.getDate() - 30)
+  const thirtyDaysAgoKey = dateKey(thirtyDaysAgo)
+  const sevenDaysAgo = new Date(nowDate)
+  sevenDaysAgo.setDate(nowDate.getDate() - 6)
+  const sevenDaysAgoKey = dateKey(sevenDaysAgo)
+
+  const salesTodayRows = store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) === today)
+  const salesMonthRows = store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) >= monthStartKey)
+  const salesSevenDaysRows = store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) >= sevenDaysAgoKey)
+  const salesThirtyDaysRows = store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) >= thirtyDaysAgoKey)
+
+  const salesToday = salesTodayRows.reduce((sum, item) => sum + saleAmount(item), 0)
+  const salesMonth = salesMonthRows.reduce((sum, item) => sum + saleAmount(item), 0)
+
+  let cogsMonth = 0
+  const soldAtByProduct = new Map<string, string>()
+  for (const sale of store.penjualan) {
+    const saleKey = recordDateKey(sale.tgl_wkt_transaksi)
+    const details = store.penjualanDetails[sale.kd_tansaksi_jual] ?? []
+    for (const detail of details) {
+      const kd = String(detail.kd_barang ?? '')
+      if (kd && (!soldAtByProduct.has(kd) || saleKey > (soldAtByProduct.get(kd) ?? ''))) {
+        soldAtByProduct.set(kd, saleKey)
+      }
+      if (saleKey >= monthStartKey) {
+        const product = store.barang.find(item => item.kd_barang === kd)
+        cogsMonth += toNumber(product?.harga_modal) * toNumber(detail.qty)
+      }
+    }
+  }
+
+  const dailyTotals = new Map<string, number>()
+  for (const sale of salesSevenDaysRows) {
+    const key = recordDateKey(sale.tgl_wkt_transaksi)
+    dailyTotals.set(key, (dailyTotals.get(key) ?? 0) + saleAmount(sale))
+  }
+  const avgDailySales = dailyTotals.size > 0
+    ? Math.round([...dailyTotals.values()].reduce((sum, total) => sum + total, 0) / dailyTotals.size)
+    : 0
+
+  const peakHourMap = new Map<string, { hour: string; count: number; total: number }>()
+  const cashierMap = new Map<string, { username: string; count: number; total: number }>()
+  for (const sale of salesThirtyDaysRows) {
+    const hour = recordHourLabel(sale.tgl_wkt_transaksi)
+    const hourRow = peakHourMap.get(hour) ?? { hour, count: 0, total: 0 }
+    hourRow.count += 1
+    hourRow.total += saleAmount(sale)
+    peakHourMap.set(hour, hourRow)
+
+    const username = sale.username_transaksi || '-'
+    const cashierRow = cashierMap.get(username) ?? { username, count: 0, total: 0 }
+    cashierRow.count += 1
+    cashierRow.total += saleAmount(sale)
+    cashierMap.set(username, cashierRow)
+  }
+
+  const marginMap = new Map<string, { category: string; margin: number; revenue: number }>()
+  for (const sale of salesMonthRows) {
+    const details = store.penjualanDetails[sale.kd_tansaksi_jual] ?? []
+    for (const detail of details) {
+      const product = store.barang.find(item => item.kd_barang === detail.kd_barang)
+      const category = kategoriName(store, product?.kd_kategori_barang) ?? product?.kategori_barang ?? 'Tanpa Kategori'
+      const revenue = toNumber(detail.total_harga_jual)
+      const margin = revenue - (toNumber(product?.harga_modal) * toNumber(detail.qty))
+      const row = marginMap.get(category) ?? { category, margin: 0, revenue: 0 }
+      row.margin += margin
+      row.revenue += revenue
+      marginMap.set(category, row)
+    }
+  }
+
+  const lowStockProducts = getBarangList(store)
+    .filter(item => toNumber(item.stok) <= toNumber(item.stok_minimum, 5))
+    .sort((a, b) => toNumber(a.stok) - toNumber(b.stok) || String(a.nama_barang ?? '').localeCompare(String(b.nama_barang ?? '')))
+
+  return {
+    kpis: {
+      salesToday,
+      salesMonth,
+      grossProfitMonth: salesMonth - cogsMonth,
+      avgDailySales,
+      projectedMonth: Math.round(avgDailySales * new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate()),
+    },
+    peakHours: [...peakHourMap.values()].sort((a, b) => b.count - a.count || b.total - a.total).slice(0, 5),
+    cashierPerformance: [...cashierMap.values()].sort((a, b) => b.total - a.total).slice(0, 5),
+    slowMoving: getBarangList(store)
+      .map(item => ({
+        kd_barang: item.kd_barang,
+        nama_barang: item.nama_barang ?? 'Produk',
+        stok: toNumber(item.stok),
+        last_sold_at: soldAtByProduct.get(item.kd_barang) ?? '',
+      }))
+      .filter(item => !item.last_sold_at || item.last_sold_at < thirtyDaysAgoKey)
+      .sort((a, b) => b.stok - a.stok)
+      .slice(0, 8),
+    reorder: lowStockProducts.slice(0, 10).map(item => ({
+      kd_barang: item.kd_barang,
+      nama_barang: item.nama_barang ?? 'Produk',
+      stok: toNumber(item.stok),
+      stok_minimum: toNumber(item.stok_minimum, 5),
+    })),
+    marginByCategory: [...marginMap.values()].sort((a, b) => b.margin - a.margin).slice(0, 6),
+    customerSegments: {
+      vip: store.customers.filter(item => toNumber(item.total_belanja) >= 1000000).length,
+      active: store.customers.filter(item => toNumber(item.total_belanja) > 0 && toNumber(item.total_belanja) < 1000000).length,
+      inactive: store.customers.filter(item => toNumber(item.total_belanja) === 0).length,
+    },
+  }
+}
+
 function createSale(store: MobileStore, payload: AnyRecord) {
   const items = Array.isArray(payload.items) ? payload.items : []
   if (items.length === 0) return fail('Keranjang kosong')
@@ -776,7 +928,7 @@ function createSale(store: MobileStore, payload: AnyRecord) {
 
   const header: Penjualan = {
     kd_tansaksi_jual: kd,
-    tgl_wkt_transaksi: now(),
+    tgl_wkt_transaksi: localDateTime(),
     username_transaksi: username,
     total_qty: totalQty,
     sub_total: total,
@@ -1088,7 +1240,7 @@ function planIdFromMobileRemote(store: MobileStore, plan: AnyRecord | null | und
     name,
     code: code || row.code,
     price: Math.round(toNumber(plan.price)),
-    duration_days: Math.max(1, Math.trunc(toNumber(plan.duration_days, 30))),
+    duration_days: Math.max(0, Math.trunc(toNumber(plan.duration_days, 30))),
     features: Array.isArray(plan.features)
       ? plan.features
       : (plan.description ? [String(plan.description)] : []),
@@ -1111,15 +1263,18 @@ function syncMobileBuyerFromLicensePayload(store: MobileStore, username: string,
   if (!user || !payload) return
 
   const planId = planIdFromMobileRemote(store, payload.plan)
+  const hasSubscriptionPayload = payload.subscription && typeof payload.subscription === 'object'
   const expiresAt = typeof payload.subscription?.expires_at === 'string'
     ? payload.subscription.expires_at
-    : null
+    : hasSubscriptionPayload
+      ? null
+      : undefined
   const customerStatus = String(payload.customer?.status ?? 'active').toLowerCase()
 
   if (planId) user.subscription_plan_id = planId
-  if (expiresAt) {
-    user.subscription_expires_at = expiresAt
-    user.access_expires_at = expiresAt
+  if (hasSubscriptionPayload) {
+    user.subscription_expires_at = expiresAt ?? null
+    user.access_expires_at = expiresAt ?? null
   }
   if (customerStatus === 'active') user.status_user = 'Aktif'
   if (['blocked', 'suspended', 'inactive'].includes(customerStatus)) user.status_user = 'Nonaktif'
@@ -1449,7 +1604,7 @@ async function listMobileAiModels(store: MobileStore, input?: Partial<IndustrySe
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': appConfigRefererUrl(),
-        'X-Title': 'MediaSoft POS Zetass v2.0',
+        'X-Title': 'MediaSoft POS Zetass',
       },
       signal: controller.signal,
     }).finally(() => window.clearTimeout(timeout))
@@ -1538,7 +1693,7 @@ async function askMobileAi(store: MobileStore, input: { question?: string; summa
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': appConfigRefererUrl(),
-        'X-Title': 'MediaSoft POS Zetass v2.0',
+        'X-Title': 'MediaSoft POS Zetass',
       },
       signal: controller.signal,
       body: JSON.stringify({
@@ -1570,7 +1725,8 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
   await migrateMobileUserPasswords(store)
 
   if (shouldUseRemote(store, channel)) {
-    return remoteInvoke<T>(store, channel, args)
+    const remote = await remoteInvoke<T>(store, channel, args)
+    if (remote.success || !REMOTE_READ_FALLBACK_CHANNELS.has(channel)) return remote
   }
 
   switch (channel) {
@@ -1611,7 +1767,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       return fail('Token dibuat di aplikasi desktop')
 
     case 'system:checkDb':
-      return ok(undefined as T, 'Android offline store siap')
+      return ok({ mode: 'android-offline-store' } as T, 'Database Android siap')
 
     case 'system:resetData': {
       memoryStore = createDefaultStore()
@@ -2202,6 +2358,9 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
     case 'dashboard:getSummary':
       return ok(dashboardSummary(store) as T)
+
+    case 'ownerDashboard:getInsights':
+      return ok(ownerDashboardInsights(store) as T)
 
     case 'identitas:get':
       return ok(store.identitas as T)

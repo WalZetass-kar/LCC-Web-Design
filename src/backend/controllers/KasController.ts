@@ -78,7 +78,7 @@ export class KasController {
       }
 
       const tgl_tutup = new Date().toISOString()
-      const saldo_sistem = (kas.modal_awal || 0) + (kas.total_penjualan || 0) - (kas.total_pengeluaran || 0)
+      const saldo_sistem = (kas.modal_awal || 0) + (kas.total_penjualan || 0) + (kas.total_pemasukan || 0) - (kas.total_pengeluaran || 0)
       const selisih = saldo_akhir_fisik - saldo_sistem
 
       KasModel.tutupKas(kd_kas, {
@@ -167,6 +167,8 @@ export class KasController {
         keterangan: keterangan || 'Pemasukan',
         username,
       })
+
+      KasModel.updateTotalPemasukan(kd_kas, jumlah)
 
       return { success: true, message: 'Pemasukan berhasil dicatat' }
     } catch (error) {

@@ -65,7 +65,7 @@ export const PlansPage: React.FC = () => {
                   <p className="text-white text-2xl font-bold">
                     {p.price === 0 ? 'Gratis' : `Rp ${Number(p.price).toLocaleString('id-ID')}`}
                   </p>
-                  <p className="text-white/70 text-xs mt-0.5">{p.duration_days} hari</p>
+                  <p className="text-white/70 text-xs mt-0.5">{p.duration_days === 0 ? 'Seumur hidup' : `${p.duration_days} hari`}</p>
                 </div>
                 <div className="p-4 flex-1 flex flex-col">
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 flex-1">{p.description || '—'}</p>

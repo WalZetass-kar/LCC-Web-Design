@@ -3,6 +3,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as fs from 'fs'
 import * as path from 'path'
+import { app } from 'electron'
 
 export interface ExportOptions {
   title?: string
@@ -10,6 +11,15 @@ export interface ExportOptions {
   includeChart?: boolean
   customColumns?: { header: string; key: string; width?: number }[]
   summary?: { label: string; value: string | number }[]
+}
+
+function exportPath(filename: string) {
+  const baseDir = app.isPackaged ? app.getPath('documents') : process.cwd()
+  const exportDir = path.join(baseDir, 'MediaSoft POS', 'exports')
+  if (!fs.existsSync(exportDir)) {
+    fs.mkdirSync(exportDir, { recursive: true })
+  }
+  return path.join(exportDir, filename)
 }
 
 export class AdvancedExportService {
@@ -108,12 +118,7 @@ export class AdvancedExportService {
       })
 
       // Save file
-      const exportDir = path.join(process.cwd(), 'exports')
-      if (!fs.existsSync(exportDir)) {
-        fs.mkdirSync(exportDir, { recursive: true })
-      }
-
-      const filePath = path.join(exportDir, filename)
+      const filePath = exportPath(filename)
       await workbook.xlsx.writeFile(filePath)
 
       return { success: true, filePath }
@@ -200,12 +205,7 @@ export class AdvancedExportService {
       }
 
       // Save file
-      const exportDir = path.join(process.cwd(), 'exports')
-      if (!fs.existsSync(exportDir)) {
-        fs.mkdirSync(exportDir, { recursive: true })
-      }
-
-      const filePath = path.join(exportDir, filename)
+      const filePath = exportPath(filename)
       doc.save(filePath)
 
       return { success: true, filePath }

@@ -5,8 +5,8 @@ const path = require('path')
 const rootDir = path.resolve(__dirname, '..')
 const androidDir = path.join(rootDir, 'android')
 const releaseDir = path.join(rootDir, 'release')
-const releaseApkName = 'MediaSoft POS Zetass v2.0.apk'
-const releaseAabName = 'MediaSoft POS Zetass v2.0.aab'
+const releaseApkName = 'MediaSoft POS Zetass.apk'
+const releaseAabName = 'MediaSoft POS Zetass.aab'
 const task = process.argv[2] || 'assembleDebug'
 const signingEnvPath = path.join(rootDir, '.keys', 'android-release.env')
 
