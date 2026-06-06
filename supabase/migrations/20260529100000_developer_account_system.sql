@@ -1,4 +1,4 @@
--- Developer/Admin account system and compatibility tables for MediaSoft POS.
+-- Developer/Admin account system and compatibility tables for Zetass Pos.
 -- Apply after 20260528120000_license_realtime_payment_gateway.sql.
 
 create extension if not exists pgcrypto;

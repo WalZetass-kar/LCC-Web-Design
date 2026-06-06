@@ -1,5 +1,7 @@
-// MediaSoft POS central license API for Supabase Edge Functions.
+// Zetass Pos central license API for Supabase Edge Functions.
 // Deploy with: supabase functions deploy mediasoft-license
+
+declare const Deno: any
 
 type JsonMap = Record<string, unknown>
 
@@ -208,7 +210,7 @@ function normalizeWhatsapp(phone: string) {
 
 function buildManualPaymentMessage(input: { orderId: string; customer: any; plan: any; amount: number }) {
   return [
-    'Halo Developer, saya ingin memperpanjang langganan MediaSoft POS.',
+    'Halo Developer, saya ingin memperpanjang langganan Zetass Pos.',
     '',
     `Invoice: ${input.orderId}`,
     `Nama: ${input.customer.name ?? '-'}`,
@@ -341,7 +343,7 @@ const DEFAULT_LIFETIME_PLAN = {
   currency: 'IDR',
   duration_days: 0,
   is_active: true,
-  is_recommended: false,
+  is_recommended: true,
   max_devices: 5,
   max_transactions_per_day: -1,
   max_products: -1,
@@ -668,17 +670,40 @@ async function getPopup(code: string) {
   return rows[0] ?? null
 }
 
-async function getForcedPopup(customer?: any) {
+function subscriptionDaysRemaining(subscription: any): number | null {
+  const expiresAt = subscription?.expires_at
+  if (!expiresAt) return null
+  const expires = new Date(expiresAt).getTime()
+  if (!Number.isFinite(expires)) return null
+  return Math.max(0, Math.ceil((expires - Date.now()) / 86400000))
+}
+
+function shouldApplyForcedPopup(popup: any, subscription?: any) {
+  const code = String(popup?.code ?? '').toUpperCase()
+  if (code !== 'ACCESS_EXPIRING') return true
+
+  const daysRemaining = subscriptionDaysRemaining(subscription)
+  if (daysRemaining === null) return false
+
+  const durationDays = Number(subscription?.subscription_plans?.duration_days ?? 0)
+  const thresholdDays = Number.isFinite(durationDays) && durationDays > 7 ? 7 : 1
+  return daysRemaining <= thresholdDays
+}
+
+async function getForcedPopup(customer?: any, subscription?: any) {
   const customerPopupCode = cleanText(customer?.force_popup_code)
   if (customerPopupCode && (!customer.force_popup_until || isFuture(customer.force_popup_until))) {
     const popup = await getPopup(customerPopupCode)
-    if (popup) return popup
+    if (popup && shouldApplyForcedPopup(popup, subscription)) return popup
   }
 
   const rows = await rest<any[]>('GET',
     `popup_rules?force_popup=eq.true&is_active=eq.true&select=*&order=updated_at.desc&limit=1`
   )
-  const popup = rows.find(row => !row.force_popup_until || isFuture(row.force_popup_until))
+  const popup = rows.find(row => (
+    (!row.force_popup_until || isFuture(row.force_popup_until))
+    && shouldApplyForcedPopup(row, subscription)
+  ))
   return popup ?? null
 }
 
@@ -891,7 +916,7 @@ async function handleCheckLicense(req: Request) {
     metadata: { device_id: body.device_id ?? body.device?.device_id ?? null },
   })
 
-  const forcedPopup = await getForcedPopup(customer)
+  const forcedPopup = await getForcedPopup(customer, subscription)
   return ok({
     ...subscriptionPayload(customer, subscription, deviceCheck),
     popup: forcedPopup,
@@ -1013,7 +1038,7 @@ async function handleCustomerLogin(req: Request) {
     ...subscriptionPayload(customer, subscription, deviceCheck),
     access_token: auth.access_token,
     refresh_token: auth.refresh_token,
-    popup: await getForcedPopup(customer),
+    popup: await getForcedPopup(customer, subscription),
   }, 'Login pembeli berhasil')
 }
 
@@ -1030,6 +1055,16 @@ function serializePlan(plan: any) {
     max_users: Number(plan.max_users ?? 1),
     feature_flags: plan.feature_flags ?? {},
   }
+}
+
+function buyerVisiblePlans(plans: any[]) {
+  const activePlans = plans.filter(plan => toBoolean(plan.is_active, true))
+  const lifetimePlans = activePlans.filter(isLifetimePlan)
+  return (lifetimePlans.length > 0 ? lifetimePlans : activePlans).sort((a, b) => {
+    const aRecommended = toBoolean(a.is_recommended) ? 1 : 0
+    const bRecommended = toBoolean(b.is_recommended) ? 1 : 0
+    return bRecommended - aRecommended
+  })
 }
 
 async function serializeCustomer(customer: any) {
@@ -1713,7 +1748,10 @@ async function handleAdmin(req: Request, pathname: string) {
       total_transactions: paidPayments.length,
       active_versions: versionCounts,
       platform_counts: platformCounts,
-      top_plans: Object.entries(planCounts).map(([code, count]) => ({ code, count })).sort((a, b) => b.count - a.count).slice(0, 8),
+      top_plans: Object.entries(planCounts as Record<string, number>)
+        .map(([code, count]) => ({ code, count: Number(count) }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8),
       revenue_by_month: monthlyRevenue,
       recent_activity: activity,
       recent_errors: errors,
@@ -1874,10 +1912,11 @@ async function handleAdmin(req: Request, pathname: string) {
       acc[code] = current
       return acc
     }, {})
+    const planRevenueRows = Object.values(planRevenue) as Array<{ code: string; name: string; total: number; count: number }>
     return ok({
       total_revenue: paid.reduce((sum, payment) => sum + Number(payment.amount ?? 0), 0),
       revenue_by_month: Object.entries(revenueByMonth).map(([month, total]) => ({ month, total })),
-      plan_revenue: Object.values(planRevenue).sort((a, b) => b.total - a.total),
+      plan_revenue: planRevenueRows.sort((a, b) => b.total - a.total),
       active_customers: subscriptions.filter(sub => sub.status === 'active' && (!sub.expires_at || new Date(sub.expires_at).getTime() >= Date.now())).length,
       expired_customers: subscriptions.filter(sub => sub.status === 'expired' || (sub.expires_at && new Date(sub.expires_at).getTime() < Date.now())).length,
       new_subscriptions: subscriptions.filter(sub => sub.source === 'trial' || sub.source === 'manual').length,
@@ -2376,7 +2415,7 @@ Deno.serve(async (req) => {
     if (req.method === 'POST' && pathname === '/errors') return await handleReportError(req)
     if (req.method === 'GET' && pathname === '/active-features') return await handleActiveFeatures(req)
     if (req.method === 'GET' && pathname === '/plans') {
-      return ok((await listPlansRaw()).filter(plan => toBoolean(plan.is_active, true)).map(serializePlan))
+      return ok(buyerVisiblePlans(await listPlansRaw()).map(serializePlan))
     }
     if (req.method === 'POST' && pathname === '/payments/create') return await handleCreatePaymentInvoice(req)
     if (req.method === 'POST' && pathname === '/payments/manual-request') return await handleCreateManualPaymentRequest(req)

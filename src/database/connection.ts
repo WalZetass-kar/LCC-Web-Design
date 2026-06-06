@@ -761,7 +761,7 @@ runMigrations()
         'Backup/restore, laporan, retur, hutang/piutang, shift, dan API',
       ]),
       1,
-      0,
+      1,
       new Date().toISOString(),
       5,
       -1,
@@ -770,6 +770,17 @@ runMigrations()
       lifetimeFlags,
     )
   }
+  sqlite.prepare(`
+    UPDATE mediasoft_subscription_plans
+    SET is_recommended = CASE WHEN name = 'Sekali Beli Seumur Hidup' THEN 1 ELSE 0 END
+  `).run()
+  sqlite.prepare(`
+    UPDATE mediasoft_subscription_plans
+    SET duration_days = 0,
+        is_active = 1,
+        feature_flags = ?
+    WHERE name = 'Sekali Beli Seumur Hidup'
+  `).run(lifetimeFlags)
 
   const trialFlags = JSON.stringify({
     reports: false,

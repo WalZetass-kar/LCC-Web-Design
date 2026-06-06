@@ -24,7 +24,7 @@ echo
 echo "==== LOGIN ADMIN ===="
 ADMIN=$(curl -s -X POST http://localhost:4099/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@mediasoft.local","password":"Admin#12345","device_id":"test-admin"}')
+  -d '{"email":"admin@zetass.local","password":"Admin#12345","device_id":"test-admin"}')
 echo "$ADMIN"
 echo
 ADMIN_TOKEN=$(echo "$ADMIN" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const j=JSON.parse(s);console.log(j?.data?.access_token||'')}catch{console.log('')}})")
@@ -34,7 +34,7 @@ echo "✅ admin token ok"
 echo "==== LOGIN DEMO ===="
 DEMO=$(curl -s -X POST http://localhost:4099/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"demo@mediasoft.local","password":"Demo#12345","device_id":"test-demo"}')
+  -d '{"email":"demo@zetass.local","password":"Demo#12345","device_id":"test-demo"}')
 DEMO_TOKEN=$(echo "$DEMO" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const j=JSON.parse(s);console.log(j?.data?.access_token||'')}catch{console.log('')}})")
 [ -z "$DEMO_TOKEN" ] && { echo "❌ demo login failed: $DEMO"; exit 1; }
 echo "✅ demo token ok"
@@ -53,7 +53,7 @@ echo
 
 echo "==== ADMIN: UBAH PAKET DEMO USER → BASIC ===="
 DEMO_USER_ID=$(curl -s http://localhost:4099/api/admin/users -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | NO_COLOR=1 node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.stdout.write(String(j.data.find(u=>u.email==='demo@mediasoft.local').id))})")
+  | NO_COLOR=1 node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.stdout.write(String(j.data.find(u=>u.email==='demo@zetass.local').id))})")
 echo "demo user id: $DEMO_USER_ID"
 curl -s -X PUT "http://localhost:4099/api/admin/users/$DEMO_USER_ID/plan" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \

@@ -12,7 +12,7 @@ const QUEUE_TABLE = 'mediasoft_ecommerce_sync_queue'
 const SECRET_PREFIX = 'enc:v1:'
 
 function encryptionSecret() {
-  return process.env.MEDIASOFT_LOCAL_SECRET || `${process.cwd()}:mediasoft-pos-zetass:v2`
+  return process.env.ZETASS_POS_LOCAL_SECRET || `${process.cwd()}:zetass-pos:v2`
 }
 
 function encryptSecret(value: unknown) {

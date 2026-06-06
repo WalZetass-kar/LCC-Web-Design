@@ -5,7 +5,7 @@ import path from 'path'
 import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 
-const DEEP_LINK_SCHEME = 'mediasoftposzetass'
+const DEEP_LINK_SCHEME = 'zetasspos'
 const DEFAULT_SUPABASE_URL = 'https://azhkvmkmimepmflzqqty.supabase.co'
 const DEFAULT_API_BASE_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
 const DEFAULT_CERT_PIN_SHA256 = 'p51goejPCgGH+Oog/MU2k6PObcEfTrrr73jUcuWJ7w0='
@@ -65,11 +65,11 @@ function endpointHost(value: string | undefined) {
 }
 
 function pinnedHosts() {
-  const pin = (process.env.MEDIASOFT_CERT_PIN_SHA256 || process.env.VITE_CERT_PIN_SHA256 || DEFAULT_CERT_PIN_SHA256).trim()
+  const pin = (process.env.ZETASS_POS_CERT_PIN_SHA256 || process.env.VITE_CERT_PIN_SHA256 || DEFAULT_CERT_PIN_SHA256).trim()
   const hosts = [
     endpointHost(process.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL),
     endpointHost(process.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL),
-    endpointHost(process.env.MEDIASOFT_PINNED_DOMAIN ? `https://${process.env.MEDIASOFT_PINNED_DOMAIN}` : undefined),
+    endpointHost(process.env.ZETASS_POS_PINNED_DOMAIN ? `https://${process.env.ZETASS_POS_PINNED_DOMAIN}` : undefined),
   ].filter(Boolean) as string[]
 
   return new Map(Array.from(new Set(hosts)).map(host => [host, new Set([pin])]))

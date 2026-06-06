@@ -61,7 +61,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const navigate = useNavigate()
   const { mode, toggleMode } = useTheme()
   const { user } = useAuth()
-  const [storeName, setStoreName] = useState('MediaSoft POS')
+  const [storeName, setStoreName] = useState('Zetass Pos')
   const [notifs, setNotifs] = useState<Notifikasi[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [showNotif, setShowNotif] = useState(false)
@@ -130,7 +130,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
 
   const normalizedPath = pathname.replace(/^\/app(?=\/|$)/, '') || '/'
   const route = ROUTE_MAP[normalizedPath]
-  const pageLabel = route?.label ?? 'MediaSoft POS'
+  const pageLabel = route?.label ?? 'Zetass Pos'
   const parentLabel = route?.parent
 
   const initials = (user?.nama_lengkap ?? user?.nama_pengguna ?? 'U')
@@ -188,7 +188,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
 
           {/* Dropdown */}
           {showNotif && (
-            <div className="absolute right-0 top-full mt-2 w-80 glass-card shadow-2xl rounded-2xl overflow-hidden border border-white/40 dark:border-slate-700/40">
+            <div className="fixed left-1/2 top-16 z-50 w-[min(calc(100vw-2rem),360px)] -translate-x-1/2 glass-card shadow-2xl rounded-2xl overflow-hidden border border-white/40 dark:border-slate-700/40">
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                 <span className="font-semibold text-sm text-slate-700 dark:text-slate-200">

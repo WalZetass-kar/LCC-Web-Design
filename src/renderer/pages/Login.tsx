@@ -348,7 +348,7 @@ export default function Login() {
     openWhatsApp(
       SUBSCRIPTION_UPGRADE_WA_NUMBER,
       [
-        'Halo Developer, saya lupa sandi akun MediaSoft POS.',
+        'Halo Developer, saya lupa sandi akun Zetass Pos.',
         `Username: ${username.trim() || '-'}`,
         '',
         'Mohon bantu reset sandi akun saya.',
@@ -384,10 +384,10 @@ export default function Login() {
       <div className="hidden min-h-screen flex-col justify-between border-r border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-950 p-8 lg:flex">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <img src={appLogo} alt="MediaSoft POS Zetass" className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-primary-500/20" />
+          <img src={appLogo} alt="Zetass Pos" className="h-10 w-10 rounded-xl object-cover shadow-lg shadow-primary-500/20" />
           <div>
-            <span className="font-bold text-slate-900 dark:text-white text-lg block leading-tight">MediaSoft POS</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">by Zetass</span>
+            <span className="font-bold text-slate-900 dark:text-white text-lg block leading-tight">Zetass Pos</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">Point of Sale</span>
           </div>
         </div>
 
@@ -430,7 +430,7 @@ export default function Login() {
         </div>
 
         {/* Footer */}
-        <p className="text-slate-400 dark:text-slate-600 text-xs">© 2026 MediaSoft POS by Zetass</p>
+        <p className="text-slate-400 dark:text-slate-600 text-xs">© 2026 Zetass Pos</p>
       </div>
 
       {/* RIGHT PANEL — form */}
@@ -438,9 +438,9 @@ export default function Login() {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-5">
-            <img src={appLogo} alt="MediaSoft POS Zetass" className="mx-auto mb-3 h-14 w-14 rounded-2xl object-cover shadow-lg shadow-primary-500/20" />
-            <p className="font-bold text-slate-900 dark:text-white text-xl">MediaSoft POS</p>
-            <p className="text-slate-500 dark:text-xs mt-1">by Zetass</p>
+            <img src={appLogo} alt="Zetass Pos" className="mx-auto mb-3 h-14 w-14 rounded-2xl object-cover shadow-lg shadow-primary-500/20" />
+            <p className="font-bold text-slate-900 dark:text-white text-xl">Zetass Pos</p>
+            <p className="text-slate-500 dark:text-xs mt-1">Point of Sale</p>
           </div>
 
           {/* Loading Skeleton */}
@@ -462,7 +462,7 @@ export default function Login() {
             <div className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] p-5 shadow-xl shadow-slate-200 dark:shadow-black/30 scrollbar-thin">
               {/* Header */}
               <div className="mb-5">
-                <img src={appLogo} alt="MediaSoft POS Zetass" className="mb-3 h-11 w-11 rounded-lg object-cover shadow-lg shadow-primary-500/20" />
+                <img src={appLogo} alt="Zetass Pos" className="mb-3 h-11 w-11 rounded-lg object-cover shadow-lg shadow-primary-500/20" />
                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">{showRegisterForm ? 'Daftar Akun Trial' : 'Selamat datang'}</h3>
                 <p className="text-slate-600 dark:text-slate-400 text-sm">
                   {showRegisterForm ? 'Buat akun pembeli dan mulai trial terbatas 3 hari.' : 'Masuk ke akun Anda untuk melanjutkan'}
@@ -715,7 +715,7 @@ export default function Login() {
                     <div>
                       <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">Bantuan Login</p>
                       <p className="text-xs text-slate-600 dark:text-slate-400">
-                        Gunakan akun trial/berlangganan yang sudah dibuat. Jika lupa sandi, klik Lupa Sandi untuk chat WhatsApp developer.
+                        Gunakan akun trial/lisensi pembeli yang sudah dibuat. Jika lupa sandi, klik Lupa Sandi untuk chat WhatsApp developer.
                       </p>
                     </div>
                   </div>
@@ -738,7 +738,7 @@ export default function Login() {
                     {dbStatus === 'connected' ? 'Database OK' : dbStatus === 'error' ? 'DB Error' : 'Checking...'}
                   </span>
                 </div>
-                <span className="text-slate-400 dark:text-slate-500">MediaSoft POS</span>
+                <span className="text-slate-400 dark:text-slate-500">Zetass Pos</span>
               </div>
 
               <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-400 dark:text-slate-500">

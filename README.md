@@ -1,10 +1,10 @@
-# MediaSoft POS Workspace
+# Zetass Pos Workspace
 
-Workspace monorepo untuk MediaSoft POS yang terdiri dari 2 aplikasi terpisah:
+Workspace monorepo untuk Zetass Pos yang terdiri dari 2 aplikasi terpisah:
 
 ## 📦 Aplikasi
 
-### 1. MediaSoft POS User (`packages/mediasoft-pos-user/`)
+### 1. Zetass Pos User (`packages/zetass-pos-user/`)
 Aplikasi Point of Sale untuk kasir, admin toko, dan pemilik usaha.
 
 **Platform:** Desktop (Windows, Linux, macOS) + Mobile (Android, iOS)
@@ -24,7 +24,7 @@ Aplikasi Point of Sale untuk kasir, admin toko, dan pemilik usaha.
 - Print Queue
 - Backup Data
 
-### 2. MediaSoft Developer Panel (`packages/mediasoft-developer-panel/`)
+### 2. Zetass Pos Developer Panel (`packages/zetass-pos-developer-panel/`)
 Aplikasi khusus untuk developer dan super admin sistem.
 
 **Platform:** Desktop only (Windows, Linux, macOS)
@@ -117,11 +117,11 @@ pnpm build:developer:mac
 ## 📁 Struktur Project
 
 ```
-mediasoft-pos-workspace/
+zetass-pos-workspace/
 ├── packages/
 │   ├── shared-lib/              # Shared code (database, types, utils)
-│   ├── mediasoft-pos-user/      # User Panel application
-│   └── mediasoft-developer-panel/ # Developer Panel application
+│   ├── zetass-pos-user/      # User Panel application
+│   └── zetass-pos-developer-panel/ # Developer Panel application
 ├── docs/
 │   ├── REFACTOR_ANALYSIS.md     # Analisis refactor
 │   ├── REFACTOR_GUIDE.md        # Panduan refactor
@@ -142,8 +142,8 @@ mediasoft-pos-workspace/
 - [Analisis Refactor](docs/REFACTOR_ANALYSIS.md)
 - [Panduan Refactor](docs/REFACTOR_GUIDE.md)
 - [Komunikasi Antar Aplikasi](docs/CROSS_APP_COMMUNICATION.md)
-- [User Panel README](packages/mediasoft-pos-user/README.md)
-- [Developer Panel README](packages/mediasoft-developer-panel/README.md)
+- [User Panel README](packages/zetass-pos-user/README.md)
+- [Developer Panel README](packages/zetass-pos-developer-panel/README.md)
 
 ## 🎯 Use Cases
 
@@ -174,4 +174,4 @@ MIT License
 
 ## 👨‍💻 Author
 
-MediaSoft POS by Zetass
+Zetass Pos

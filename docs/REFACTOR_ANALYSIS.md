@@ -27,7 +27,7 @@ LCC-Web-Design/
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   │
-│   ├── mediasoft-pos-user/            # User Panel Application
+│   ├── zetass-pos-user/            # User Panel Application
 │   │   ├── src/
 │   │   │   ├── main/                  # Electron main process
 │   │   │   ├── renderer/              # React frontend
@@ -53,7 +53,7 @@ LCC-Web-Design/
 │   │   ├── capacitor.config.ts
 │   │   └── electron-builder.json
 │   │
-│   └── mediasoft-developer-panel/     # Developer Panel Application
+│   └── zetass-pos-developer-panel/     # Developer Panel Application
 │       ├── src/
 │       │   ├── main/                  # Electron main process
 │       │   ├── renderer/              # React frontend
@@ -80,7 +80,7 @@ LCC-Web-Design/
 
 ## Fitur per Aplikasi
 
-### MediaSoft POS User (mediasoft-pos-user)
+### Zetass Pos User (zetass-pos-user)
 
 **Target Platform:** Desktop (Windows, Linux, macOS), Mobile (Android, iOS)
 
@@ -106,7 +106,7 @@ LCC-Web-Design/
 
 **Roles:** kasir, operator, admin, super_admin, developer, demo
 
-### MediaSoft Developer Panel (mediasoft-developer-panel)
+### Zetass Pos Developer Panel (zetass-pos-developer-panel)
 
 **Target Platform:** Desktop only (Windows, Linux, macOS)
 

@@ -171,10 +171,10 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
       {/* Logo */}
       <div className={`flex items-center justify-between gap-3 border-b border-white/30 dark:border-slate-700/30 ${isCollapsed ? 'lg:px-3 px-5' : 'px-5'} py-5`}>
         <div className={`flex items-center min-w-0 ${isCollapsed ? 'lg:justify-center lg:flex-1 gap-0' : 'gap-3'}`}>
-          <img src={appLogo} alt="MediaSoft POS Zetass" className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-sm" />
+          <img src={appLogo} alt="Zetass Pos" className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-sm" />
           <div className={`${isCollapsed ? 'lg:hidden' : ''}`}>
-            <p className="font-bold text-sm text-slate-800 dark:text-white leading-tight">MediaSoft POS</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">by Zetass</p>
+            <p className="font-bold text-sm text-slate-800 dark:text-white leading-tight">Zetass Pos</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Point of Sale</p>
           </div>
         </div>
         <button

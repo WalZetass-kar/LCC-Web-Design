@@ -5,9 +5,9 @@ const path = require('path')
 
 const rootDir = path.resolve(__dirname, '..')
 const keysDir = path.join(rootDir, '.keys')
-const keystorePath = path.join(keysDir, 'mediasoft-pos-zetass-release.keystore')
+const keystorePath = path.join(keysDir, 'zetass-pos-release.keystore')
 const envPath = path.join(keysDir, 'android-release.env')
-const alias = 'mediasoft-pos-zetass'
+const alias = 'zetass-pos'
 
 function randomSecret() {
   return crypto.randomBytes(24).toString('hex')
@@ -34,10 +34,10 @@ function findKeytool() {
 
 function writeEnv(storePassword) {
   const lines = [
-    `MEDIASOFT_RELEASE_STORE_FILE=${keystorePath}`,
-    `MEDIASOFT_RELEASE_STORE_PASSWORD=${storePassword}`,
-    `MEDIASOFT_RELEASE_KEY_ALIAS=${alias}`,
-    `MEDIASOFT_RELEASE_KEY_PASSWORD=${storePassword}`,
+    `ZETASS_POS_RELEASE_STORE_FILE=${keystorePath}`,
+    `ZETASS_POS_RELEASE_STORE_PASSWORD=${storePassword}`,
+    `ZETASS_POS_RELEASE_KEY_ALIAS=${alias}`,
+    `ZETASS_POS_RELEASE_KEY_PASSWORD=${storePassword}`,
   ]
   fs.writeFileSync(envPath, `${lines.join('\n')}\n`, { mode: 0o600 })
 }
@@ -66,7 +66,7 @@ const result = spawnSync(keytool, [
   '-validity', '10000',
   '-storepass', storePassword,
   '-keypass', storePassword,
-  '-dname', 'CN=MediaSoft POS Zetass, OU=POS, O=Zetass, L=Jakarta, ST=Jakarta, C=ID',
+  '-dname', 'CN=Zetass Pos, OU=POS, O=Zetass, L=Jakarta, ST=Jakarta, C=ID',
 ], {
   stdio: 'inherit',
 })

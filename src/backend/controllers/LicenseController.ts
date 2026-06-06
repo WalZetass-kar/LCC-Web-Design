@@ -65,7 +65,7 @@ function configuredPinnedHosts() {
     DEFAULT_LICENSE_SERVER_URL,
     process.env.VITE_SUPABASE_URL,
     process.env.VITE_API_BASE_URL,
-    process.env.MEDIASOFT_PINNED_DOMAIN ? `https://${process.env.MEDIASOFT_PINNED_DOMAIN}` : undefined,
+    process.env.ZETASS_POS_PINNED_DOMAIN ? `https://${process.env.ZETASS_POS_PINNED_DOMAIN}` : undefined,
   ]) {
     if (!value) continue
     try {
@@ -84,7 +84,7 @@ function checkPinnedServerIdentity(hostname: string, cert: tls.PeerCertificate) 
   const pins = configuredPinnedHosts()
   if (!pins.has(hostname.toLowerCase())) return undefined
 
-  const expectedPin = (process.env.MEDIASOFT_CERT_PIN_SHA256 || process.env.VITE_CERT_PIN_SHA256 || DEFAULT_CERT_PIN_SHA256).trim()
+  const expectedPin = (process.env.ZETASS_POS_CERT_PIN_SHA256 || process.env.VITE_CERT_PIN_SHA256 || DEFAULT_CERT_PIN_SHA256).trim()
   if (!expectedPin) return undefined
 
   try {
@@ -159,6 +159,21 @@ function request<T = unknown>(method: string, path: string, token: string, baseU
 }
 
 type ApiResult<T = unknown> = { success: boolean; data?: T; message?: string }
+
+function isLifetimePlan(plan: any) {
+  const text = `${plan?.code ?? ''} ${plan?.name ?? ''}`.toLowerCase()
+  return Number(plan?.duration_days ?? 0) === 0 || text.includes('lifetime') || text.includes('seumur')
+}
+
+function buyerVisiblePlans<T extends Record<string, any>>(plans: T[]) {
+  const activePlans = plans.filter(plan => plan.is_active !== false && plan.is_active !== 0)
+  const lifetimePlans = activePlans.filter(isLifetimePlan)
+  return (lifetimePlans.length > 0 ? lifetimePlans : activePlans).sort((a, b) => {
+    const aRecommended = a.is_recommended === true || a.is_recommended === 1 ? 1 : 0
+    const bRecommended = b.is_recommended === true || b.is_recommended === 1 ? 1 : 0
+    return bRecommended - aRecommended
+  })
+}
 
 async function refreshAdminToken(cfg: { url: string; refreshToken?: string | null }): Promise<string | null> {
   if (!cfg.refreshToken) return null
@@ -286,7 +301,7 @@ function errorCodeFromLicenseResult(result: ApiResult<any>): string | undefined 
 
 function getPublicLicenseUrl(): string | null {
   const envUrl = (
-    process.env.MEDIASOFT_LICENSE_SERVER_URL ||
+    process.env.ZETASS_POS_LICENSE_SERVER_URL ||
     process.env.SUPABASE_LICENSE_SERVER_URL ||
     process.env.VITE_LICENSE_SERVER_URL ||
     ''
@@ -397,7 +412,7 @@ export class LicenseController {
         email: data.email,
         password: data.password,
         device_id: device.deviceId ?? device.device_id ?? 'pos-app-admin',
-        device_name: device.deviceName ?? device.device_name ?? 'MediaSoft POS Admin',
+        device_name: device.deviceName ?? device.device_name ?? 'Zetass Pos Admin',
         platform: device.platform ?? device.osName ?? device.os_name ?? 'desktop',
         app_version: device.appVersion ?? device.app_version ?? undefined,
       })
@@ -497,7 +512,9 @@ export class LicenseController {
     const endpoint = getPublicLicenseUrl()
     if (!endpoint) return { success: false, message: 'License server publik belum dikonfigurasi' }
     try {
-      return await request<ApiResult<any[]>>('GET', '/plans', '', endpoint)
+      const result = await request<ApiResult<any[]>>('GET', '/plans', '', endpoint)
+      if (!result.success || !Array.isArray(result.data)) return result
+      return { ...result, data: buyerVisiblePlans(result.data) }
     } catch (e: any) {
       return { success: false, message: e?.message || 'Gagal memuat paket dari license server' }
     }
@@ -538,7 +555,7 @@ export class LicenseController {
     try {
       const loginRes = await request<ApiResult<{ access_token: string; refresh_token?: string; user: { role: string } }>>(
         'POST', '/auth/login', '', apiBase,
-        { email, password, device_id: 'pos-app-developer', device_name: 'MediaSoft POS Developer', platform: 'electron' }
+        { email, password, device_id: 'pos-app-developer', device_name: 'Zetass Pos Developer', platform: 'electron' }
       )
       if (!loginRes?.data?.access_token) {
         return { success: false, message: loginRes?.message || 'Login gagal — periksa email dan password' }

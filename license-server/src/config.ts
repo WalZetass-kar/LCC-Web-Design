@@ -16,7 +16,7 @@ export const config = {
   JWT_ACCESS_TTL: process.env.JWT_ACCESS_TTL ?? '15m',
   JWT_REFRESH_TTL: process.env.JWT_REFRESH_TTL ?? '30d',
 
-  ADMIN_EMAIL: process.env.ADMIN_EMAIL ?? 'admin@mediasoft.local',
+  ADMIN_EMAIL: process.env.ADMIN_EMAIL ?? 'admin@zetass.local',
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ?? 'Admin#12345',
   ADMIN_NAME: process.env.ADMIN_NAME ?? 'Super Admin',
 

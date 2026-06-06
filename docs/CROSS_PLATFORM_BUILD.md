@@ -1,6 +1,6 @@
 # Cross-Platform Build Guide
 
-Panduan ini menjelaskan alur build MediaSoft POS Zetass untuk desktop,
+Panduan ini menjelaskan alur build Zetass Pos untuk desktop,
 Android, dan iOS tanpa mengubah fitur POS yang sudah ada.
 
 ## Runtime Database
@@ -8,9 +8,9 @@ Android, dan iOS tanpa mengubah fitur POS yang sudah ada.
 Desktop packaged app membawa template `sistem_pos.db` sebagai resource.
 Saat aplikasi pertama dibuka, database disalin otomatis ke folder writable:
 
-- Windows: `%APPDATA%/MediaSoft POS Zetass v2.0/sistem_pos.db`
-- Linux: `~/.config/MediaSoft POS Zetass v2.0/sistem_pos.db`
-- macOS: `~/Library/Application Support/MediaSoft POS Zetass v2.0/sistem_pos.db`
+- Windows: `%APPDATA%/Zetass Pos/sistem_pos.db`
+- Linux: `~/.config/Zetass Pos/sistem_pos.db`
+- macOS: `~/Library/Application Support/Zetass Pos/sistem_pos.db`
 
 Migrasi tetap dijalankan otomatis pada startup melalui `src/database/connection.ts`
 dan `src/backend/utils/dbInit.ts`.
@@ -18,9 +18,9 @@ dan `src/backend/utils/dbInit.ts`.
 Backup desktop juga disimpan di folder data aplikasi saat packaged, bukan di
 folder instalasi:
 
-- Windows: `%APPDATA%/MediaSoft POS Zetass v2.0/backups`
-- Linux: `~/.config/MediaSoft POS Zetass v2.0/backups`
-- macOS: `~/Library/Application Support/MediaSoft POS Zetass v2.0/backups`
+- Windows: `%APPDATA%/Zetass Pos/backups`
+- Linux: `~/.config/Zetass Pos/backups`
+- macOS: `~/Library/Application Support/Zetass Pos/backups`
 
 Mobile memakai Capacitor SQLite/local storage bridge di
 `src/renderer/utils/sqlitePersistence.ts` dan file backup melalui Capacitor
@@ -96,7 +96,7 @@ Catatan:
 - Setelah install, database runtime tetap berada di folder data aplikasi.
 - Uninstall NSIS tidak menghapus app data karena `deleteAppDataOnUninstall`
   diset `false`.
-- Desktop mendaftarkan deep link `mediasoftposzetass://...`, membatasi external link ke HTTPS,
+- Desktop mendaftarkan deep link `zetasspos://...`, membatasi external link ke HTTPS,
   dan melakukan certificate pinning untuk endpoint Supabase/license utama.
 
 Menjalankan hasil build:
@@ -126,23 +126,23 @@ tetap tersedia. Jika hanya butuh salah satu:
 Release APK:
 
 ```bash
-MEDIASOFT_PINNED_DOMAIN=api.domain-anda.com \
-MEDIASOFT_CERT_PIN_SHA256=BASE64_SHA256_PIN \
+ZETASS_POS_PINNED_DOMAIN=api.domain-anda.com \
+ZETASS_POS_CERT_PIN_SHA256=BASE64_SHA256_PIN \
 npm run android:release
 ```
 
 Release AAB untuk Play Store:
 
 ```bash
-MEDIASOFT_PINNED_DOMAIN=api.domain-anda.com \
-MEDIASOFT_CERT_PIN_SHA256=BASE64_SHA256_PIN \
+ZETASS_POS_PINNED_DOMAIN=api.domain-anda.com \
+ZETASS_POS_CERT_PIN_SHA256=BASE64_SHA256_PIN \
 npm run android:aab
 ```
 
 Jika build release memang harus mengizinkan HTTP LAN untuk pairing lokal:
 
 ```bash
-MEDIASOFT_ALLOW_LAN_HTTP=true npm run android:release
+ZETASS_POS_ALLOW_LAN_HTTP=true npm run android:release
 ```
 
 Output release disalin ke folder `release/`.
@@ -154,8 +154,8 @@ Output native Gradle tetap tersedia di:
 
 Script `scripts/build-android.cjs` menyalin hasil final menjadi:
 
-- `release/MediaSoft POS Zetass v2.0.apk`
-- `release/MediaSoft POS Zetass v2.0.aab`
+- `release/Zetass Pos.apk`
+- `release/Zetass Pos.aab`
 
 ## iOS
 
@@ -190,12 +190,12 @@ npm run ios:open
 Di Xcode:
 
 1. Set Team dan Signing.
-2. Set Bundle Identifier `com.mediasoft.pos.zetass`.
+2. Set Bundle Identifier `com.zetass.pos`.
 3. Archive.
 4. Upload ke TestFlight atau export `.ipa`.
 
 Konfigurasi iOS sudah memuat privacy usage text untuk kamera, Bluetooth printer,
-file backup/export, local network sync, deep link `mediasoftposzetass://...`,
+file backup/export, local network sync, deep link `zetasspos://...`,
 ATS HTTPS-only, dan pinning SPKI untuk endpoint Supabase/license utama.
 
 Project Xcode berada di:

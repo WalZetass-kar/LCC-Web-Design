@@ -72,7 +72,7 @@ export const UpgradePopup: React.FC = () => {
 
           {whatsappNumber && (
             <a
-              href={`https://wa.me/${whatsappNumber}?text=Halo,%20saya%20mau%20upgrade%20paket%20MediaSoft%20POS`}
+              href={`https://wa.me/${whatsappNumber}?text=Halo,%20saya%20mau%20upgrade%20paket%20Zetass Pos%20POS`}
               target="_blank"
               rel="noreferrer"
               onClick={closePopup}

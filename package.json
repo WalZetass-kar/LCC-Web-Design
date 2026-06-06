@@ -1,7 +1,7 @@
 {
-  "name": "mediasoft-pos-zetass",
+  "name": "zetass-pos",
   "version": "2.0.0",
-  "description": "MediaSoft POS Zetass - Desktop Point of Sale Application",
+  "description": "Zetass Pos - Desktop Point of Sale Application",
   "type": "module",
   "main": "dist-electron/main/index.js",
   "author": "Zetass",
@@ -129,8 +129,8 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.mediasoft.pos.zetass",
-    "productName": "MediaSoft POS Zetass",
+    "appId": "com.zetass.pos",
+    "productName": "Zetass Pos",
     "directories": {
       "output": "release"
     },
@@ -163,9 +163,9 @@
     ],
     "protocols": [
       {
-        "name": "MediaSoft POS Zetass",
+        "name": "Zetass Pos",
         "schemes": [
-          "mediasoftposzetass"
+          "zetasspos"
         ]
       }
     ],
@@ -203,7 +203,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "MediaSoft POS Zetass",
+      "shortcutName": "Zetass Pos",
       "deleteAppDataOnUninstall": false
     },
     "msi": {
@@ -211,7 +211,7 @@
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "MediaSoft POS Zetass"
+      "shortcutName": "Zetass Pos"
     }
   }
 }

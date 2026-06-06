@@ -42,6 +42,7 @@ export interface DemoContextValue {
 
 const DEMO_USAGE_LIMIT = 10
 const POPUP_COOLDOWN_MS = 10 * 60 * 1000
+const ACCESS_EXPIRING_POPUP_THRESHOLD_DAYS = 1
 const LS_DEMO_STATE = 'pos_demo_state'
 const LS_POPUP_DISMISSED = 'pos_popup_dismissed_at'
 const LS_FIRST_LOGIN_SHOWN = 'pos_first_login_shown'
@@ -205,7 +206,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isDemo || !user) return
     const days = user.access_days_remaining
-    if (days === null || days === undefined || days > 3) return
+    if (days === null || days === undefined || days > ACCESS_EXPIRING_POPUP_THRESHOLD_DAYS) return
 
     const t = setTimeout(() => {
       if (isCooldownElapsed()) {

@@ -199,9 +199,9 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
 
-  packages/mediasoft-developer-panel:
+  packages/zetass-pos-developer-panel:
     dependencies:
-      '@mediasoft/shared-lib':
+      '@zetass/pos-shared-lib':
         specifier: workspace:*
         version: link:../shared-lib
       '@supabase/supabase-js':
@@ -278,7 +278,7 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
 
-  packages/mediasoft-pos-user:
+  packages/zetass-pos-user:
     dependencies:
       '@capacitor-community/sqlite':
         specifier: ^8.1.0
@@ -301,7 +301,7 @@ importers:
       '@capacitor/preferences':
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.3.4)
-      '@mediasoft/shared-lib':
+      '@zetass/pos-shared-lib':
         specifier: workspace:*
         version: link:../shared-lib
       '@tanstack/react-table':

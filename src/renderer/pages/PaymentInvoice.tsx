@@ -30,6 +30,16 @@ interface Invoice {
   created_at: string
 }
 
+function isLifetimePlan(plan: PublicPlan) {
+  const text = `${plan.code} ${plan.name}`.toLowerCase()
+  return plan.duration_days === 0 || text.includes('lifetime') || text.includes('seumur')
+}
+
+function getBuyerVisiblePlans(plans: PublicPlan[]) {
+  const lifetimePlans = plans.filter(isLifetimePlan)
+  return lifetimePlans.length > 0 ? lifetimePlans : plans
+}
+
 export default function PaymentInvoice() {
   const { user } = useAuth()
   const toast = useToast()
@@ -46,9 +56,9 @@ export default function PaymentInvoice() {
     api<PublicPlan[]>('license:getPublicPlans').then(r => {
       if (cancelled) return
       if (r.success) {
-        const rows = r.data ?? []
+        const rows = getBuyerVisiblePlans(r.data ?? [])
         setPlans(rows)
-        setSelectedCode(current => current || rows.find(p => p.is_recommended)?.code || rows[0]?.code || '')
+        setSelectedCode(current => current || rows.find(p => p.is_recommended || isLifetimePlan(p))?.code || rows[0]?.code || '')
       } else {
         toast(r.message || 'Gagal memuat paket pembayaran', 'error')
       }
@@ -100,14 +110,14 @@ export default function PaymentInvoice() {
         </div>
         <div>
           <h1 className="heading-1">Pembayaran Lisensi</h1>
-          <p className="text-caption">Ajukan perpanjangan manual melalui WhatsApp developer.</p>
+          <p className="text-caption">Ajukan aktivasi sekali beli seumur hidup melalui WhatsApp developer.</p>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-800 dark:text-white">Pilih Paket</h2>
+            <h2 className="text-sm font-bold text-slate-800 dark:text-white">Paket Sekali Beli</h2>
             <button
               onClick={() => window.location.reload()}
               className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
@@ -140,9 +150,9 @@ export default function PaymentInvoice() {
                         <p className="text-xs font-semibold uppercase text-slate-400">{plan.code}</p>
                         <h3 className="mt-1 font-bold text-slate-900 dark:text-white">{plan.name}</h3>
                       </div>
-                      {plan.is_recommended && (
+                      {(plan.is_recommended || isLifetimePlan(plan)) && (
                         <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                          Rekomendasi
+                          Sekali beli
                         </span>
                       )}
                     </div>
@@ -184,7 +194,7 @@ export default function PaymentInvoice() {
           </button>
 
           <p className="mt-3 text-xs leading-5 text-slate-500">
-            Sistem membuat request `pending` di Supabase, lalu membuka WhatsApp. Developer mengaktifkan lisensi setelah pembayaran dikonfirmasi.
+            Sistem membuat request `pending` di Supabase, lalu membuka WhatsApp. Developer mengaktifkan lisensi seumur hidup setelah pembayaran dikonfirmasi.
           </p>
 
           {invoice && (

@@ -46,7 +46,7 @@ function getConfigPath() {
 }
 
 function configKey() {
-  return crypto.scryptSync(`${app.getPath('userData')}:${app.getName()}`, 'mediasoft-pos-sync-client-config', 32)
+  return crypto.scryptSync(`${app.getPath('userData')}:${app.getName()}`, 'zetass-pos-sync-client-config', 32)
 }
 
 function encryptConfig(config: SyncClientConfig) {
@@ -269,7 +269,7 @@ class SyncClient {
     return {
       deviceId: config.deviceId,
       deviceName: config.deviceName,
-      userAgent: `MediaSoft POS Desktop/${app.getVersion()} ${process.platform}/${process.arch}`,
+      userAgent: `Zetass Pos Desktop/${app.getVersion()} ${process.platform}/${process.arch}`,
     }
   }
 

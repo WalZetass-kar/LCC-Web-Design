@@ -40,7 +40,7 @@ export const PlansPage: React.FC = () => {
 
   return (
     <div>
-      <PageHeader title="Plans" subtitle="Atur fitur yang tersedia di setiap paket langganan" />
+      <PageHeader title="Plans" subtitle="Atur fitur yang tersedia di setiap paket lisensi" />
       {loading ? (
         <div className="text-slate-400 text-sm">Memuat…</div>
       ) : (

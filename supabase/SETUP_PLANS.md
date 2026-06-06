@@ -54,7 +54,7 @@ SQL akan insert 3 paket default:
 
 ### Error "License server publik belum dikonfigurasi"
 Pastikan salah satu dari ini sudah diset:
-- Environment variable `MEDIASOFT_LICENSE_SERVER_URL`
+- Environment variable `ZETASS_POS_LICENSE_SERVER_URL`
 - Field `license_server_url` di tabel `mediasoft_identitas`
 - Default URL: `https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license`
 

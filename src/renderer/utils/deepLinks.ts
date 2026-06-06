@@ -83,7 +83,7 @@ export function normalizeDeepLink(rawUrl: string) {
     const scheme = parsed.protocol.replace(':', '').toLowerCase()
     let route = ''
 
-    if (scheme === 'mediasoftposzetass') {
+    if (scheme === 'zetasspos') {
       const host = parsed.hostname ? `/${parsed.hostname}` : ''
       route = routeFromParts(`${host}${parsed.pathname}`.replace(/\/+/g, '/'), parsed.search, parsed.hash)
     } else if (parsed.hash.startsWith('#/')) {

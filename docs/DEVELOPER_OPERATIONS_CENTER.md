@@ -1,6 +1,6 @@
 # Developer Operations Center
 
-Dokumen ini menjelaskan pengembangan lanjutan Developer Panel MediaSoft POS Zetass.
+Dokumen ini menjelaskan pengembangan lanjutan Developer Panel Zetass Pos.
 
 ## Audit Masalah
 

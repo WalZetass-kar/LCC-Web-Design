@@ -122,7 +122,7 @@ const LIFETIME_PLAN_PAYLOAD = {
   max_users: 10,
   sort_order: 40,
   is_active: true,
-  is_recommended: false,
+  is_recommended: true,
   feature_flags: Object.fromEntries(ALL_FEATURE_CODES.map(code => [code, true])),
 }
 
@@ -356,7 +356,7 @@ export default function LicensePlansPage() {
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-900/60 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
             >
               <Plus className="h-4 w-4" />
-              {addingAnnual ? 'Menambahkan...' : 'Tambah Paket Tahunan'}
+              {addingAnnual ? 'Menambahkan...' : 'Tambah Paket Tahunan Opsional'}
             </button>
           )}
           {!hasLifetimePlan && (
@@ -366,7 +366,7 @@ export default function LicensePlansPage() {
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-900/60 dark:text-amber-300 dark:hover:bg-amber-950/30"
             >
               <Plus className="h-4 w-4" />
-              {addingLifetime ? 'Menambahkan...' : 'Tambah Paket Lifetime'}
+              {addingLifetime ? 'Menambahkan...' : 'Tambah Sekali Beli'}
             </button>
           )}
           <button

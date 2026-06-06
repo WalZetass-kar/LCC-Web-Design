@@ -1,4 +1,4 @@
--- Seed data paket langganan untuk MediaSoft POS
+-- Seed data paket langganan untuk Zetass Pos
 -- Jalankan di Supabase SQL Editor
 
 INSERT INTO subscription_plans (

@@ -111,7 +111,7 @@ interface MobileStore {
   counters: Record<string, number>
 }
 
-const STORAGE_KEY = 'mediasoft-pos-android-store-v3'
+const STORAGE_KEY = 'zetass-pos-android-store-v3'
 const AI_API_KEY_STORAGE_KEY = 'integrations.ai_api_key'
 const STORE_VERSION = 3
 const DEFAULT_LICENSE_SERVER_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
@@ -274,7 +274,7 @@ function auditAuth(store: MobileStore, username: string, aktivitas: string, deta
 function defaultIdentitas(): Identitas {
   return {
     kode: 1,
-    namatoko: 'MediaSoft POS Zetass',
+    namatoko: 'Zetass Pos',
     alamattoko: 'Android Offline',
     nomortelptoko: '-',
     nomorwaowner: '-',
@@ -606,19 +606,19 @@ async function writeAndroidBackupFile(fileName: string, store: MobileStore) {
   const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
   const data = JSON.stringify({ exportedAt: now(), version: STORE_VERSION, store })
   await Filesystem.writeFile({
-    path: `mediasoft-pos/${fileName}`,
+    path: `zetass-pos/${fileName}`,
     data,
     directory: Directory.Documents,
     encoding: Encoding.UTF8,
     recursive: true,
   })
-  return { path: `Documents/mediasoft-pos/${fileName}`, size: data.length }
+  return { path: `Documents/zetass-pos/${fileName}`, size: data.length }
 }
 
 async function readAndroidBackupFile(fileName: string) {
   const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
   const result = await Filesystem.readFile({
-    path: `mediasoft-pos/${fileName}`,
+    path: `zetass-pos/${fileName}`,
     directory: Directory.Documents,
     encoding: Encoding.UTF8,
   })
@@ -1221,6 +1221,17 @@ function dispatchMobileLicensePopup(result: IpcResponse<any>, force = false) {
   }))
 }
 
+function isMobileLifetimePlan(plan: AnyRecord) {
+  const text = `${plan?.code ?? ''} ${plan?.name ?? ''}`.toLowerCase()
+  return Number(plan?.duration_days ?? 0) === 0 || text.includes('lifetime') || text.includes('seumur')
+}
+
+function getMobileBuyerVisiblePlans<T extends AnyRecord>(plans: T[]) {
+  const activePlans = plans.filter(plan => plan.is_active !== false && plan.is_active !== 0)
+  const lifetimePlans = activePlans.filter(isMobileLifetimePlan)
+  return lifetimePlans.length > 0 ? lifetimePlans : activePlans
+}
+
 function planIdFromMobileRemote(store: MobileStore, plan: AnyRecord | null | undefined): number | null {
   if (!plan) return null
   const code = String(plan.code ?? '').trim()
@@ -1604,7 +1615,7 @@ async function listMobileAiModels(store: MobileStore, input?: Partial<IndustrySe
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': appConfigRefererUrl(),
-        'X-Title': 'MediaSoft POS Zetass',
+        'X-Title': 'Zetass Pos',
       },
       signal: controller.signal,
     }).finally(() => window.clearTimeout(timeout))
@@ -1693,7 +1704,7 @@ async function askMobileAi(store: MobileStore, input: { question?: string; summa
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': appConfigRefererUrl(),
-        'X-Title': 'MediaSoft POS Zetass',
+        'X-Title': 'Zetass Pos',
       },
       signal: controller.signal,
       body: JSON.stringify({
@@ -1813,8 +1824,11 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
     case 'license:syncBuyerLicense':
       return mobileCheckBuyerLicense(store, String(args[0] ?? ''), args[1]) as Promise<IpcResponse<T>>
 
-    case 'license:getPublicPlans':
-      return mobileLicenseRequest<T>('GET', '/plans')
+    case 'license:getPublicPlans': {
+      const result = await mobileLicenseRequest<AnyRecord[]>('GET', '/plans')
+      if (!result.success || !Array.isArray(result.data)) return result as IpcResponse<T>
+      return { ...result, data: getMobileBuyerVisiblePlans(result.data) as T }
+    }
 
     case 'license:getPublicPopup': {
       const code = String(args[0] ?? '').trim()
@@ -3013,7 +3027,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
     case 'backup:download': {
       const row = store.backups.find(item => String(item.kd_backup) === String(args[0]))
-      return row ? ok({ path: `Documents/mediasoft-pos/${row.nama_file}` } as T, 'File backup tersedia di folder Documents') : fail('Backup tidak ditemukan')
+      return row ? ok({ path: `Documents/zetass-pos/${row.nama_file}` } as T, 'File backup tersedia di folder Documents') : fail('Backup tidak ditemukan')
     }
 
     case 'backup:import': {

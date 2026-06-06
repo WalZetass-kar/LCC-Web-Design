@@ -308,7 +308,7 @@ export function seed() {
   }
 
   // ===== Default demo user =====
-  const demoExists = db.prepare(`SELECT id FROM users WHERE email = 'demo@mediasoft.local'`).get() as
+  const demoExists = db.prepare(`SELECT id FROM users WHERE email = 'demo@zetass.local'`).get() as
     | { id: number }
     | undefined;
   if (!demoExists) {
@@ -318,7 +318,7 @@ export function seed() {
         `INSERT INTO users (name, email, password_hash, role, status, must_change_pwd)
          VALUES (?, ?, ?, 'user', 'active', 0)`,
       )
-      .run('Demo User', 'demo@mediasoft.local', hash);
+      .run('Demo User', 'demo@zetass.local', hash);
     const userId = info.lastInsertRowid as number;
     const planId = (db.prepare(`SELECT id FROM plans WHERE code = 'DEMO'`).get() as { id: number }).id;
     const expired = new Date(Date.now() + 14 * 86400000).toISOString();
@@ -326,7 +326,7 @@ export function seed() {
       `INSERT INTO user_subscriptions (user_id, plan_id, status, expired_at)
        VALUES (?, ?, 'active', ?)`,
     ).run(userId, planId, expired);
-    console.log('[seed] Default demo user → demo@mediasoft.local / Demo#12345');
+    console.log('[seed] Default demo user → demo@zetass.local / Demo#12345');
   }
 
   console.log('[seed] Done.');

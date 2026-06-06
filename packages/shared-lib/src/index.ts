@@ -1,4 +1,4 @@
-// Shared Library - MediaSoft POS
+// Shared Library - Zetass Pos
 export * from './types';
 export * from './database';
 export * from './services';

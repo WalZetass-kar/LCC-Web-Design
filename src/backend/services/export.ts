@@ -173,7 +173,7 @@ function exportPath(defaultName: string, customPath?: string) {
     return target
   }
   const baseDir = app.isPackaged ? app.getPath('documents') : process.cwd()
-  const exportDir = path.join(baseDir, 'MediaSoft POS', 'exports')
+  const exportDir = path.join(baseDir, 'Zetass Pos', 'exports')
   if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true })
   return path.join(exportDir, defaultName)
 }
@@ -309,7 +309,7 @@ export class ExportService {
     try {
       const rows = Array.isArray(data) ? data : []
       const workbook = new ExcelJS.Workbook()
-      workbook.creator = 'MediaSoft POS Zetass'
+      workbook.creator = 'Zetass Pos'
       workbook.created = new Date()
 
       const safeSheetName = String(sheetName || 'Data').slice(0, 31)
@@ -441,7 +441,7 @@ export class ExportService {
       // Subtitle
       doc.setFontSize(10)
       doc.setFont('helvetica', 'normal')
-      doc.text('MediaSoft POS by Zetass', 35, 21)
+      doc.text('Zetass Pos', 35, 21)
 
       // Date & Time
       doc.setFontSize(9)
@@ -480,7 +480,7 @@ export class ExportService {
       if (pageHeight - finalY > 20) {
         doc.setFontSize(8)
         doc.setTextColor(100, 116, 139)
-        doc.text('Developer by Zetass', 14, pageHeight - 10)
+        doc.text('Zetass Pos Developer', 14, pageHeight - 10)
         doc.text(`Halaman 1`, pageWidth - 14, pageHeight - 10, { align: 'right' })
         
         // Decorative line
@@ -1862,7 +1862,7 @@ export class ExportService {
 
       doc.setFontSize(11)
       doc.setFont('helvetica', 'normal')
-      doc.text('MediaSoft POS by Zetass', 38, 25)
+      doc.text('Zetass Pos', 38, 25)
 
       const now = new Date()
       doc.setFontSize(9)
@@ -1950,7 +1950,7 @@ export class ExportService {
       
       doc.setFontSize(8)
       doc.setTextColor(100, 116, 139)
-      doc.text('Developer by Zetass', 14, pageHeight - 8)
+      doc.text('Zetass Pos Developer', 14, pageHeight - 8)
       doc.text('Inventory Management System', pageWidth / 2, pageHeight - 8, { align: 'center' })
       doc.text(`Halaman 1`, pageWidth - 14, pageHeight - 8, { align: 'right' })
 

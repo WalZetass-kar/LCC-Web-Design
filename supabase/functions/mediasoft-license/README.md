@@ -1,4 +1,4 @@
-# MediaSoft License Edge Function
+# Zetass Pos License Edge Function
 
 Endpoint produksi setelah deploy:
 

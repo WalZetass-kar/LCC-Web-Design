@@ -44,7 +44,7 @@ app.use('/api/admin', adminRoutes);
 app.get('/', (_req, res) => {
   res.type('html').send(`<!doctype html>
     <html><body style="font-family:sans-serif;padding:32px;line-height:1.6">
-      <h2>🛡️ MediaSoft License Server</h2>
+      <h2>🛡️ Zetass Pos License Server</h2>
       <p>Backend berjalan. Tidak ada admin dashboard di server ini.</p>
       <p>Semua manajemen lisensi, user, paket, dan popup dilakukan dari
       <b>aplikasi POS</b> oleh akun bertipe <code>super_admin</code> /

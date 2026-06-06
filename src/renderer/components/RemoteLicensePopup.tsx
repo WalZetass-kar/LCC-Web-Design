@@ -124,6 +124,16 @@ function getPlanFeatures(plan: PublicPlan, index: number): string[] {
   return defaults
 }
 
+function isLifetimePlan(plan: PublicPlan) {
+  const text = `${plan.code} ${plan.name}`.toLowerCase()
+  return plan.duration_days === 0 || text.includes('lifetime') || text.includes('seumur')
+}
+
+function getBuyerVisiblePlans(plans: PublicPlan[]) {
+  const lifetimePlans = plans.filter(isLifetimePlan)
+  return lifetimePlans.length > 0 ? lifetimePlans : plans
+}
+
 export default function RemoteLicensePopup() {
   const { user, logout } = useAuth()
   const { state: demoState, remainingUsage } = useDemo()
@@ -182,8 +192,9 @@ export default function RemoteLicensePopup() {
 
   const canRequestPayment = Boolean(user?.email || user?.remote_customer_id)
   const showPlans = !isDanger || ['EXPIRED', 'FEATURE_LOCKED', 'DEMO_LIMIT', 'ACCESS_EXPIRING', 'TRANSACTION_LIMIT', 'DEVICE_LIMIT'].includes(String(popup.code ?? '').toUpperCase())
+  const visiblePlans = getBuyerVisiblePlans(plans)
   const fallbackWhatsappMessage = [
-    'Halo Admin, saya ingin upgrade/perpanjang lisensi MediaSoft POS.',
+    'Halo Admin, saya ingin membeli lisensi seumur hidup Zetass Pos.',
     '',
     `Nama akun: ${user?.nama_lengkap ?? user?.nama_pengguna ?? '-'}`,
     `Email: ${user?.email ?? '-'}`,
@@ -207,7 +218,7 @@ export default function RemoteLicensePopup() {
     setCreatingPlan(null)
     if (!result.success || !result.data) {
       const fallbackUrl = buildWhatsAppUrl(popup.whatsapp_number, [
-        'Halo Admin, saya ingin membeli/perpanjang paket MediaSoft POS.',
+        'Halo Admin, saya ingin membeli lisensi seumur hidup Zetass Pos.',
         '',
         `Paket: ${plan.name} (${plan.code})`,
         `Harga: ${formatPlanPrice(plan)}`,
@@ -215,7 +226,7 @@ export default function RemoteLicensePopup() {
         `Nama akun: ${user?.nama_lengkap ?? user?.nama_pengguna ?? '-'}`,
         `Email: ${user?.email ?? '-'}`,
         '',
-        'Mohon info pembayaran dan aktivasi langganannya.',
+        'Mohon info pembayaran dan aktivasi lisensi seumur hidupnya.',
       ].join('\n'))
       setPaymentMessage(result.message || 'Gagal membuat request otomatis. Membuka WhatsApp admin.')
       void api('app:openExternal', fallbackUrl)
@@ -253,7 +264,7 @@ export default function RemoteLicensePopup() {
               {popup.title || 'Upgrade Akun Anda'} <span className="text-violet-300">🚀</span>
             </h2>
             <p className="mt-2 text-sm text-slate-400">
-              {popup.description || 'Pilih paket yang sesuai untuk bisnis Anda'}
+              {popup.description || 'Pilih lisensi sekali beli untuk bisnis Anda'}
             </p>
             {popup.code && <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-violet-300/60">{popup.code}</p>}
           </div>
@@ -286,7 +297,7 @@ export default function RemoteLicensePopup() {
 
           <div className="mt-4 flex justify-center">
             <div className="rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-[11px] font-bold text-amber-300 shadow-lg shadow-amber-900/20">
-              Penawaran spesial via WhatsApp admin
+              Sekali beli seumur hidup via WhatsApp admin
             </div>
           </div>
 
@@ -299,17 +310,17 @@ export default function RemoteLicensePopup() {
 
           {showPlans && (
             <div className="mt-4">
-              {!plansLoading && plans.length === 0 ? (
+              {!plansLoading && visiblePlans.length === 0 ? (
                 <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-center">
                   <p className="text-sm font-semibold text-slate-200">Paket aktif belum tersedia dari server developer.</p>
                   <p className="mt-1 text-xs text-slate-500">Tetap bisa chat admin WA untuk info harga terbaru.</p>
                 </div>
               ) : (
                 <div className="grid gap-3 md:grid-cols-3">
-                  {plans.map((plan, index) => {
+                  {visiblePlans.map((plan, index) => {
                     const visual = getPlanVisual(plan, index)
                     const PlanIcon = visual.Icon
-                    const recommended = plan.is_recommended || index === 1
+                    const recommended = plan.is_recommended || isLifetimePlan(plan) || index === 1
                     const daily = getDailyPrice(plan)
                     return (
                       <div

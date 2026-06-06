@@ -1,4 +1,4 @@
--- MediaSoft POS central license schema for Supabase.
+-- Zetass Pos central license schema for Supabase.
 -- Apply with: supabase db push
 
 create extension if not exists pgcrypto;

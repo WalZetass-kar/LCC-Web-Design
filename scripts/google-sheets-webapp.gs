@@ -1,5 +1,5 @@
 /**
- * MediaSoft POS Zetass v2.0 - Google Sheets Web App endpoint.
+ * Zetass Pos - Google Sheets Web App endpoint.
  *
  * Cara pakai:
  * 1. Buka https://script.google.com dan buat project baru.
@@ -11,10 +11,10 @@
  *
  * Opsional:
  * - Isi Script Property SPREADSHEET_ID jika ingin memakai spreadsheet tertentu.
- * - Jika kosong, script membuat file "MediaSoft POS Zetass Export" di Google Drive pemilik script.
+ * - Jika kosong, script membuat file "Zetass Pos Export" di Google Drive pemilik script.
  */
 
-const DEFAULT_SPREADSHEET_NAME = 'MediaSoft POS Zetass Export'
+const DEFAULT_SPREADSHEET_NAME = 'Zetass Pos Export'
 
 function doPost(e) {
   try {
@@ -43,7 +43,7 @@ function doGet() {
   const spreadsheet = getSpreadsheet()
   return jsonResponse({
     success: true,
-    app: 'MediaSoft POS Zetass v2.0',
+    app: 'Zetass Pos',
     spreadsheetId: spreadsheet.getId(),
     spreadsheetUrl: spreadsheet.getUrl(),
   })

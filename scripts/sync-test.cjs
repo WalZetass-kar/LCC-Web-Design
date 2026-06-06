@@ -34,8 +34,8 @@ async function fetchJson(url, init = {}) {
 }
 
 async function main() {
-  const baseUrl = normalizeBaseUrl(process.env.SYNC_SERVER_URL || process.env.MEDIASOFT_SYNC_SERVER_URL)
-  const token = String(process.env.SYNC_SERVER_TOKEN || process.env.MEDIASOFT_SYNC_TOKEN || '').trim()
+  const baseUrl = normalizeBaseUrl(process.env.SYNC_SERVER_URL || process.env.ZETASS_POS_SYNC_SERVER_URL)
+  const token = String(process.env.SYNC_SERVER_TOKEN || process.env.ZETASS_POS_SYNC_TOKEN || '').trim()
 
   if (!baseUrl) {
     console.log('[sync:test] Konfigurasi project siap.')

@@ -5,8 +5,8 @@ const path = require('path')
 const rootDir = path.resolve(__dirname, '..')
 const androidDir = path.join(rootDir, 'android')
 const releaseDir = path.join(rootDir, 'release')
-const releaseApkName = 'MediaSoft POS Zetass.apk'
-const releaseAabName = 'MediaSoft POS Zetass.aab'
+const releaseApkName = 'Zetass Pos.apk'
+const releaseAabName = 'Zetass Pos.aab'
 const task = process.argv[2] || 'assembleDebug'
 const signingEnvPath = path.join(rootDir, '.keys', 'android-release.env')
 
@@ -121,8 +121,8 @@ if (status === 0 && (task === 'assembleDebug' || task === 'assembleRelease' || t
     fs.mkdirSync(releaseDir, { recursive: true })
     for (const entry of fs.readdirSync(releaseDir)) {
       const isSameArtifactType = isBundle
-        ? (/^MediaSoft POS .*\.aab$/i.test(entry) || entry === releaseAabName)
-        : (/^MediaSoft POS .*\.apk$/i.test(entry) || entry === releaseApkName)
+        ? (/^Zetass Pos .*\.aab$/i.test(entry) || entry === releaseAabName)
+        : (/^Zetass Pos .*\.apk$/i.test(entry) || entry === releaseApkName)
       if (isSameArtifactType) {
         fs.rmSync(path.join(releaseDir, entry), { force: true })
       }

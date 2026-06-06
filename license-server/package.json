@@ -1,7 +1,7 @@
 {
   "name": "mediasoft-license-server",
   "version": "1.0.0",
-  "description": "Central license, subscription & feature flag server for MediaSoft POS",
+  "description": "Central license, subscription & feature flag server for Zetass Pos",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

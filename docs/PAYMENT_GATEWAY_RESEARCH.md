@@ -1,6 +1,6 @@
 # Payment Gateway Options
 
-Ringkasan pilihan untuk lisensi online MediaSoft POS.
+Ringkasan pilihan untuk lisensi online Zetass Pos.
 
 ## Implementasi Saat Ini
 

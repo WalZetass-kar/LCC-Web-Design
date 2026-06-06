@@ -40,7 +40,7 @@ on conflict (user_id) do update set role = excluded.role, is_active = true;
 6. Smoke test:
 
 ```bash
-MEDIASOFT_LICENSE_SERVER_URL=https://PROJECT_ID.supabase.co/functions/v1/mediasoft-license \
+ZETASS_POS_LICENSE_SERVER_URL=https://PROJECT_ID.supabase.co/functions/v1/mediasoft-license \
 LICENSE_ADMIN_EMAIL=admin@example.com \
 LICENSE_ADMIN_PASSWORD='password' \
 npm run smoke:supabase-license
@@ -51,7 +51,7 @@ npm run smoke:supabase-license
 Set saat build desktop/mobile:
 
 ```bash
-MEDIASOFT_LICENSE_SERVER_URL=https://PROJECT_ID.supabase.co/functions/v1/mediasoft-license
+ZETASS_POS_LICENSE_SERVER_URL=https://PROJECT_ID.supabase.co/functions/v1/mediasoft-license
 VITE_SUPABASE_URL=https://PROJECT_ID.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 VITE_LICENSE_OFFLINE_GRACE_HOURS=72

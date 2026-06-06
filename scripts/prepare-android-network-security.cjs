@@ -1,9 +1,9 @@
 const fs = require('fs')
 const path = require('path')
 
-const domain = (process.env.MEDIASOFT_PINNED_DOMAIN || 'azhkvmkmimepmflzqqty.supabase.co').trim()
-const pin = (process.env.MEDIASOFT_CERT_PIN_SHA256 || process.env.VITE_CERT_PIN_SHA256 || 'p51goejPCgGH+Oog/MU2k6PObcEfTrrr73jUcuWJ7w0=').trim()
-const allowLanHttp = /^(1|true|yes)$/i.test((process.env.MEDIASOFT_ALLOW_LAN_HTTP || '').trim())
+const domain = (process.env.ZETASS_POS_PINNED_DOMAIN || 'azhkvmkmimepmflzqqty.supabase.co').trim()
+const pin = (process.env.ZETASS_POS_CERT_PIN_SHA256 || process.env.VITE_CERT_PIN_SHA256 || 'p51goejPCgGH+Oog/MU2k6PObcEfTrrr73jUcuWJ7w0=').trim()
+const allowLanHttp = /^(1|true|yes)$/i.test((process.env.ZETASS_POS_ALLOW_LAN_HTTP || '').trim())
 const out = path.join(process.cwd(), 'android/app/src/main/res/xml/network_security_config.xml')
 
 function escapeXml(value) {

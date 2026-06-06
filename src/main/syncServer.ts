@@ -57,7 +57,7 @@ function getConfigPath() {
 }
 
 function configKey() {
-  return crypto.scryptSync(`${app.getPath('userData')}:${app.getName()}`, 'mediasoft-pos-sync-config', 32)
+  return crypto.scryptSync(`${app.getPath('userData')}:${app.getName()}`, 'zetass-pos-sync-config', 32)
 }
 
 function encryptConfig(config: SyncServerConfig) {
@@ -320,7 +320,7 @@ class SyncServer {
       sendJson(res, 200, {
         success: true,
         data: {
-          app: 'MediaSoft POS Zetass',
+          app: 'Zetass Pos',
           serverTime: new Date().toISOString(),
           tokenRequired: true,
         },

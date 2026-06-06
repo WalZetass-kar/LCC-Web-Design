@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-const baseUrl = normalizeBaseUrl(process.env.MEDIASOFT_LICENSE_SERVER_URL || process.env.SUPABASE_LICENSE_SERVER_URL || '')
+const baseUrl = normalizeBaseUrl(process.env.ZETASS_POS_LICENSE_SERVER_URL || process.env.SUPABASE_LICENSE_SERVER_URL || '')
 const adminEmail = process.env.LICENSE_ADMIN_EMAIL || ''
 const adminPassword = process.env.LICENSE_ADMIN_PASSWORD || ''
 
 if (!baseUrl) {
-  console.error('MEDIASOFT_LICENSE_SERVER_URL wajib diisi.')
+  console.error('ZETASS_POS_LICENSE_SERVER_URL wajib diisi.')
   process.exit(1)
 }
 

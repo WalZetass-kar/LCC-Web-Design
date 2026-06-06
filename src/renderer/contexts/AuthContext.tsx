@@ -16,6 +16,30 @@ const LICENSE_OFFLINE_GRACE_MS = Number(import.meta.env.VITE_LICENSE_OFFLINE_GRA
 const SUPABASE_REALTIME_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const SUPABASE_REALTIME_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
+function numericValue(value: unknown): number | null {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function shouldShowRemoteLicensePopup(data: any): boolean {
+  const code = String(data?.popup?.code ?? '').toUpperCase()
+  if (code !== 'ACCESS_EXPIRING') return true
+
+  const daysRemaining = numericValue(
+    data?.subscription?.days_remaining
+      ?? data?.days_remaining
+      ?? data?.access_days_remaining
+  )
+  if (daysRemaining === null) return false
+
+  const durationDays = numericValue(
+    data?.plan?.duration_days
+      ?? data?.subscription?.plan?.duration_days
+  )
+  const thresholdDays = durationDays !== null && durationDays > 7 ? 7 : 1
+  return daysRemaining <= thresholdDays
+}
+
 interface StoredSession extends UserSession {
   loginAt: number
   expiresAt: number
@@ -269,18 +293,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = r.data ?? {}
         if (r.success) {
           secureStorage.setItem(LICENSE_LAST_SUCCESS_KEY, String(Date.now()))
-          if (data?.subscription?.expires_at) {
-            const expires = new Date(data.subscription.expires_at).getTime()
+          const hasSubscriptionPayload = data?.subscription && typeof data.subscription === 'object'
+          const subscriptionExpiresAt = typeof data?.subscription?.expires_at === 'string'
+            ? data.subscription.expires_at
+            : hasSubscriptionPayload
+              ? null
+              : undefined
+          if (hasSubscriptionPayload) {
+            const expires = subscriptionExpiresAt ? new Date(subscriptionExpiresAt).getTime() : NaN
             setUser(prev => prev && prev.nama_pengguna === user.nama_pengguna ? {
               ...prev,
-              access_expires_at: data.subscription.expires_at,
-              subscription_expires_at: data.subscription.expires_at,
-              access_days_remaining: Number.isFinite(expires)
+              access_expires_at: subscriptionExpiresAt,
+              subscription_expires_at: subscriptionExpiresAt,
+              access_days_remaining: subscriptionExpiresAt && Number.isFinite(expires)
                 ? Math.max(0, Math.ceil((expires - Date.now()) / 86400000))
-                : prev.access_days_remaining,
+                : null,
             } : prev)
           }
-          if (data?.popup) {
+          if (data?.popup && shouldShowRemoteLicensePopup(data)) {
             window.dispatchEvent(new CustomEvent('license:remote-popup', {
               detail: { popup: data.popup, force: !!data.force_popup },
             }))
@@ -311,7 +341,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           return
         }
-        if (data?.popup) {
+        if (data?.popup && shouldShowRemoteLicensePopup(data)) {
           window.dispatchEvent(new CustomEvent('license:remote-popup', {
             detail: {
               popup: data.popup,

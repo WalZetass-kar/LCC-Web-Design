@@ -1,8 +1,8 @@
-# Panduan Refactor MediaSoft POS - Pemisahan Aplikasi
+# Panduan Refactor Zetass Pos - Pemisahan Aplikasi
 
 ## Status: IN PROGRESS
 
-Dokumen ini berisi panduan lengkap untuk memisahkan MediaSoft POS menjadi 2 aplikasi terpisah.
+Dokumen ini berisi panduan lengkap untuk memisahkan Zetass Pos menjadi 2 aplikasi terpisah.
 
 ## ✅ Yang Sudah Selesai
 
@@ -10,13 +10,13 @@ Dokumen ini berisi panduan lengkap untuk memisahkan MediaSoft POS menjadi 2 apli
    - ✅ Created `pnpm-workspace.yaml`
    - ✅ Created `packages/` directory structure
    - ✅ Created `packages/shared-lib/`
-   - ✅ Created `packages/mediasoft-pos-user/`
-   - ✅ Created `packages/mediasoft-developer-panel/`
+   - ✅ Created `packages/zetass-pos-user/`
+   - ✅ Created `packages/zetass-pos-developer-panel/`
 
 2. **Package Configuration**
    - ✅ `packages/shared-lib/package.json` - Shared dependencies
-   - ✅ `packages/mediasoft-pos-user/package.json` - User app dependencies
-   - ✅ `packages/mediasoft-developer-panel/package.json` - Developer app dependencies
+   - ✅ `packages/zetass-pos-user/package.json` - User app dependencies
+   - ✅ `packages/zetass-pos-developer-panel/package.json` - Developer app dependencies
    - ✅ Root `package.json` updated for workspace
 
 3. **Shared Library Setup**
@@ -40,12 +40,12 @@ Buat file index untuk exports:
 - `src/config/index.ts`
 - `src/components/index.ts`
 
-### Step 2: Setup MediaSoft POS User
+### Step 2: Setup Zetass Pos User
 
 **Struktur yang dibutuhkan:**
 
 ```
-packages/mediasoft-pos-user/
+packages/zetass-pos-user/
 ├── src/
 │   ├── main/                    # Electron main process
 │   │   ├── index.ts
@@ -134,12 +134,12 @@ packages/mediasoft-pos-user/
 - LoyaltyController.ts
 - BranchController.ts
 
-### Step 3: Setup MediaSoft Developer Panel
+### Step 3: Setup Zetass Pos Developer Panel
 
 **Struktur yang dibutuhkan:**
 
 ```
-packages/mediasoft-developer-panel/
+packages/zetass-pos-developer-panel/
 ├── src/
 │   ├── main/                    # Electron main process
 │   │   ├── index.ts
@@ -231,7 +231,7 @@ import { User } from '../../shared/types';
 
 **After:**
 ```typescript
-import { db, User } from '@mediasoft/shared-lib';
+import { db, User } from '@zetass/pos-shared-lib';
 ```
 
 ### Step 6: Create Vite Configs
@@ -406,8 +406,8 @@ Update README.md untuk menjelaskan struktur baru dan cara menjalankan masing-mas
 3. **Authentication**: Masing-masing aplikasi memiliki login terpisah dengan role-based access control.
 
 4. **Build Output**:
-   - User Panel: `packages/mediasoft-pos-user/release/`
-   - Developer Panel: `packages/mediasoft-developer-panel/release/`
+   - User Panel: `packages/zetass-pos-user/release/`
+   - Developer Panel: `packages/zetass-pos-developer-panel/release/`
 
 5. **Mobile Support**: Hanya User Panel yang support Android/iOS.
 

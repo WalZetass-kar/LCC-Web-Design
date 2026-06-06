@@ -1,7 +1,7 @@
 {
-  "name": "@mediasoft/shared-lib",
+  "name": "@zetass/pos-shared-lib",
   "version": "1.0.0",
-  "description": "Shared library for MediaSoft applications",
+  "description": "Shared library for Zetass Pos applications",
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
