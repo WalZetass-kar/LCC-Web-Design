@@ -6,6 +6,9 @@ type AndroidPermissionAlias =
   | 'bluetoothScan'
   | 'readExternalStorage'
   | 'writeExternalStorage'
+  | 'postNotifications'
+  | 'readMediaImages'
+  | 'readMediaVideo'
 
 type PermissionState = 'prompt' | 'prompt-with-rationale' | 'granted' | 'denied'
 
@@ -61,10 +64,20 @@ export async function ensureBluetoothPrinterPermission() {
 
 export async function ensureStoragePermission() {
   const sdk = sdkInt()
-  if (!isNativeAndroid() || (sdk !== null && sdk >= 33)) return { granted: true }
+  if (!isNativeAndroid()) return { granted: true }
+
+  if (sdk !== null && sdk >= 33) {
+    return requestAndroidAliases(['readMediaImages', 'readMediaVideo'])
+  }
 
   const aliases: AndroidPermissionAlias[] = sdk !== null && sdk >= 30
     ? ['readExternalStorage']
     : ['readExternalStorage', 'writeExternalStorage']
   return requestAndroidAliases(aliases)
+}
+
+export async function ensureNotificationPermission() {
+  const sdk = sdkInt()
+  if (!isNativeAndroid() || (sdk !== null && sdk < 33)) return { granted: true }
+  return requestAndroidAliases(['postNotifications'])
 }

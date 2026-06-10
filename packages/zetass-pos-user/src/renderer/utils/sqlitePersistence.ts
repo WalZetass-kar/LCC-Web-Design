@@ -21,12 +21,24 @@ async function openDb() {
         const sqliteModule = await import('@capacitor-community/sqlite')
         const sqlite = new sqliteModule.SQLiteConnection(sqliteModule.CapacitorSQLite)
         let db: any
+        
+        // Use a persistent encryption key. In production, this should be unique per device.
+        const dbKey = 'zetass-pos-secure-v3-key-2026' 
+        const encryptionMode = 'secret' // Enable SQLCipher
+
         try {
-          db = await sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false)
+          db = await sqlite.createConnection(DB_NAME, false, encryptionMode, 1, false)
         } catch {
           db = await sqlite.retrieveConnection(DB_NAME, false)
         }
+        
         await db.open()
+        
+        // Ensure SQLCipher is active by setting the passphrase if retrieveConnection was used
+        if (db.isEncryptionSupported()) {
+          await db.setEncryptionId(dbKey)
+        }
+        
         await db.execute(TABLE_SQL)
         return db
       } catch (error) {

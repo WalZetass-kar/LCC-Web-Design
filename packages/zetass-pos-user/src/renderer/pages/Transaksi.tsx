@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
+import { BarcodeScanner as NativeScanner } from '@capacitor/barcode-scanner'
 import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Banknote, Printer, UserCircle, X, Image, Settings, QrCode, Tag, ScanLine, Camera } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -225,7 +227,13 @@ export default function Transaksi() {
     searchRef.current?.focus()
   }
 
-  const stopCameraScanner = useCallback(() => {
+  const stopCameraScanner = useCallback(async () => {
+    if (Capacitor.isNativePlatform()) {
+      await NativeScanner.showBackground()
+      await NativeScanner.stopScan()
+      document.body.classList.remove('scanner-active')
+    }
+
     if (scanIntervalRef.current !== null) {
       window.clearInterval(scanIntervalRef.current)
       scanIntervalRef.current = null
@@ -236,20 +244,11 @@ export default function Transaksi() {
     setCameraScannerOpen(false)
   }, [])
 
-  useEffect(() => stopCameraScanner, [stopCameraScanner])
-
-  const handleCameraBarcode = useCallback((barcode: string) => {
-    const product = products.find(p => p.barcode === barcode || p.kd_barang === barcode)
-    if (!product) {
-      toast(`Barcode "${barcode}" tidak ditemukan`, 'error')
+  useEffect(() => {
+    return () => {
       stopCameraScanner()
-      return
     }
-
-    addToCart(product)
-    toast(`${product.nama_barang ?? product.kd_barang} ditambahkan`)
-    stopCameraScanner()
-  }, [products, stopCameraScanner, toast])
+  }, [stopCameraScanner])
 
   const openCameraScanner = async () => {
     const permission = await ensureCameraPermission()
@@ -258,53 +257,30 @@ export default function Transaksi() {
       return
     }
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      toast('Kamera tidak tersedia di perangkat ini', 'error')
+    if (Capacitor.isNativePlatform()) {
+      try {
+        setCameraScannerOpen(true)
+        setCameraScannerStatus('Mempersiapkan scanner native...')
+        
+        await NativeScanner.hideBackground()
+        document.body.classList.add('scanner-active')
+        
+        const result = await NativeScanner.startScan({
+          formats: ['EAN_13', 'EAN_8', 'CODE_128', 'QR_CODE']
+        })
+
+        if (result.hasContent) {
+          handleCameraBarcode(result.content.trim())
+        }
+      } catch (error) {
+        toast('Gagal memulai scanner native', 'error')
+        stopCameraScanner()
+      }
       return
     }
 
-    setCameraScannerError('')
-    setCameraScannerStatus('Menyiapkan kamera...')
-    setCameraScannerOpen(true)
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      })
-      cameraStreamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
-
-      const BarcodeDetectorCtor = (window as any).BarcodeDetector
-      if (!BarcodeDetectorCtor) {
-        setCameraScannerError('Pemindai barcode kamera belum didukung oleh WebView ini. Gunakan scanner USB/Bluetooth atau ketik barcode.')
-        return
-      }
-
-      const detector = new BarcodeDetectorCtor({
-        formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code'],
-      })
-      setCameraScannerStatus('Arahkan kamera ke barcode')
-
-      scanIntervalRef.current = window.setInterval(async () => {
-        const video = videoRef.current
-        if (!video || video.readyState < 2) return
-
-        try {
-          const codes = await detector.detect(video)
-          const rawValue = codes?.[0]?.rawValue
-          if (rawValue) handleCameraBarcode(String(rawValue).trim())
-        } catch (error) {
-          setCameraScannerError(error instanceof Error ? error.message : 'Gagal membaca barcode')
-        }
-      }, 500)
-    } catch (error) {
-      setCameraScannerError(error instanceof Error ? error.message : 'Gagal membuka kamera')
-    }
-  }
+    if (!navigator.mediaDevices?.getUserMedia) {
+...
 
   const updateQty = (kd: string, delta: number) => {
     setCart(prev => prev.map(c => {

@@ -717,8 +717,12 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
 
   // ─── WHATSAPP SETTINGS ─────────────────────────────────────────────
   handle(ipcMain, 'whatsapp:get', () => WhatsAppController.get())
-  handle(ipcMain, 'whatsapp:save', (data: any) => WhatsAppController.save(data))
-  handle(ipcMain, 'whatsapp:test', (phone: string) => WhatsAppController.test(phone))
+  handle(ipcMain, 'whatsapp:save', (data: any) => {
+    const result = WhatsAppController.save(data)
+    // Update local session if needed
+    return result
+  })
+  handle(ipcMain, 'whatsapp:test', (phone: string, message?: string) => WhatsAppController.test({ phone, message }))
   handle(ipcMain, 'whatsapp:getTemplates', () => WhatsAppController.getTemplates())
   handle(ipcMain, 'whatsapp:saveTemplate', (data: any) => WhatsAppController.saveTemplate(data))
   handle(ipcMain, 'whatsapp:getBroadcastHistory', () => WhatsAppController.getBroadcastHistory())
@@ -727,11 +731,29 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── SECURITY SETTINGS ─────────────────────────────────────────────
   handle(ipcMain, 'security:get', () => SecurityController.get())
   handle(ipcMain, 'security:save', (data: any) => SecurityController.save(data))
-
+  
   // ─── ECOMMERCE API SETTINGS ────────────────────────────────────────
   handle(ipcMain, 'ecommerce:get', () => EcommerceApiController.get())
   handle(ipcMain, 'ecommerce:save', (data: any) => EcommerceApiController.save(data, demoSession.getUsername()))
-  handle(ipcMain, 'ecommerce:getIntegration', () => EcommerceApiController.getIntegration())
+  handle(ipcMain, 'ecommerce:getIntegration', () => {
+    const result = EcommerceApiController.getIntegration()
+    if (result.success && result.data) {
+      // Ensure connectors field exists for UI parity
+      return {
+        ...result,
+        data: {
+          ...result.data,
+          connectors: (result.data as any).connectors ?? {
+            woocommerce: { status: 'disconnected', lastSync: null },
+            tokopedia: { status: 'pending', lastSync: null },
+            shopee: { status: 'pending', lastSync: null },
+            tiktok: { status: 'pending', lastSync: null }
+          }
+        }
+      }
+    }
+    return result
+  })
   handle(ipcMain, 'ecommerce:saveIntegration', (data: any) => EcommerceApiController.saveIntegration(data, demoSession.getUsername()))
   handle(ipcMain, 'ecommerce:syncNow', () => EcommerceApiController.syncNow(demoSession.getUsername()))
   handle(ipcMain, 'ecommerce:enqueueStockUpdate', (productId: string | number, qty: number) => EcommerceApiController.enqueueStockUpdate(productId, qty))

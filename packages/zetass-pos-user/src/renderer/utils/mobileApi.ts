@@ -424,9 +424,33 @@ function createDefaultStore(): MobileStore {
       { id: 2, name: 'Gold', min_points: 100, discount_percent: 5, benefits: 'Diskon 5%', color: '#f59e0b' },
     ],
     audit: [],
-    whatsapp: { enabled: 0, provider: 'fonnte', api_key: '', rate_limit_per_minute: 20, phone_number: '', message_template: '' },
-    security: { id: 1, pin_enabled: 0, pin_code: '', lock_after_minutes: 15 },
-    ecommerce: { enabled: 0, api_key: '', base_url: '', platform: 'woocommerce', autoSync: false, intervalMinutes: 30, logs: [], queue: [] },
+    whatsapp: { 
+      enabled: 0, 
+      provider: 'fonnte', // fonnte, wablas, custom
+      api_key: '', 
+      api_url: '', // for custom provider
+      phone_number: '', 
+      message_template: 'Halo *{{customer_name}}*, terima kasih telah berbelanja di *{{store_name}}*. Total transaksi Anda adalah *{{total_amount}}*.',
+      rate_limit_per_minute: 20 
+    },
+    security: { id: 1, pin_enabled: 0, pin_code: '', biometric_enabled: 0, lock_after_minutes: 15 },
+    ecommerce: { 
+      enabled: 0, 
+      platform: 'woocommerce', // woocommerce, tokopedia, shopee, tiktok
+      api_key: '', 
+      api_secret: '',
+      base_url: '', 
+      autoSync: false, 
+      intervalMinutes: 30,
+      connectors: {
+        woocommerce: { status: 'disconnected', lastSync: null },
+        tokopedia: { status: 'pending', lastSync: null },
+        shopee: { status: 'pending', lastSync: null },
+        tiktok: { status: 'pending', lastSync: null }
+      },
+      logs: [], 
+      queue: [] 
+    },
     counters: {
       barang: 4,
       customer: 2,
