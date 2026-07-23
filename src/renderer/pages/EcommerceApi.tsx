@@ -10,6 +10,7 @@ import { api } from '../utils/api'
 import { normalizeHttpsUrl } from '../../shared/endpointSecurity'
 import { appConfig, validateProductionConfig } from '../utils/productionConfig'
 import type { SubscriptionPlan } from '../../shared/types'
+import { SkeletonSpinner } from '../components/Skeleton'
 
 interface ApiConfig {
   apiKey: string
@@ -108,7 +109,7 @@ export default function EcommerceApi() {
   const [integration, setIntegration] = useState<EcommerceIntegration>(DEFAULT_INTEGRATION)
   const [syncLoading, setSyncLoading] = useState(false)
   const apiBaseUrl = appConfig.apiBaseUrl?.trim() || ''
-  const documentedApiBaseUrl = apiBaseUrl || appConfig.supabaseUrl || 'VITE_API_BASE_URL'
+  const documentedApiBaseUrl = apiBaseUrl || appConfig.supabaseProjectId || 'VITE_API_BASE_URL'
 
   useEffect(() => {
     api<any>('ecommerce:get').then(r => {
@@ -208,6 +209,8 @@ export default function EcommerceApi() {
     const latest = await api<EcommerceIntegration>('ecommerce:getIntegration')
     if (latest.success && latest.data) setIntegration({ ...DEFAULT_INTEGRATION, ...latest.data })
   }
+
+  if (loading) return <SkeletonSpinner />
 
   return (
     <div className="space-y-6">

@@ -197,12 +197,7 @@ export function seed() {
     `INSERT OR IGNORE INTO plans (code, name, description, price, duration_days, sort_order)
      VALUES (?, ?, ?, ?, ?, ?)`,
   );
-  insertPlan.run('DEMO', 'Demo', 'Akun coba-coba 14 hari', 0, 14, 0);
-  insertPlan.run('BASIC', 'Basic', 'Toko skala kecil', 99000, 30, 1);
-  insertPlan.run('PRO', 'Pro', 'Toko menengah', 249000, 30, 2);
-  insertPlan.run('ENTERPRISE', 'Enterprise', 'Multi cabang & unlimited', 599000, 30, 3);
-  insertPlan.run('PRO_ANNUAL', 'Tahunan', 'Paket 1 tahun dengan fitur lengkap untuk operasional toko dan multi cabang', 1999000, 365, 4);
-  insertPlan.run('LIFETIME', 'Sekali Beli Seumur Hidup', 'Sekali bayar untuk akses permanen dengan semua fitur operasional aktif', 4999000, 0, 5);
+    // Demo plan removed
 
   // ===== Plan ↔ Features =====
   const planFeatureMap: Record<string, Array<[string, boolean, number | null]>> = {
@@ -307,27 +302,7 @@ export function seed() {
     );
   }
 
-  // ===== Default demo user =====
-  const demoExists = db.prepare(`SELECT id FROM users WHERE email = 'demo@zetass.local'`).get() as
-    | { id: number }
-    | undefined;
-  if (!demoExists) {
-    const hash = bcrypt.hashSync('Demo#12345', 12);
-    const info = db
-      .prepare(
-        `INSERT INTO users (name, email, password_hash, role, status, must_change_pwd)
-         VALUES (?, ?, ?, 'user', 'active', 0)`,
-      )
-      .run('Demo User', 'demo@zetass.local', hash);
-    const userId = info.lastInsertRowid as number;
-    const planId = (db.prepare(`SELECT id FROM plans WHERE code = 'DEMO'`).get() as { id: number }).id;
-    const expired = new Date(Date.now() + 14 * 86400000).toISOString();
-    db.prepare(
-      `INSERT INTO user_subscriptions (user_id, plan_id, status, expired_at)
-       VALUES (?, ?, 'active', ?)`,
-    ).run(userId, planId, expired);
-    console.log('[seed] Default demo user → demo@zetass.local / Demo#12345');
-  }
+    // Demo user creation removed
 
   console.log('[seed] Done.');
 }

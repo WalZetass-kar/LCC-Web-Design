@@ -134,11 +134,14 @@ export default function Users() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<LocalSubscriptionStatus | null>(null)
 
   const load = async () => {
-    const r = await api<Pengguna[]>('user:getAll')
-    if (r.success) {
-      setData(r.data ?? [])
+    try {
+      const r = await api<Pengguna[]>('user:getAll')
+      if (r.success) {
+        setData(r.data ?? [])
+      }
+    } finally {
+      setLoadingData(false)
     }
-    setLoadingData(false)
   }
 
   useEffect(() => {
@@ -233,7 +236,7 @@ export default function Users() {
     }
     const r = modal === 'add'
       ? await api('user:create', payload)
-      : await api('user:update', selected!.nama_pengguna, payload)
+      : await api('user:update', selected?.nama_pengguna, payload)
     setLoading(false)
     if (r.success) { toast(r.message as string); closeModal(); load() }
     else toast(r.message as string, 'error')
@@ -241,7 +244,7 @@ export default function Users() {
 
   const handleDelete = async () => {
     setLoading(true)
-    const r = await api('user:delete', selected!.nama_pengguna, currentUser?.nama_pengguna)
+    const r = await api('user:delete', selected?.nama_pengguna, currentUser?.nama_pengguna)
     setLoading(false)
     if (r.success) { toast(r.message as string); closeModal(); load() }
     else toast(r.message as string, 'error')
@@ -287,7 +290,7 @@ export default function Users() {
   }
 
   const togglePerm = (code: string) =>
-    setPermissions(prev => ({ ...prev, [code]: prev[code] === false }))
+    setPermissions(prev => ({ ...prev, [code]: prev[code] !== true }))
 
   const toggleGroup = (codes: string[], checked: boolean) =>
     setPermissions(prev => {
@@ -519,7 +522,7 @@ export default function Users() {
             <Button icon={<Plus size={16} />} onClick={openAdd} className="w-full sm:w-auto">Tambah Pengguna</Button>
           </div>
           <Card>
-            <DataTable data={data} columns={columns} searchPlaceholder="Cari user..." />
+            <DataTable data={data.filter(u => !u.is_buyer)} columns={columns} searchPlaceholder="Cari user..." />
           </Card>
         </>
       )}

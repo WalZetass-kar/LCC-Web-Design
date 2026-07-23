@@ -19,6 +19,7 @@ export function dashboardSummaryToSheetsPayload(summary: DashboardSummary): Goog
   const topProducts = summary.topProducts || []
   const lowStockProducts = summary.lowStockProducts || []
   const chartData = summary.chartData || []
+  const hourlySales = summary.hourlySales || []
 
   return {
     app: 'Zetass Pos',
@@ -44,6 +45,13 @@ export function dashboardSummaryToSheetsPayload(summary: DashboardSummary): Goog
         rows: [
           ['Tanggal', 'Pemasukan'],
           ...chartData.map(item => [item.label, item.total]),
+        ],
+      },
+      {
+        name: 'Jam Ramai Hari Ini',
+        rows: [
+          ['Jam', 'Jumlah Transaksi', 'Pemasukan'],
+          ...hourlySales.map(item => [item.hour, item.count, item.total]),
         ],
       },
       {

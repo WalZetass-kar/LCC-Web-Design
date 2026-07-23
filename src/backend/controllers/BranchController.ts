@@ -58,7 +58,18 @@ export class BranchController {
   static getAll() {
     try {
       const data = sqlite.prepare(`
-        SELECT * FROM mediasoft_branches 
+        SELECT
+          id,
+          code,
+          name,
+          address,
+          phone,
+          is_warehouse,
+          is_active,
+          created_at,
+          name AS nama_branch,
+          code AS kode_branch
+        FROM mediasoft_branches
         ORDER BY is_warehouse DESC, name ASC
       `).all()
       return { success: true, data }
@@ -70,7 +81,18 @@ export class BranchController {
   static getActive() {
     try {
       const data = sqlite.prepare(`
-        SELECT * FROM mediasoft_branches 
+        SELECT
+          id,
+          code,
+          name,
+          address,
+          phone,
+          is_warehouse,
+          is_active,
+          created_at,
+          name AS nama_branch,
+          code AS kode_branch
+        FROM mediasoft_branches
         WHERE is_active = 1 
         ORDER BY is_warehouse DESC, name ASC
       `).all()
@@ -83,7 +105,18 @@ export class BranchController {
   static getWarehouses() {
     try {
       const data = sqlite.prepare(`
-        SELECT * FROM mediasoft_branches 
+        SELECT
+          id,
+          code,
+          name,
+          address,
+          phone,
+          is_warehouse,
+          is_active,
+          created_at,
+          name AS nama_branch,
+          code AS kode_branch
+        FROM mediasoft_branches
         WHERE is_warehouse = 1 AND is_active = 1
         ORDER BY name ASC
       `).all()
@@ -95,7 +128,21 @@ export class BranchController {
 
   static getById(id: number) {
     try {
-      const data = sqlite.prepare('SELECT * FROM mediasoft_branches WHERE id = ?').get(id)
+      const data = sqlite.prepare(`
+        SELECT
+          id,
+          code,
+          name,
+          address,
+          phone,
+          is_warehouse,
+          is_active,
+          created_at,
+          name AS nama_branch,
+          code AS kode_branch
+        FROM mediasoft_branches
+        WHERE id = ?
+      `).get(id)
       return { success: true, data }
     } catch (error) {
       return { success: false, message: String(error) }

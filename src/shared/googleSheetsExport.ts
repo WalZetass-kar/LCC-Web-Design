@@ -19,6 +19,14 @@ export function dashboardSummaryToSheetsPayload(summary: DashboardSummary): Goog
   const topProducts = summary.topProducts || []
   const lowStockProducts = summary.lowStockProducts || []
   const chartData = summary.chartData || []
+  const hourlySales = summary.hourlySales || []
+  const recentTransactions = summary.recentTransactions || []
+  const alertSummary = summary.alertSummary || {
+    stockOutCount: 0,
+    lowStockCount: summary.lowStockCount || 0,
+    todayTransactionCount: summary.today.count,
+    todayRevenue: summary.today.total,
+  }
 
   return {
     app: 'Zetass Pos',
@@ -37,6 +45,8 @@ export function dashboardSummaryToSheetsPayload(summary: DashboardSummary): Goog
           ['Bulan Ini', summary.month.count, summary.month.total],
           ['Rata-rata Harian Minggu Ini', '', Math.round(summary.week.total / 7)],
           ['Prediksi Besok', '', summary.predictedTomorrow || 0],
+          ['Produk Habis', '', alertSummary.stockOutCount],
+          ['Stok Menipis', '', alertSummary.lowStockCount],
         ],
       },
       {
@@ -44,6 +54,28 @@ export function dashboardSummaryToSheetsPayload(summary: DashboardSummary): Goog
         rows: [
           ['Tanggal', 'Pemasukan'],
           ...chartData.map(item => [item.label, item.total]),
+        ],
+      },
+      {
+        name: 'Jam Ramai Hari Ini',
+        rows: [
+          ['Jam', 'Jumlah Transaksi', 'Pemasukan'],
+          ...hourlySales.map(item => [item.hour, item.count, item.total]),
+        ],
+      },
+      {
+        name: 'Transaksi Terbaru',
+        rows: [
+          ['No. Transaksi', 'Tanggal', 'Kasir', 'Customer', 'Qty', 'Total', 'Pembayaran'],
+          ...recentTransactions.map(transaction => [
+            transaction.kd_tansaksi_jual,
+            transaction.tgl_wkt_transaksi || '',
+            transaction.username_transaksi || '-',
+            transaction.nama_customer || 'Pelanggan Umum',
+            transaction.total_qty,
+            transaction.total_penjualan,
+            transaction.jenis_pembayaran || '-',
+          ]),
         ],
       },
       {
@@ -56,6 +88,16 @@ export function dashboardSummaryToSheetsPayload(summary: DashboardSummary): Goog
             product.total_qty,
             product.total_revenue,
           ]),
+        ],
+      },
+      {
+        name: 'Ringkasan Alert',
+        rows: [
+          ['Jenis', 'Jumlah'],
+          ['Produk Habis', alertSummary.stockOutCount],
+          ['Stok Menipis', alertSummary.lowStockCount],
+          ['Transaksi Hari Ini', alertSummary.todayTransactionCount],
+          ['Pendapatan Hari Ini', alertSummary.todayRevenue],
         ],
       },
       {

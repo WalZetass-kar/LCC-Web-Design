@@ -1,15 +1,23 @@
 import { sqlite } from '../../database/connection.js'
-import { validateDemoMode } from '../utils/demoMode.js'
+import { requireAuth } from '../utils/authGuard.js'
 import { BackupController } from './BackupController.js'
+import { demoSession } from '../services/demoSessionManager.js'
+
+const ADMIN_ROLES = ['developer', 'super_admin', 'admin']
 
 export class SystemController {
   /**
    * Reset all data (transactions, products, customers, etc.)
    * Keeps users and identitas
    */
-  static resetData(username?: string) {
-    const demoError = validateDemoMode(username)
-    if (demoError) return demoError
+  static async resetData(username?: string) {
+    const authError = await requireAuth()
+    if (authError) return authError
+
+    const role = demoSession.getRole()
+    if (!role || !ADMIN_ROLES.includes(role)) {
+      return { success: false, message: 'Akses ditolak. Hanya admin yang dapat mereset data.' }
+    }
 
     try {
       // Auto backup before reset
@@ -39,6 +47,10 @@ export class SystemController {
         'mediasoft_backup',
         'mediasoft_activity_log',
         'mediasoft_product_images',
+        'mediasoft_daily_notes',
+        'mediasoft_petty_cash',
+        'mediasoft_notification_settings',
+        'mediasoft_stock_history',
       ]
 
       for (const table of tables) {

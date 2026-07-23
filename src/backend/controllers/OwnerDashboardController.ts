@@ -27,12 +27,12 @@ export class OwnerDashboardController {
       const sevenDaysAgo = dateKey(new Date(now.getTime() - 6 * 86400000))
 
       const salesMonth = q(`
-        SELECT COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)), 0) AS value
+        SELECT COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0)), 0) AS value
         FROM mediasoft_penjualan
         WHERE substr(tgl_wkt_transaksi, 1, 10) >= ?
       `, [monthStart])
       const salesToday = q(`
-        SELECT COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)), 0) AS value
+        SELECT COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0)), 0) AS value
         FROM mediasoft_penjualan
         WHERE substr(tgl_wkt_transaksi, 1, 10) = ?
       `, [today])
@@ -44,7 +44,7 @@ export class OwnerDashboardController {
       `, [monthStart])
       const avgDaily = q(`
         SELECT COALESCE(AVG(total), 0) AS value FROM (
-          SELECT substr(tgl_wkt_transaksi, 1, 10) AS d, SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)) AS total
+          SELECT substr(tgl_wkt_transaksi, 1, 10) AS d, SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0)) AS total
           FROM mediasoft_penjualan
           WHERE substr(tgl_wkt_transaksi, 1, 10) >= ?
           GROUP BY substr(tgl_wkt_transaksi, 1, 10)
@@ -53,7 +53,7 @@ export class OwnerDashboardController {
 
       const peakHours = sqlite.prepare(`
         SELECT strftime('%H:00', tgl_wkt_transaksi) AS hour, COUNT(*) AS count,
-          COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)), 0) AS total
+          COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0)), 0) AS total
         FROM mediasoft_penjualan
         WHERE substr(tgl_wkt_transaksi, 1, 10) >= ?
         GROUP BY hour
@@ -63,7 +63,7 @@ export class OwnerDashboardController {
 
       const cashierPerformance = sqlite.prepare(`
         SELECT username_transaksi AS username, COUNT(*) AS count,
-          COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)), 0) AS total
+          COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0)), 0) AS total
         FROM mediasoft_penjualan
         WHERE substr(tgl_wkt_transaksi, 1, 10) >= ?
         GROUP BY username_transaksi

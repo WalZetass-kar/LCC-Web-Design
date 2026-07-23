@@ -13,8 +13,30 @@ export function useKeyboardShortcuts() {
         return
       }
 
+      // Ctrl/Cmd shortcuts
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey
+
+      if (isCtrlOrCmd && e.key === 'n') {
+        e.preventDefault()
+        navigate('/transaksi')
+      } else if (isCtrlOrCmd && e.key === 'p') {
+        e.preventDefault()
+        window.print()
+      } else if (isCtrlOrCmd && e.shiftKey && (e.key === '?' || e.key === '/')) {
+        e.preventDefault()
+        // Dispatch custom event for shortcuts modal
+        window.dispatchEvent(new CustomEvent('show-shortcuts-help'))
+      } else if (e.key === 'F11') {
+        e.preventDefault()
+        // Toggle fullscreen
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {})
+        } else {
+          document.exitFullscreen().catch(() => {})
+        }
+      }
       // F1-F12 shortcuts
-      if (e.key === 'F1') {
+      else if (e.key === 'F1') {
         e.preventDefault()
         navigate('/transaksi')
       } else if (e.key === 'F2') {

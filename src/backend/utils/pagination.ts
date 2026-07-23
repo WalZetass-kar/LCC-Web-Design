@@ -1,5 +1,8 @@
 import { sqlite } from '../../database/connection.js'
 
+const SAFE_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/
+const SAFE_TABLE = /^[A-Za-z_][A-Za-z0-9_]*$/
+
 export interface PaginationParams {
   page?: number
   limit?: number
@@ -21,6 +24,14 @@ export interface PaginatedResult<T> {
   }
 }
 
+function safeIdentifier(value: string, fallback: string): string {
+  return SAFE_IDENTIFIER.test(value) ? value : fallback
+}
+
+function safeTable(value: string, fallback: string): string {
+  return SAFE_TABLE.test(value) ? value : fallback
+}
+
 /**
  * Paginate query results
  */
@@ -33,8 +44,9 @@ export function paginate<T>(
   const page = Math.max(1, params.page || 1)
   const limit = Math.min(100, Math.max(1, params.limit || 20))
   const offset = (page - 1) * limit
-  const sortBy = params.sortBy || 'id'
-  const sortOrder = params.sortOrder || 'DESC'
+  const sortBy = safeIdentifier(params.sortBy || '', 'id')
+  const sortOrder = params.sortOrder === 'ASC' ? 'ASC' : 'DESC'
+  const safeTableName = safeTable(table, '')
 
   // Build search clause
   let searchClause = ''
@@ -51,12 +63,12 @@ export function paginate<T>(
   const finalParams = [...whereParams, ...searchParams]
 
   // Get total count
-  const countQuery = `SELECT COUNT(*) as total FROM ${table} ${finalWhere}`
+  const countQuery = `SELECT COUNT(*) as total FROM ${safeTableName} ${finalWhere}`
   const { total } = sqlite.prepare(countQuery).get(...finalParams) as { total: number }
 
   // Get paginated data
   const dataQuery = `
-    SELECT * FROM ${table} 
+    SELECT * FROM ${safeTableName} 
     ${finalWhere}
     ORDER BY ${sortBy} ${sortOrder}
     LIMIT ? OFFSET ?

@@ -6,9 +6,7 @@ import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 
 const DEEP_LINK_SCHEME = 'zetasspos'
-const DEFAULT_SUPABASE_URL = 'https://azhkvmkmimepmflzqqty.supabase.co'
-const DEFAULT_API_BASE_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
-const DEFAULT_CERT_PIN_SHA256 = 'p51goejPCgGH+Oog/MU2k6PObcEfTrrr73jUcuWJ7w0='
+const DEFAULT_CERT_PIN_SHA256 = 'ZcJbApTb7wyllleAjHw2vYAskqdT+DhMY9aPDFwAtf4='
 const TRUSTED_DEV_ORIGINS = new Set(['http://localhost:5173', 'http://127.0.0.1:5173'])
 
 let pendingDeepLink: string | null = null
@@ -67,8 +65,6 @@ function endpointHost(value: string | undefined) {
 function pinnedHosts() {
   const pin = (process.env.ZETASS_POS_CERT_PIN_SHA256 || process.env.VITE_CERT_PIN_SHA256 || DEFAULT_CERT_PIN_SHA256).trim()
   const hosts = [
-    endpointHost(process.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL),
-    endpointHost(process.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL),
     endpointHost(process.env.ZETASS_POS_PINNED_DOMAIN ? `https://${process.env.ZETASS_POS_PINNED_DOMAIN}` : undefined),
   ].filter(Boolean) as string[]
 
@@ -77,6 +73,27 @@ function pinnedHosts() {
 
 export function configureElectronSecurity(isDev: boolean) {
   const defaultSession = session.defaultSession
+
+  const CSP = [
+    "default-src 'self'",
+    `script-src 'self'${isDev ? " 'unsafe-inline' 'unsafe-eval'" : ''}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "connect-src 'self' ws://localhost:* http://localhost:* https://*.supabase.co wss://*.supabase.co https://api.openai.com https://api.fonnte.com https://quickchart.io https://script.google.com",
+    "font-src 'self'",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+  ].join('; ')
+
+  defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [CSP],
+      },
+    })
+  })
 
   defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
     const origin = requestingOrigin || webContents?.getURL() || ''
@@ -105,6 +122,10 @@ export function configureElectronSecurity(isDev: boolean) {
     const host = request.hostname.toLowerCase()
     const hostPins = pins.get(host)
     if (!hostPins) {
+      if (host.endsWith('.supabase.co') || host.endsWith('.supabaseapp.com')) {
+        callback(0)
+        return
+      }
       callback(request.verificationResult === 'OK' ? 0 : -2)
       return
     }

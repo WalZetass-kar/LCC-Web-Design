@@ -8,6 +8,7 @@ import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
 import ConfirmDialog from '../components/ConfirmDialog'
 import type { Tutorial } from '../../shared/types'
+import { SkeletonPage } from '../components/Skeleton'
 
 // Simple markdown-like renderer (bold, headings, lists, code)
 function renderContent(text: string) {
@@ -199,6 +200,8 @@ export default function Tutorials() {
   const filtered = tutorials.filter(t =>
     t.title.toLowerCase().includes(search.toLowerCase())
   )
+
+  if (loading) return <SkeletonPage rows={6} />
 
   const handleDelete = async () => {
     if (!deleteTarget) return

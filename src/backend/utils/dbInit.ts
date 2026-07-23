@@ -173,6 +173,68 @@ export function initDatabase() {
         notes TEXT
       )
     `).run()
+
+    sqlite.prepare(`
+      CREATE TABLE IF NOT EXISTS mediasoft_daily_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tanggal TEXT NOT NULL,
+        judul TEXT NOT NULL,
+        isi TEXT NOT NULL,
+        jenis TEXT DEFAULT 'info',
+        username TEXT DEFAULT '',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run()
+
+    sqlite.prepare(`
+      CREATE TABLE IF NOT EXISTS mediasoft_petty_cash (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tanggal TEXT NOT NULL,
+        keterangan TEXT NOT NULL,
+        kategori TEXT DEFAULT 'Lainnya',
+        jumlah REAL DEFAULT 0,
+        jenis TEXT DEFAULT 'keluar',
+        username TEXT DEFAULT '',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run()
+
+    sqlite.prepare(`
+      CREATE TABLE IF NOT EXISTS mediasoft_notification_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        stok_menipis INTEGER DEFAULT 1,
+        stok_habis INTEGER DEFAULT 1,
+        hutang_jatuh_tempo INTEGER DEFAULT 1,
+        lisensi_expire INTEGER DEFAULT 1,
+        target_penjualan INTEGER DEFAULT 0,
+        min_stok INTEGER DEFAULT 5,
+        notif_wa INTEGER DEFAULT 0,
+        wa_number TEXT DEFAULT '',
+        notif_in_app INTEGER DEFAULT 1,
+        quiet_start TEXT DEFAULT '22:00',
+        quiet_end TEXT DEFAULT '06:00',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run()
+
+    sqlite.prepare(`
+      CREATE TABLE IF NOT EXISTS mediasoft_stock_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kd_barang TEXT NOT NULL,
+        nama_barang TEXT NOT NULL,
+        jenis TEXT NOT NULL,
+        qty INTEGER DEFAULT 0,
+        stok_sebelum INTEGER DEFAULT 0,
+        stok_sesudah INTEGER DEFAULT 0,
+        keterangan TEXT,
+        username TEXT DEFAULT '',
+        direction TEXT DEFAULT 'neutral',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run()
     
     // Insert default data if empty
     const taxCount = sqlite.prepare('SELECT COUNT(*) as count FROM mediasoft_tax_settings').get() as any
@@ -193,6 +255,18 @@ export function initDatabase() {
         sqlite.prepare('INSERT INTO mediasoft_loyalty_tiers (name, min_points, discount_percent, benefits, color) VALUES (?, ?, ?, ?, ?)').run(t.name, t.min_points, t.discount_percent, t.benefits, t.color)
       }
       console.log('✅ Default loyalty tiers created')
+    }
+
+    const notifCount = sqlite.prepare('SELECT COUNT(*) as count FROM mediasoft_notification_settings').get() as any
+    if (notifCount?.count === 0) {
+      sqlite.prepare(`
+        INSERT INTO mediasoft_notification_settings (
+          id, stok_menipis, stok_habis, hutang_jatuh_tempo, lisensi_expire,
+          target_penjualan, min_stok, notif_wa, wa_number, notif_in_app,
+          quiet_start, quiet_end
+        ) VALUES (1, 1, 1, 1, 1, 0, 5, 0, '', 1, '22:00', '06:00')
+      `).run()
+      console.log('✅ Default notification settings created')
     }
     
     console.log('✅ Database initialization complete')

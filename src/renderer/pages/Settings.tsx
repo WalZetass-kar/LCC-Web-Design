@@ -1,18 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toDataURL } from 'qrcode'
-import { Sun, Moon, Palette, Store, Receipt, Barcode, Printer, Database, Bell, AlertTriangle, Server, RefreshCw, Wifi, Bot, FileSpreadsheet, KeyRound, QrCode, Copy, CheckCircle2, Code2, ExternalLink, MessageCircle } from 'lucide-react'
-import Card from '../components/Card'
+import {
+  Sun, Moon, Palette, Store, Receipt, Barcode, Printer, Database, Bell, AlertTriangle,
+  Server, RefreshCw, Wifi, Bot, FileSpreadsheet, KeyRound, QrCode, Copy, CheckCircle2,
+  Code2, ExternalLink, MessageCircle, ChevronLeft, Search, Monitor, Shield, HardDrive,
+  Info, User, Fingerprint,
+} from 'lucide-react'
 import Button from '../components/Button'
 import Input from '../components/Input'
-import ConfirmDialog from '../components/ConfirmDialog'
 import Modal from '../components/Modal'
+import appLogo from '../assets/app-logo.png'
 import { useTheme, type ThemeColor } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
+import { secureStorage } from '../utils/secureStorage'
 import { playDangerSound, playWarningSound } from '../utils/sound'
 import { collectAuthDeviceInfo } from '../utils/authDevice'
+import { SkeletonPage } from '../components/Skeleton'
 import { openWhatsApp, SUBSCRIPTION_UPGRADE_WA_NUMBER } from '../utils/whatsapp'
 import { DEFAULT_INDUSTRY_SETTINGS, defaultBaseUrlForProvider, defaultModelForProvider, normalizeIndustrySettings, type AiProvider, type IndustrySettings } from '../../shared/industrySettings'
 import type { Identitas } from '../../shared/types'
@@ -36,38 +42,96 @@ const COLORS: { key: ThemeColor; label: string; hex: string }[] = [
 
 type SyncMode = 'server' | 'client'
 
+type SettingCategory =
+  | 'tampilan'
+  | 'akun'
+  | 'sinkronisasi'
+  | 'toko'
+  | 'perangkat'
+  | 'notifikasi'
+  | 'backup'
+  | 'jaringan'
+  | 'tentang'
+
+interface CategoryDef {
+  id: SettingCategory
+  label: string
+  description: string
+  icon: React.ReactNode
+  color: string
+}
+
+const CATEGORIES: CategoryDef[] = [
+  { id: 'tampilan', label: 'Tampilan', description: 'Tema warna dan mode tampilan', icon: <Palette size={20} />, color: 'bg-violet-500' },
+  { id: 'akun', label: 'Akun', description: 'Ganti sandi dan profil pengguna', icon: <User size={20} />, color: 'bg-blue-500' },
+  { id: 'sinkronisasi', label: 'Sinkronisasi', description: 'Multi-device dan pairing', icon: <Server size={20} />, color: 'bg-emerald-500' },
+  { id: 'toko', label: 'Toko', description: 'Identitas, pajak, struk, dan barcode', icon: <Store size={20} />, color: 'bg-amber-500' },
+  { id: 'perangkat', label: 'Perangkat', description: 'Pengaturan perangkat lokal', icon: <Monitor size={20} />, color: 'bg-cyan-500' },
+  { id: 'notifikasi', label: 'Notifikasi', description: 'Batas stok dan pengingat', icon: <Bell size={20} />, color: 'bg-rose-500' },
+  { id: 'backup', label: 'Backup', description: 'Cadangan database otomatis', icon: <HardDrive size={20} />, color: 'bg-teal-500' },
+  { id: 'jaringan', label: 'Jaringan', description: 'AI, Google Sheets, dan integrasi', icon: <Bot size={20} />, color: 'bg-pink-500' },
+  { id: 'tentang', label: 'Tentang', description: 'Info aplikasi dan pengembang', icon: <Info size={20} />, color: 'bg-slate-500' },
+]
+
 export default function Settings() {
   const { color, mode, setColor, setMode } = useTheme()
   const [customColor, setCustomColor] = useState(color.startsWith('#') ? color : '#ec4899')
-  const { user, logout } = useAuth()
+  const { user, logout, refreshUser } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
   const [identitas, setIdentitas] = useState<Partial<Identitas>>({})
   const [syncStatus, setSyncStatus] = useState<any>(null)
-  const [syncForm, setSyncForm] = useState({ enabled: false, mode: 'server' as SyncMode, port: '38573', baseUrl: '', token: '', deviceName: '' })
-  const [syncQr, setSyncQr] = useState('')
+  const [syncError, setSyncError] = useState('')
+  const [syncLoading, setSyncLoading] = useState(false)
+  const [syncForm, setSyncForm] = useState({
+    enabled: false,
+    mode: 'server' as SyncMode,
+    port: '38573',
+    baseUrl: '',
+    token: '',
+    deviceName: '',
+  })
   const [pairingText, setPairingText] = useState('')
+  const [syncQr, setSyncQr] = useState('')
   const [industrySettings, setIndustrySettings] = useState<IndustrySettings>(DEFAULT_INDUSTRY_SETTINGS)
   const [industryLoading, setIndustryLoading] = useState(false)
-  const [testingSheets, setTestingSheets] = useState(false)
-  const [testingAi, setTestingAi] = useState(false)
-  const [loadingAiModels, setLoadingAiModels] = useState(false)
   const [aiModels, setAiModels] = useState<string[]>([])
-  const [syncLoading, setSyncLoading] = useState(false)
+  const [loadingAiModels, setLoadingAiModels] = useState(false)
+  const [testingAi, setTestingAi] = useState(false)
+  const [testingSheets, setTestingSheets] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [resetting, setResetting] = useState(false)
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' })
   const [changingPassword, setChangingPassword] = useState(false)
+  const [profileForm, setProfileForm] = useState({ nama_lengkap: '', email: '', no_telp: '', foto: '' })
+  const [savingProfile, setSavingProfile] = useState(false)
+
+  const [activeCategory, setActiveCategory] = useState<SettingCategory | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
-    api<Identitas>('identitas:get').then(r => {
-      if (r.success && r.data) setIdentitas(r.data)
-    })
-    loadSyncStatus()
-    loadIndustrySettings()
+    Promise.all([
+      api<Identitas>('identitas:get').then(r => {
+        if (r.success && r.data) setIdentitas(r.data)
+      }),
+      loadSyncStatus(),
+      loadIndustrySettings(),
+    ]).finally(() => setInitialLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (user) {
+      setProfileForm({
+        nama_lengkap: user.nama_lengkap ?? '',
+        email: user.email ?? '',
+        no_telp: (user as any).no_telp ?? '',
+        foto: (user as any).foto ?? '',
+      })
+    }
+  }, [user?.nama_lengkap, user?.email])
 
   const loadSyncStatus = async () => {
     const r = await api<any>('sync:getStatus')
@@ -106,10 +170,13 @@ export default function Settings() {
 
   const saveIdentitas = async () => {
     setLoading(true)
-    const r = await api('identitas:save', identitas)
-    setLoading(false)
-    if (r.success) toast(r.message as string)
-    else toast(r.message as string, 'error')
+    try {
+      const r = await api('identitas:save', identitas)
+      if (r.success) toast(r.message as string)
+      else toast(r.message as string, 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const isAndroidSyncClient = syncStatus?.mode === 'android-client'
@@ -154,22 +221,28 @@ export default function Settings() {
   const saveIndustrySettings = async () => {
     if (industrySettings.aiEnabled && industrySettings.aiProvider !== 'local') {
       setTestingAi(true)
-      const test = await api('integrations:testAi', industrySettings)
-      setTestingAi(false)
-      if (!test.success) {
-        toast(test.message as string || 'Koneksi AI gagal. Periksa provider, base URL, model, dan API key.', 'error')
-        return
+      try {
+        const test = await api('integrations:testAi', industrySettings)
+        if (!test.success) {
+          toast(test.message as string || 'Koneksi AI gagal. Periksa provider, base URL, model, dan API key.', 'error')
+          return
+        }
+      } finally {
+        setTestingAi(false)
       }
     }
 
     setIndustryLoading(true)
-    const r = await api<IndustrySettings>('integrations:save', industrySettings)
-    setIndustryLoading(false)
-    if (r.success && r.data) {
-      setIndustrySettings(normalizeIndustrySettings(r.data))
-      toast('Pengaturan industri disimpan', 'success')
-    } else {
-      toast(r.message as string || 'Gagal menyimpan pengaturan industri', 'error')
+    try {
+      const r = await api<IndustrySettings>('integrations:save', industrySettings)
+      if (r.success && r.data) {
+        setIndustrySettings(normalizeIndustrySettings(r.data))
+        toast('Pengaturan industri disimpan', 'success')
+      } else {
+        toast(r.message as string || 'Gagal menyimpan pengaturan industri', 'error')
+      }
+    } finally {
+      setIndustryLoading(false)
     }
   }
 
@@ -195,20 +268,32 @@ export default function Settings() {
       return
     }
     if (industrySettings.aiProvider === 'gemini') {
-      toast('Daftar model otomatis saat ini hanya untuk provider OpenAI-compatible', 'error')
+      setAiModels([
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash-002',
+        'gemini-1.5-pro-002',
+      ])
+      if (!industrySettings.aiModel) changeIndustrySetting('aiModel', 'gemini-2.0-flash')
+      toast('Daftar model Gemini dimuat dari default', 'success')
       return
     }
 
     setLoadingAiModels(true)
-    const r = await api<string[]>('integrations:listAiModels', industrySettings)
-    setLoadingAiModels(false)
-    if (r.success) {
-      const models = r.data ?? []
-      setAiModels(models)
-      if (!industrySettings.aiModel && models[0]) changeIndustrySetting('aiModel', models[0])
-      toast(r.message as string || 'Daftar model dimuat', 'success')
-    } else {
-      toast(r.message as string || 'Gagal memuat daftar model', 'error')
+    try {
+      const r = await api<string[]>('integrations:listAiModels', industrySettings)
+      if (r.success) {
+        const models = r.data ?? []
+        setAiModels(models)
+        if (!industrySettings.aiModel && models[0]) changeIndustrySetting('aiModel', models[0])
+        toast(r.message as string || 'Daftar model dimuat', 'success')
+      } else {
+        toast(r.message as string || 'Gagal memuat daftar model', 'error')
+      }
+    } finally {
+      setLoadingAiModels(false)
     }
   }
 
@@ -219,16 +304,22 @@ export default function Settings() {
     }
 
     setTestingAi(true)
-    const r = await api('integrations:testAi', industrySettings)
-    setTestingAi(false)
-    toast(r.message as string || (r.success ? 'Koneksi AI berhasil' : 'Koneksi AI gagal'), r.success ? 'success' : 'error')
+    try {
+      const r = await api('integrations:testAi', industrySettings)
+      toast(r.message as string || (r.success ? 'Koneksi AI berhasil' : 'Koneksi AI gagal'), r.success ? 'success' : 'error')
+    } finally {
+      setTestingAi(false)
+    }
   }
 
   const testGoogleSheets = async () => {
     setTestingSheets(true)
-    const r = await api('integrations:testGoogleSheets')
-    setTestingSheets(false)
-    toast(r.message as string || (r.success ? 'Google Sheets tersambung' : 'Google Sheets gagal'), r.success ? 'success' : 'error')
+    try {
+      const r = await api('integrations:testGoogleSheets')
+      toast(r.message as string || (r.success ? 'Google Sheets tersambung' : 'Google Sheets gagal'), r.success ? 'success' : 'error')
+    } finally {
+      setTestingSheets(false)
+    }
   }
 
   const copyGoogleSheetsScript = async () => {
@@ -286,17 +377,20 @@ export default function Settings() {
       setSyncForm(prev => ({ ...prev, baseUrl: url.url! }))
     }
     setSyncLoading(true)
-    const payload = isSyncClient
-      ? { enabled: syncForm.enabled, baseUrl: syncForm.baseUrl, token: syncForm.token, deviceName: syncForm.deviceName }
-      : { enabled: syncForm.enabled, port: parseInt(syncForm.port, 10), token: syncForm.token }
-    const channel = isAndroidSyncClient || !isSyncClient ? 'sync:saveConfig' : 'sync:saveClientConfig'
-    const r = await api<any>(channel, payload)
-    setSyncLoading(false)
-    if (r.success) {
-      toast(r.message as string || 'Sinkronisasi disimpan', 'success')
-      await loadSyncStatus()
-    } else {
-      toast(r.message as string || 'Gagal menyimpan sinkronisasi', 'error')
+    try {
+      const payload = isSyncClient
+        ? { enabled: syncForm.enabled, baseUrl: syncForm.baseUrl, token: syncForm.token, deviceName: syncForm.deviceName }
+        : { enabled: syncForm.enabled, port: parseInt(syncForm.port, 10), token: syncForm.token }
+      const channel = isAndroidSyncClient || !isSyncClient ? 'sync:saveConfig' : 'sync:saveClientConfig'
+      const r = await api<any>(channel, payload)
+      if (r.success) {
+        toast(r.message as string || 'Sinkronisasi disimpan', 'success')
+        await loadSyncStatus()
+      } else {
+        toast(r.message as string || 'Gagal menyimpan sinkronisasi', 'error')
+      }
+    } finally {
+      setSyncLoading(false)
     }
   }
 
@@ -309,31 +403,37 @@ export default function Settings() {
       }
     }
     setSyncLoading(true)
-    const channel = isAndroidSyncClient
-      ? 'sync:testConnection'
-      : isSyncClient
-        ? 'sync:testClientConnection'
-        : 'sync:testConnection'
-    const payload = isSyncClient ? { baseUrl: syncForm.baseUrl, token: syncForm.token, deviceName: syncForm.deviceName } : undefined
-    const r = await api<any>(channel, payload)
-    setSyncLoading(false)
-    if (r.success) {
-      toast(r.message as string || 'Sinkronisasi tersambung', 'success')
-      await loadSyncStatus()
-    } else {
-      toast(r.message as string || 'Sinkronisasi gagal', 'error')
+    try {
+      const channel = isAndroidSyncClient
+        ? 'sync:testConnection'
+        : isSyncClient
+          ? 'sync:testClientConnection'
+          : 'sync:testConnection'
+      const payload = isSyncClient ? { baseUrl: syncForm.baseUrl, token: syncForm.token, deviceName: syncForm.deviceName } : undefined
+      const r = await api<any>(channel, payload)
+      if (r.success) {
+        toast(r.message as string || 'Sinkronisasi tersambung', 'success')
+        await loadSyncStatus()
+      } else {
+        toast(r.message as string || 'Sinkronisasi gagal', 'error')
+      }
+    } finally {
+      setSyncLoading(false)
     }
   }
 
   const rotateSyncToken = async () => {
     setSyncLoading(true)
-    const r = await api<any>('sync:rotateToken')
-    setSyncLoading(false)
-    if (r.success) {
-      toast(r.message as string || 'Token diganti', 'success')
-      await loadSyncStatus()
-    } else {
-      toast(r.message as string || 'Gagal mengganti token', 'error')
+    try {
+      const r = await api<any>('sync:rotateToken')
+      if (r.success) {
+        toast(r.message as string || 'Token diganti', 'success')
+        await loadSyncStatus()
+      } else {
+        toast(r.message as string || 'Gagal mengganti token', 'error')
+      }
+    } finally {
+      setSyncLoading(false)
     }
   }
 
@@ -396,6 +496,57 @@ export default function Settings() {
     )
   }
 
+  const handleSaveProfile = async () => {
+    if (!user?.nama_pengguna) return
+    if (!profileForm.nama_lengkap.trim()) {
+      toast('Nama lengkap wajib diisi', 'error')
+      return
+    }
+    setSavingProfile(true)
+    try {
+      const r = await api('user:update', user.nama_pengguna, {
+        nama_lengkap: profileForm.nama_lengkap.trim(),
+        email: profileForm.email.trim() || null,
+        no_telp: profileForm.no_telp.trim() || null,
+        foto: profileForm.foto || null,
+      })
+      if (r.success) {
+        toast('Profil berhasil diperbarui', 'success')
+        try {
+          const raw = secureStorage.getItem('pos_session')
+          if (raw) {
+            const stored = typeof raw === 'string' ? JSON.parse(raw) : raw
+            stored.nama_lengkap = profileForm.nama_lengkap.trim()
+            stored.email = profileForm.email.trim() || null
+            stored.foto = profileForm.foto || null
+            secureStorage.setJSON('pos_session', stored)
+          }
+        } catch { /* ignore */ }
+        refreshUser()
+      } else {
+        toast(r.message as string || 'Gagal memperbarui profil', 'error')
+      }
+    } catch (error) {
+      toast('Gagal memperbarui profil: ' + String(error), 'error')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) {
+      toast('Ukuran foto maksimal 2MB', 'error')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setProfileForm(prev => ({ ...prev, foto: reader.result as string }))
+    }
+    reader.readAsDataURL(file)
+  }
+
   const openResetDialog = () => {
     playWarningSound()
     setConfirmReset(true)
@@ -411,639 +562,204 @@ export default function Settings() {
 
     playDangerSound()
     setResetting(true)
-    const r = await api('system:resetData')
-    setResetting(false)
-    if (r.success) {
-      toast('Semua data berhasil direset!', 'success')
-      setConfirmReset(false)
-      setTimeout(() => window.location.reload(), 1500)
-    } else {
-      toast(r.message as string || 'Gagal reset data', 'error')
+    try {
+      const r = await api('system:resetData')
+      if (r.success) {
+        toast('Semua data berhasil direset!', 'success')
+        setConfirmReset(false)
+        setTimeout(() => window.location.reload(), 1500)
+      } else {
+        toast(r.message as string || 'Gagal reset data', 'error')
+      }
+    } finally {
+      setResetting(false)
     }
   }
 
   const f = (k: string, v: string | number) => setIdentitas(prev => ({ ...prev, [k]: v }))
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-      <div className="space-y-4 lg:space-y-6">
-        <Card title="Tema Warna" action={<Palette size={16} className="text-slate-400" />}>
-          <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-3 flex-wrap mt-1">
-            {COLORS.map(c => (
-              <button 
-                key={c.key} 
-                onClick={() => setColor(c.key)} 
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 transition-all text-sm font-medium ${
-                  color === c.key 
-                    ? 'shadow-md scale-105' 
-                    : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
-                }`}
-                style={{ 
-                  color: c.hex,
-                  borderColor: color === c.key ? c.hex : undefined
-                }}
-              >
-                <span className="w-4 h-4 rounded-full" style={{ backgroundColor: c.hex }} />
-                {c.label}
-              </button>
-            ))}
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery.trim()) return CATEGORIES
+    const q = searchQuery.toLowerCase()
+    return CATEGORIES.filter(
+      cat => cat.label.toLowerCase().includes(q) || cat.description.toLowerCase().includes(q)
+    )
+  }, [searchQuery])
 
-            <div className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-primary-400 transition-all relative overflow-hidden group">
-              <input 
-                type="color" 
-                value={customColor} 
-                onChange={(e) => {
-                  setCustomColor(e.target.value)
-                  setColor(e.target.value)
-                }}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-              />
-              <span className="w-4 h-4 rounded-full shadow-sm border border-white" style={{ backgroundColor: customColor }} />
-              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Custom</span>
-            </div>
+  if (initialLoading) return <SkeletonPage rows={6} />
+
+  if (activeCategory) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setActiveCategory(null)}
+            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <ChevronLeft size={20} className="text-slate-600 dark:text-slate-300" />
+          </button>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              {CATEGORIES.find(c => c.id === activeCategory)?.label}
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {CATEGORIES.find(c => c.id === activeCategory)?.description}
+            </p>
           </div>
-          {color.startsWith('#') && (
-            <p className="text-[10px] text-slate-400 mt-3 font-mono">Custom Color: {color.toUpperCase()}</p>
+        </div>
+
+        <div className="space-y-3">
+          {activeCategory === 'tampilan' && (
+            <TampilanSettings
+              color={color}
+              mode={mode}
+              customColor={customColor}
+              setCustomColor={setCustomColor}
+              setColor={setColor}
+              setMode={setMode}
+            />
           )}
-        </Card>
-
-        <Card title="Mode Tampilan">
-          <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-3 mt-1">
-            {(['light', 'dark'] as const).map(m => (
-              <button key={m} onClick={() => setMode(m)} className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all ${mode === m ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400' : 'border-slate-200 dark:border-slate-600 text-slate-500 hover:border-primary-300'}`}>
-                {m === 'light' ? <Sun size={16} /> : <Moon size={16} />}
-                {m === 'light' ? 'Light Mode' : 'Dark Mode'}
-              </button>
-            ))}
-          </div>
-        </Card>
-
-        <Card title="Ganti Sandi Akun" action={<KeyRound size={16} className="text-slate-400" />}>
-          <div className="mt-1 space-y-3">
-            <Input
-              label="Sandi Saat Ini"
-              type="password"
-              value={passwordForm.current}
-              onChange={e => updatePasswordField('current', e.target.value)}
-              autoComplete="current-password"
+          {activeCategory === 'akun' && (
+            <AkunSettings
+              user={user}
+              profileForm={profileForm}
+              setProfileForm={setProfileForm}
+              savingProfile={savingProfile}
+              handleSaveProfile={handleSaveProfile}
+              handlePhotoUpload={handlePhotoUpload}
+              passwordForm={passwordForm}
+              updatePasswordField={updatePasswordField}
+              handleChangePassword={handleChangePassword}
+              changingPassword={changingPassword}
+              contactDeveloperForPassword={contactDeveloperForPassword}
             />
-            <Input
-              label="Sandi Baru"
-              type="password"
-              value={passwordForm.next}
-              onChange={e => updatePasswordField('next', e.target.value)}
-              autoComplete="new-password"
-              helperText="Minimal 8 karakter dengan huruf besar, huruf kecil, angka, dan simbol"
+          )}
+          {activeCategory === 'sinkronisasi' && (
+            <SinkronisasiSettings
+              syncStatus={syncStatus}
+              syncForm={syncForm}
+              setSyncForm={setSyncForm}
+              syncLoading={syncLoading}
+              syncQr={syncQr}
+              pairingText={pairingText}
+              setPairingText={setPairingText}
+              isAndroidSyncClient={isAndroidSyncClient}
+              isSyncClient={isSyncClient}
+              saveSync={saveSync}
+              testSync={testSync}
+              rotateSyncToken={rotateSyncToken}
+              copyPairingData={copyPairingData}
+              applyPairingData={applyPairingData}
             />
-            <Input
-              label="Konfirmasi Sandi Baru"
-              type="password"
-              value={passwordForm.confirm}
-              onChange={e => updatePasswordField('confirm', e.target.value)}
-              autoComplete="new-password"
+          )}
+          {activeCategory === 'toko' && (
+            <TokoSettings
+              identitas={identitas}
+              f={f}
+              loading={loading}
+              saveIdentitas={saveIdentitas}
             />
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-300">
-              Setelah sandi diganti, semua sesi lama dicabut dan Anda perlu login ulang.
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={contactDeveloperForPassword}
-                icon={<MessageCircle size={14} />}
-                className="w-full sm:w-auto"
-              >
-                Lupa Sandi?
-              </Button>
-              <Button
-                type="button"
-                loading={changingPassword}
-                onClick={handleChangePassword}
-                className="w-full sm:w-auto"
-              >
-                Simpan Sandi Baru
-              </Button>
-            </div>
-          </div>
-        </Card>
+          )}
+          {activeCategory === 'perangkat' && (
+            <PerangkatSettings
+              identitas={identitas}
+              f={f}
+              loading={loading}
+              saveIdentitas={saveIdentitas}
+            />
+          )}
+          {activeCategory === 'notifikasi' && (
+            <NotifikasiSettings
+              identitas={identitas}
+              f={f}
+              loading={loading}
+              saveIdentitas={saveIdentitas}
+            />
+          )}
+          {activeCategory === 'backup' && (
+            <BackupSettings
+              industrySettings={industrySettings}
+              changeIndustrySetting={changeIndustrySetting}
+              industryLoading={industryLoading}
+              saveIndustrySettings={saveIndustrySettings}
+            />
+          )}
+          {activeCategory === 'jaringan' && (
+            <JaringanSettings
+              industrySettings={industrySettings}
+              changeIndustrySetting={changeIndustrySetting}
+              changeAiProvider={changeAiProvider}
+              aiModels={aiModels}
+              loadingAiModels={loadingAiModels}
+              testingAi={testingAi}
+              testingSheets={testingSheets}
+              industryLoading={industryLoading}
+              loadAiModels={loadAiModels}
+              testAiConnection={testAiConnection}
+              testGoogleSheets={testGoogleSheets}
+              saveIndustrySettings={saveIndustrySettings}
+              copyGoogleSheetsScript={copyGoogleSheetsScript}
+              openAppsScript={openAppsScript}
+            />
+          )}
+          {activeCategory === 'tentang' && <TentangSettings />}
+        </div>
+      </div>
+    )
+  }
 
-        <Card title="Identitas Toko" action={<Store size={16} className="text-slate-400" />}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
-            <Input label="Nama Toko" value={identitas.namatoko ?? ''} onChange={e => f('namatoko', e.target.value)} />
-            <Input label="No. Telepon" value={identitas.nomortelptoko ?? ''} onChange={e => f('nomortelptoko', e.target.value)} />
-            <Input label="No. WhatsApp Owner" value={identitas.nomorwaowner ?? ''} onChange={e => f('nomorwaowner', e.target.value)} />
-            <Input label="Email Owner" value={identitas.alamatemailowner ?? ''} onChange={e => f('alamatemailowner', e.target.value)} />
-            <div className="col-span-1 sm:col-span-2">
-              <Input label="Alamat Toko" value={identitas.alamattoko ?? ''} onChange={e => f('alamattoko', e.target.value)} />
-            </div>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button loading={loading} onClick={saveIdentitas} className="w-full sm:w-auto">Simpan Identitas</Button>
-          </div>
-        </Card>
-
-        <Card title="Pengaturan Pajak (PPN)" action={<Receipt size={16} className="text-slate-400" />}>
-          <div className="mt-1 space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <Input label="Persentase PPN (%)" type="number" value={identitas.pajak_persen ?? 0} onChange={e => f('pajak_persen', e.target.value)} placeholder="0" />
-                <p className="text-xs text-slate-400 mt-1">Isi 0 untuk menonaktifkan pajak. Contoh: isi 11 untuk PPN 11%.</p>
-              </div>
-              <div className="shrink-0 text-center px-4 py-3 rounded-xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-700">
-                <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{identitas.pajak_persen ?? 0}%</p>
-                <p className="text-xs text-slate-500">PPN aktif</p>
-              </div>
-            </div>
-            {(identitas.pajak_persen ?? 0) > 0 && (
-              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-400">
-                Pajak PPN {identitas.pajak_persen}% akan ditambahkan ke setiap transaksi dan ditampilkan di struk.
-              </div>
-            )}
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button loading={loading} onClick={saveIdentitas} className="w-full sm:w-auto">Simpan Pengaturan Pajak</Button>
-          </div>
-        </Card>
-
-        <Card title="Asisten AI & Google Sheets" action={<Bot size={16} className={industrySettings.aiEnabled ? 'text-emerald-500' : 'text-slate-400'} />}>
-          <div className="space-y-4 mt-1">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
-              <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">AI Online Opsional</p>
-                <p className="text-xs text-slate-400 mt-0.5">Fallback lokal tetap aktif saat API tidak tersedia</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={industrySettings.aiEnabled}
-                  onChange={e => changeIndustrySetting('aiEnabled', e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
-              </label>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Provider AI</label>
-                <select
-                  value={industrySettings.aiProvider}
-                  onChange={e => changeAiProvider(e.target.value as AiProvider)}
-                  className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                >
-                  <option value="local">Lokal gratis</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="gemini">Gemini</option>
-                  <option value="custom">Custom OpenAI-Compatible</option>
-                  <option value="deepseek">DeepSeek</option>
-                  <option value="openrouter">OpenRouter</option>
-                  <option value="bluesminds">BluesMinds</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Model</label>
-                <div className="flex gap-2">
-                  {aiModels.length > 0 ? (
-                    <select
-                      value={industrySettings.aiModel}
-                      onChange={e => changeIndustrySetting('aiModel', e.target.value)}
-                      className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 transition-all duration-200 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                    >
-                      {aiModels.map(model => <option key={model} value={model}>{model}</option>)}
-                    </select>
-                  ) : (
-                    <input
-                      value={industrySettings.aiModel}
-                      onChange={e => changeIndustrySetting('aiModel', e.target.value)}
-                      placeholder={defaultModelForProvider(industrySettings.aiProvider) || 'nama-model'}
-                      className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 transition-all duration-200 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                    />
-                  )}
-                  {industrySettings.aiProvider !== 'local' && industrySettings.aiProvider !== 'gemini' && (
-                    <Button type="button" variant="secondary" loading={loadingAiModels} onClick={loadAiModels} icon={<RefreshCw size={14} />} className="shrink-0">
-                      Model
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {industrySettings.aiProvider !== 'local' && (
-              <>
-                <Input
-                  label="API Key AI"
-                  type="password"
-                  value={industrySettings.aiApiKey}
-                  onChange={e => changeIndustrySetting('aiApiKey', e.target.value)}
-                  placeholder="Masukkan API key provider"
-                  icon={<KeyRound size={16} />}
-                />
-                <Input
-                  label="Base URL"
-                  value={industrySettings.aiBaseUrl}
-                  onChange={e => changeIndustrySetting('aiBaseUrl', e.target.value)}
-                  placeholder={industrySettings.aiProvider === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : appConfig.aiProviderUrl || defaultBaseUrlForProvider(industrySettings.aiProvider)}
-                  helperText={industrySettings.aiProvider === 'bluesminds' ? 'Gunakan https://api.bluesminds.com/v1. Chat memakai /v1/chat/completions dan model memakai /v1beta/models.' : undefined}
-                />
-              </>
-            )}
-
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-700 space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
-                <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Export Google Sheets Otomatis</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Gunakan URL Web App Apps Script</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={industrySettings.googleSheetsEnabled}
-                    onChange={e => changeIndustrySetting('googleSheetsEnabled', e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
-                </label>
-              </div>
-              <Input
-                label="Apps Script Web App URL"
-                value={industrySettings.googleSheetsWebAppUrl}
-                onChange={e => changeIndustrySetting('googleSheetsWebAppUrl', e.target.value)}
-                placeholder="https://script.google.com/macros/s/.../exec"
-                icon={<FileSpreadsheet size={16} />}
-                helperText="Buat script dari file Google Sheets target, deploy sebagai Web App, lalu tempel URL /exec di sini."
-              />
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button type="button" variant="secondary" onClick={copyGoogleSheetsScript} icon={<Code2 size={14} />} className="w-full sm:w-auto">
-                  Salin Template Script
-                </Button>
-                <Button type="button" variant="ghost" onClick={openAppsScript} icon={<ExternalLink size={14} />} className="w-full sm:w-auto">
-                  Buka Apps Script
-                </Button>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
-                <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Backup Otomatis Produksi</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Dipakai scheduler harian desktop</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={industrySettings.autoBackupEnabled}
-                    onChange={e => changeIndustrySetting('autoBackupEnabled', e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
-                </label>
-              </div>
-              <Input
-                label="Retensi Backup (hari)"
-                type="number"
-                min={1}
-                max={365}
-                value={industrySettings.backupRetentionDays}
-                onChange={e => changeIndustrySetting('backupRetentionDays', Number(e.target.value))}
-              />
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2 justify-end">
-              <Button variant="secondary" loading={testingSheets} onClick={testGoogleSheets} icon={<CheckCircle2 size={14} />} className="w-full sm:w-auto">
-                Tes Google Sheets
-              </Button>
-              <Button variant="secondary" loading={testingAi} onClick={testAiConnection} icon={<Bot size={14} />} className="w-full sm:w-auto">
-                Tes AI
-              </Button>
-              <Button loading={industryLoading} onClick={saveIndustrySettings} className="w-full sm:w-auto">
-                Simpan Integrasi
-              </Button>
-            </div>
-          </div>
-        </Card>
+  return (
+    <div className="space-y-4">
+      <div className="relative">
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Cari pengaturan..."
+          className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+        />
       </div>
 
-      <div className="space-y-4 lg:space-y-6">
-        <Card title="Sinkronisasi Multi-Device" action={<Server size={16} className={syncStatus?.running || syncForm.enabled ? 'text-emerald-500' : 'text-slate-400'} />}>
-          <div className="space-y-4 mt-1">
-            {!isAndroidSyncClient && (
-              <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setSyncForm(prev => ({
-                    ...prev,
-                    mode: 'server',
-                    enabled: Boolean(syncStatus?.enabled),
-                    baseUrl: syncStatus?.urls?.[1] ?? syncStatus?.urls?.[0] ?? prev.baseUrl,
-                    token: syncStatus?.token ?? prev.token,
-                  }))}
-                  className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                    syncForm.mode === 'server'
-                      ? 'bg-white text-primary-700 shadow-sm dark:bg-slate-700 dark:text-primary-300'
-                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                  }`}
-                >
-                  Server Developer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSyncForm(prev => ({
-                    ...prev,
-                    mode: 'client',
-                    enabled: Boolean(syncStatus?.client?.enabled),
-                    baseUrl: syncStatus?.client?.baseUrl ?? '',
-                    token: syncStatus?.client?.token ?? '',
-                    deviceName: syncStatus?.client?.deviceName ?? prev.deviceName,
-                  }))}
-                  className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                    syncForm.mode === 'client'
-                      ? 'bg-white text-primary-700 shadow-sm dark:bg-slate-700 dark:text-primary-300'
-                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                  }`}
-                >
-                  Client Device
-                </button>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
-              <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                  {isSyncClient ? 'Mode Client ke Server Developer' : 'Server Developer Pusat'}
-                </p>
-                <p className={`text-xs mt-0.5 ${syncStatus?.running || syncForm.enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
-                  {isSyncClient
-                    ? (syncForm.enabled ? 'Aktif' : 'Offline lokal')
-                    : (syncStatus?.running ? 'Aktif' : 'Nonaktif')}
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={syncForm.enabled}
-                  onChange={e => setSyncForm(prev => ({ ...prev, enabled: e.target.checked }))}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
-              </label>
+      <div className="space-y-1">
+        {filteredCategories.map(cat => (
+          <button
+            key={cat.id}
+            onClick={() => setActiveCategory(cat.id)}
+            className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-left group"
+          >
+            <div className={`w-10 h-10 rounded-xl ${cat.color} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+              {cat.icon}
             </div>
-
-            {isSyncClient ? (
-              <>
-                {!isAndroidSyncClient && (
-                  <Input
-                    label="Nama Device"
-                    value={syncForm.deviceName}
-                    onChange={e => setSyncForm(prev => ({ ...prev, deviceName: e.target.value }))}
-                    placeholder="Kasir Windows 1"
-                  />
-                )}
-                <Input
-                  label="URL Server Developer"
-                  value={syncForm.baseUrl}
-                  onChange={e => setSyncForm(prev => ({ ...prev, baseUrl: e.target.value }))}
-                  placeholder="http://192.168.1.10:38573"
-                  icon={<Wifi size={16} />}
-                  helperText="Bisa HTTP untuk IP LAN privat, atau HTTPS untuk domain produksi."
-                />
-                <Input
-                  label="Token"
-                  value={syncForm.token}
-                  onChange={e => setSyncForm(prev => ({ ...prev, token: e.target.value }))}
-                  placeholder="Token dari server developer"
-                />
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Data Pairing QR</label>
-                  <textarea
-                    value={pairingText}
-                    onChange={e => setPairingText(e.target.value)}
-                    placeholder="Tempel data pairing dari QR desktop"
-                    className="w-full min-h-[90px] rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-mono text-slate-700 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
-                  />
-                  <Button type="button" variant="secondary" onClick={applyPairingData} icon={<QrCode size={14} />} className="w-full">
-                    Terapkan Pairing
-                  </Button>
-                </div>
-                {syncStatus?.client?.lastConnectedAt && (
-                  <p className="text-xs text-slate-400">Terakhir tersambung: {new Date(syncStatus.client.lastConnectedAt).toLocaleString('id-ID')}</p>
-                )}
-                {syncStatus?.client?.lastError && (
-                  <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-400">
-                    {syncStatus.client.lastError}
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <Input
-                  label="Port"
-                  type="number"
-                  value={syncForm.port}
-                  onChange={e => setSyncForm(prev => ({ ...prev, port: e.target.value }))}
-                />
-                <Input
-                  label="Token"
-                  value={syncForm.token}
-                  onChange={e => setSyncForm(prev => ({ ...prev, token: e.target.value }))}
-                />
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">URL Server Developer</p>
-                  {(syncStatus?.urls ?? []).map((url: string) => (
-                    <div key={url} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                      {url}
-                    </div>
-                  ))}
-                </div>
-                {syncQr && (
-                  <div className="grid grid-cols-1 sm:grid-cols-[180px_minmax(0,1fr)] gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
-                    <img src={syncQr} alt="QR pairing sinkronisasi" className="w-[180px] h-[180px] rounded-lg bg-white p-2" />
-                    <div className="flex flex-col justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">QR Pairing Device</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          QR berisi URL desktop dan token sinkronisasi. Simpan token ini seperti password.
-                        </p>
-                      </div>
-                      <Button type="button" variant="secondary" onClick={copyPairingData} icon={<Copy size={14} />} className="w-full sm:w-auto">
-                        Salin Data Pairing
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {syncStatus?.lastRequestAt && (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
-                    Request terakhir: {syncStatus.lastChannel || '-'} pada {new Date(syncStatus.lastRequestAt).toLocaleString('id-ID')} ({syncStatus.requestCount || 0} request)
-                  </div>
-                )}
-                {(syncStatus?.devices ?? []).length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Device Terhubung</p>
-                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                      {(syncStatus.devices ?? []).map((device: any) => (
-                        <div key={device.deviceId} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-slate-700 dark:text-slate-200">{device.deviceName || 'Device POS'}</p>
-                              <p className="mt-0.5 truncate text-slate-400">{device.address || '-'} - {device.lastChannel || '-'}</p>
-                            </div>
-                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">
-                              {device.requestCount || 0} req
-                            </span>
-                          </div>
-                          <p className="mt-1 text-slate-400">Terakhir: {device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString('id-ID') : '-'}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {syncStatus?.error && (
-                  <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-400">
-                    {syncStatus.error}
-                  </div>
-                )}
-              </>
-            )}
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button loading={syncLoading} onClick={saveSync} className="w-full sm:w-auto">Simpan Sinkronisasi</Button>
-              <Button variant="secondary" loading={syncLoading} onClick={testSync} icon={<RefreshCw size={14} />} className="w-full sm:w-auto">Tes</Button>
-              {!isAndroidSyncClient && !isSyncClient && (
-                <Button variant="secondary" loading={syncLoading} onClick={rotateSyncToken} className="w-full sm:w-auto">Ganti Token</Button>
-              )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">{cat.label}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{cat.description}</p>
             </div>
-          </div>
-        </Card>
-
-        <Card title="Pengaturan Barcode" action={<Barcode size={16} className="text-slate-400" />}>
-          <div className="mt-1 space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
-              <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Auto-generate Barcode</p>
-                <p className="text-xs text-slate-400 mt-0.5">Generate barcode otomatis untuk produk baru</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" checked={identitas.auto_barcode === 1} onChange={e => f('auto_barcode', e.target.checked ? 1 : 0)} className="sr-only peer" />
-                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
-              </label>
-            </div>
-            <Input label="Prefix Barcode" value={identitas.barcode_prefix ?? 'POS'} onChange={e => f('barcode_prefix', e.target.value)} placeholder="POS" />
-            <p className="text-xs text-slate-400">Contoh: POS0001, POS0002, dst.</p>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button loading={loading} onClick={saveIdentitas} className="w-full sm:w-auto">Simpan Pengaturan Barcode</Button>
-          </div>
-        </Card>
-
-        <Card title="Pengaturan Struk" action={<Printer size={16} className="text-slate-400" />}>
-          <div className="mt-1 space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
-              <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Auto Print Struk</p>
-                <p className="text-xs text-slate-400 mt-0.5">Cetak struk otomatis setelah transaksi</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" checked={identitas.auto_print === 1} onChange={e => f('auto_print', e.target.checked ? 1 : 0)} className="sr-only peer" />
-                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
-              </label>
-            </div>
-            <Input label="Footer Struk" value={identitas.struk_footer ?? 'Terima kasih atas kunjungan Anda'} onChange={e => f('struk_footer', e.target.value)} placeholder="Terima kasih..." />
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button loading={loading} onClick={saveIdentitas} className="w-full sm:w-auto">Simpan Pengaturan Struk</Button>
-          </div>
-        </Card>
-
-        <Card title="Auto Backup Database" action={<Database size={16} className="text-slate-400" />}>
-          <div className="mt-1 space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
-              <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Auto Backup Harian</p>
-                <p className="text-xs text-slate-400 mt-0.5">Backup database otomatis setiap hari pukul 23:00</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" checked={identitas.auto_backup === 1} onChange={e => f('auto_backup', e.target.checked ? 1 : 0)} className="sr-only peer" />
-                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
-              </label>
-            </div>
-            <Input label="Simpan Backup Terakhir (hari)" type="number" value={identitas.backup_retention ?? 7} onChange={e => f('backup_retention', e.target.value)} placeholder="7" />
-            <p className="text-xs text-slate-400">Backup lama akan dihapus otomatis setelah periode ini.</p>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button loading={loading} onClick={saveIdentitas} className="w-full sm:w-auto">Simpan Pengaturan Backup</Button>
-          </div>
-        </Card>
-
-        <Card title="Pengaturan Notifikasi" action={<Bell size={16} className="text-slate-400" />}>
-          <div className="mt-1 space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
-              <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Notifikasi Stok Menipis</p>
-                <p className="text-xs text-slate-400 mt-0.5">Tampilkan notifikasi saat stok produk menipis</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" checked={identitas.notif_stok === 1} onChange={e => f('notif_stok', e.target.checked ? 1 : 0)} className="sr-only peer" />
-                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600"></div>
-              </label>
-            </div>
-            <Input label="Batas Stok Minimum" type="number" value={identitas.min_stok ?? 5} onChange={e => f('min_stok', e.target.value)} placeholder="5" />
-            <p className="text-xs text-slate-400">Notifikasi muncul jika stok produk ≤ nilai ini.</p>
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button loading={loading} onClick={saveIdentitas} className="w-full sm:w-auto">Simpan Pengaturan Notifikasi</Button>
-          </div>
-        </Card>
-
-        {/* Reset Data - Danger Zone */}
-        <Card title="Zona Berbahaya" action={<AlertTriangle size={16} className="text-red-500" />}>
-          <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800">
-            <div className="flex items-start gap-3 mb-3">
-              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/40">
-                <AlertTriangle className="text-red-600 dark:text-red-400" size={24} />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-bold text-red-700 dark:text-red-400 mb-1">Reset Semua Data</h3>
-                <p className="text-sm text-red-600 dark:text-red-400 leading-relaxed">
-                  Menghapus <strong>SEMUA</strong> data transaksi, produk, customer, supplier, dan pengaturan. 
-                  Tindakan ini <strong>TIDAK DAPAT DIBATALKAN</strong>!
-                </p>
-              </div>
-            </div>
-            
-            <div className="space-y-2 text-xs text-red-600 dark:text-red-400 mb-4 pl-2 border-l-2 border-red-300 dark:border-red-700">
-              <p>✗ Semua transaksi penjualan & pembelian</p>
-              <p>✗ Semua data produk & stok</p>
-              <p>✗ Semua data customer & supplier</p>
-              <p>✗ Semua data kas & shift</p>
-              <p>✗ Riwayat backup & activity log</p>
-            </div>
-
-            <Button 
-              variant="danger" 
-              onClick={openResetDialog}
-              className="w-full"
-            >
-              <AlertTriangle size={16} />
-              Reset Semua Data
-            </Button>
-          </div>
-        </Card>
+            <ChevronLeft size={16} className="text-slate-300 dark:text-slate-600 rotate-180 group-hover:text-primary-500 transition-colors shrink-0" />
+          </button>
+        ))}
       </div>
 
-      <p className="text-xs text-slate-400 text-center lg:col-span-2">Zetass Pos — Preferensi tema disimpan otomatis</p>
+      {filteredCategories.length === 0 && (
+        <div className="text-center py-12">
+          <Search size={32} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Tidak ada pengaturan ditemukan</p>
+        </div>
+      )}
 
-      {/* Confirm Reset Dialog */}
+      <p className="text-xs text-slate-400 text-center pt-2">Zetass Pos - Preferensi disimpan otomatis</p>
+
       <Modal
         open={confirmReset}
         onClose={() => {
           setConfirmReset(false)
           setConfirmText('')
         }}
-        title="🚨 PERINGATAN KERAS - ZONA BERBAHAYA!"
+        title="PERINGATAN - ZONA BERBAHAYA!"
         size="lg"
       >
         <div className="space-y-4">
-          {/* Warning Banner */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white animate-pulse">
+          <div className="p-4 rounded-xl bg-red-500 text-white animate-pulse">
             <div className="flex items-center gap-3">
               <AlertTriangle size={32} className="shrink-0" />
               <div>
@@ -1053,56 +769,27 @@ export default function Settings() {
             </div>
           </div>
 
-          {/* Data yang akan dihapus */}
           <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800">
             <p className="font-bold text-red-700 dark:text-red-400 mb-3 flex items-center gap-2">
               <Database size={18} />
               Data yang akan DIHAPUS PERMANEN:
             </p>
             <div className="grid grid-cols-2 gap-2 text-sm text-red-600 dark:text-red-400">
-              <div className="flex items-center gap-2">
-                <span className="text-red-500">✗</span>
-                <span>Transaksi Penjualan</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-red-500">✗</span>
-                <span>Transaksi Pembelian</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-red-500">✗</span>
-                <span>Data Produk & Stok</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-red-500">✗</span>
-                <span>Data Customer</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-red-500">✗</span>
-                <span>Data Supplier</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-red-500">✗</span>
-                <span>Data Kas & Shift</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-red-500">✗</span>
-                <span>Hutang & Piutang</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-red-500">✗</span>
-                <span>Backup & Activity Log</span>
-              </div>
+              {['Transaksi Penjualan', 'Transaksi Pembelian', 'Data Produk & Stok', 'Data Customer', 'Data Supplier', 'Data Kas & Shift', 'Hutang & Piutang', 'Backup & Activity Log'].map(item => (
+                <div key={item} className="flex items-center gap-2">
+                  <span className="text-red-500">X</span>
+                  <span>{item}</span>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Data yang tetap tersimpan */}
           <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-700 dark:text-blue-400">
-              <strong>✓ Data yang TETAP tersimpan:</strong> User & Identitas Toko
+              <strong>Data yang TETAP tersimpan:</strong> User & Identitas Toko
             </p>
           </div>
 
-          {/* Konfirmasi Input */}
           <div className="space-y-2">
             <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">
               Ketik <span className="text-red-600 dark:text-red-400 font-mono bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">RESET SEMUA DATA</span> untuk konfirmasi:
@@ -1123,7 +810,6 @@ export default function Settings() {
             )}
           </div>
 
-          {/* Action Buttons */}
           <div className="flex gap-3 pt-2">
             <Button
               variant="secondary"
@@ -1147,13 +833,622 @@ export default function Settings() {
               {resetting ? 'Menghapus...' : 'Ya, Reset Semua Data'}
             </Button>
           </div>
-
-          {/* Final Warning */}
-          <div className="text-center text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700">
-            Pastikan Anda sudah backup data sebelum melanjutkan
-          </div>
         </div>
       </Modal>
+    </div>
+  )
+}
+
+// ─── Sub-page Components ──────────────────────────────────────────────────────
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="relative inline-flex items-center cursor-pointer">
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="sr-only peer" />
+      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 dark:peer-focus:ring-primary-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary-600" />
+    </label>
+  )
+}
+
+function SettingRow({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+      {children}
+    </div>
+  )
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pt-2 pb-1 px-1">{children}</p>
+}
+
+function TampilanSettings({ color, mode, customColor, setCustomColor, setColor, setMode }: {
+  color: string; mode: string; customColor: string; setCustomColor: (v: string) => void
+  setColor: (v: ThemeColor) => void; setMode: (v: 'light' | 'dark') => void
+}) {
+  return (
+    <div className="space-y-3">
+      <SectionTitle>Mode Tampilan</SectionTitle>
+      <div className="grid grid-cols-2 gap-2">
+        {(['light', 'dark'] as const).map(m => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
+              mode === m
+                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+                : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-primary-300'
+            }`}
+          >
+            {m === 'light' ? <Sun size={16} /> : <Moon size={16} />}
+            {m === 'light' ? 'Light Mode' : 'Dark Mode'}
+          </button>
+        ))}
+      </div>
+
+      <SectionTitle>Tema Warna</SectionTitle>
+      <div className="grid grid-cols-2 gap-2">
+        {COLORS.map(c => (
+          <button
+            key={c.key}
+            onClick={() => setColor(c.key)}
+            className={`relative flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border-2 transition-all text-sm font-medium ${
+              color === c.key
+                ? 'shadow-md scale-[1.02]'
+                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+            }`}
+            style={{
+              color: c.hex,
+              borderColor: color === c.key ? c.hex : undefined,
+              backgroundColor: color === c.key ? `${c.hex}15` : undefined,
+            }}
+          >
+            <span className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: c.hex }} />
+            {c.label}
+            {color === c.key && <CheckCircle2 size={14} className="shrink-0" style={{ color: c.hex }} />}
+          </button>
+        ))}
+        <div
+          className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border-2 transition-all relative overflow-hidden ${
+            color.startsWith('#')
+              ? 'border-dashed shadow-md scale-[1.02]'
+              : 'border-dashed border-slate-300 dark:border-slate-600 hover:border-primary-400'
+          }`}
+          style={{ borderColor: color.startsWith('#') ? customColor : undefined }}
+        >
+          <input
+            type="color"
+            value={customColor}
+            onChange={(e) => { setCustomColor(e.target.value); setColor(e.target.value) }}
+            className="absolute inset-0 opacity-0 cursor-pointer"
+          />
+          <span className="w-4 h-4 rounded-full shadow-sm border border-white" style={{ backgroundColor: customColor }} />
+          <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Custom</span>
+          {color.startsWith('#') && <CheckCircle2 size={14} className="shrink-0 text-slate-500" />}
+        </div>
+      </div>
+      {color.startsWith('#') && (
+        <p className="text-[10px] text-slate-400 font-mono px-1">Custom Color: {color.toUpperCase()}</p>
+      )}
+    </div>
+  )
+}
+
+function AkunSettings({ user, profileForm, setProfileForm, savingProfile, handleSaveProfile, handlePhotoUpload, passwordForm, updatePasswordField, handleChangePassword, changingPassword, contactDeveloperForPassword }: {
+  user: any; profileForm: any; setProfileForm: (fn: any) => void; savingProfile: boolean; handleSaveProfile: () => void
+  handlePhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
+  passwordForm: any; updatePasswordField: (k: 'current' | 'next' | 'confirm', v: string) => void
+  handleChangePassword: () => void; changingPassword: boolean; contactDeveloperForPassword: () => void
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  return (
+    <div className="space-y-3">
+      <SectionTitle>Profil Pengguna</SectionTitle>
+      <div className="space-y-3">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="relative group shrink-0 w-20 h-20 rounded-2xl overflow-hidden border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-red-400 transition-colors"
+          >
+            {profileForm.foto ? (
+              <img src={profileForm.foto} alt="Foto Profil" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400">
+                <User size={28} />
+                <span className="text-[9px] mt-0.5">Upload</span>
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <span className="text-white text-[10px] font-bold">Ganti</span>
+            </div>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handlePhotoUpload}
+            className="hidden"
+          />
+          <div className="flex-1">
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Foto Profil</p>
+            <p className="text-[11px] text-slate-400">Klik untuk upload. Maks 2MB.</p>
+          </div>
+        </div>
+        <Input
+          label="Nama Lengkap"
+          value={profileForm.nama_lengkap}
+          onChange={e => setProfileForm((prev: any) => ({ ...prev, nama_lengkap: e.target.value }))}
+          placeholder="Nama lengkap Anda"
+          icon={<User size={16} />}
+        />
+        <Input
+          label="Email"
+          type="email"
+          value={profileForm.email}
+          onChange={e => setProfileForm((prev: any) => ({ ...prev, email: e.target.value }))}
+          placeholder="email@contoh.com"
+        />
+        <Input
+          label="No. Telepon"
+          value={profileForm.no_telp}
+          onChange={e => setProfileForm((prev: any) => ({ ...prev, no_telp: e.target.value }))}
+          placeholder="08xxxxxxxxxx"
+        />
+        <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5">
+          <div>
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Username</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{user?.nama_pengguna ?? '-'}</p>
+          </div>
+          <Fingerprint size={20} className="text-primary-500" />
+        </div>
+        <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5">
+          <div>
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Role</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{user?.hak_akses ?? 'user'}</p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          loading={savingProfile}
+          onClick={handleSaveProfile}
+          className="w-full"
+        >
+          Simpan Profil
+        </Button>
+      </div>
+
+      <SectionTitle>Ganti Sandi</SectionTitle>
+      <div className="space-y-3">
+        <Input
+          label="Sandi Saat Ini"
+          type="password"
+          value={passwordForm.current}
+          onChange={e => updatePasswordField('current', e.target.value)}
+          autoComplete="current-password"
+        />
+        <Input
+          label="Sandi Baru"
+          type="password"
+          value={passwordForm.next}
+          onChange={e => updatePasswordField('next', e.target.value)}
+          autoComplete="new-password"
+          helperText="Minimal 8 karakter dengan huruf besar, kecil, angka, dan simbol"
+        />
+        <Input
+          label="Konfirmasi Sandi Baru"
+          type="password"
+          value={passwordForm.confirm}
+          onChange={e => updatePasswordField('confirm', e.target.value)}
+          autoComplete="new-password"
+        />
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-300">
+          Setelah sandi diganti, semua sesi lama dicabut dan Anda perlu login ulang.
+        </div>
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={contactDeveloperForPassword}
+            icon={<MessageCircle size={14} />}
+            className="w-full"
+          >
+            Lupa Sandi?
+          </Button>
+          <Button
+            type="button"
+            loading={changingPassword}
+            onClick={handleChangePassword}
+            className="w-full"
+          >
+            Simpan Sandi Baru
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SinkronisasiSettings({ syncStatus, syncForm, setSyncForm, syncLoading, syncQr, pairingText, setPairingText, isAndroidSyncClient, isSyncClient, saveSync, testSync, rotateSyncToken, copyPairingData, applyPairingData }: any) {
+  return (
+    <div className="space-y-3">
+      {!isAndroidSyncClient && (
+        <>
+          <SectionTitle>Mode</SectionTitle>
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+            <button
+              type="button"
+              onClick={() => setSyncForm((prev: any) => ({ ...prev, mode: 'server' }))}
+              className={`rounded-lg px-3 py-2.5 text-xs font-semibold transition ${
+                syncForm.mode === 'server'
+                  ? 'bg-white text-primary-700 shadow-sm dark:bg-slate-700 dark:text-primary-300'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              Server Developer
+            </button>
+            <button
+              type="button"
+              onClick={() => setSyncForm((prev: any) => ({ ...prev, mode: 'client' }))}
+              className={`rounded-lg px-3 py-2.5 text-xs font-semibold transition ${
+                syncForm.mode === 'client'
+                  ? 'bg-white text-primary-700 shadow-sm dark:bg-slate-700 dark:text-primary-300'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              Client Device
+            </button>
+          </div>
+        </>
+      )}
+
+      <SettingRow>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+            {isSyncClient ? 'Mode Client ke Server' : 'Server Developer Pusat'}
+          </p>
+          <p className={`text-xs mt-0.5 ${syncStatus?.running || syncForm.enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+            {isSyncClient ? (syncForm.enabled ? 'Aktif' : 'Offline lokal') : (syncStatus?.running ? 'Aktif' : 'Nonaktif')}
+          </p>
+        </div>
+        <Toggle checked={syncForm.enabled} onChange={v => setSyncForm((prev: any) => ({ ...prev, enabled: v }))} />
+      </SettingRow>
+
+      {isSyncClient ? (
+        <div className="space-y-3">
+          {!isAndroidSyncClient && (
+            <Input label="Nama Device" value={syncForm.deviceName} onChange={e => setSyncForm((prev: any) => ({ ...prev, deviceName: e.target.value }))} placeholder="Kasir Windows 1" />
+          )}
+          <Input label="URL Server Developer" value={syncForm.baseUrl} onChange={e => setSyncForm((prev: any) => ({ ...prev, baseUrl: e.target.value }))} placeholder="http://192.168.1.10:38573" icon={<Wifi size={16} />} helperText="Bisa HTTP untuk IP LAN privat, atau HTTPS untuk domain produksi." />
+          <Input label="Token" value={syncForm.token} onChange={e => setSyncForm((prev: any) => ({ ...prev, token: e.target.value }))} placeholder="Token dari server developer" />
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Data Pairing QR</label>
+            <textarea
+              value={pairingText}
+              onChange={e => setPairingText(e.target.value)}
+              placeholder="Tempel data pairing dari QR desktop"
+              className="w-full min-h-[90px] rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-mono text-slate-700 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+            />
+            <Button type="button" variant="secondary" onClick={applyPairingData} icon={<QrCode size={14} />} className="w-full">Terapkan Pairing</Button>
+          </div>
+          {syncStatus?.client?.lastConnectedAt && (
+            <p className="text-xs text-slate-400">Terakhir tersambung: {new Date(syncStatus.client.lastConnectedAt).toLocaleString('id-ID')}</p>
+          )}
+          {syncStatus?.client?.lastError && (
+            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-400">{syncStatus.client.lastError}</div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <Input label="Port" type="number" value={syncForm.port} onChange={e => setSyncForm((prev: any) => ({ ...prev, port: e.target.value }))} />
+          <Input label="Token" value={syncForm.token} onChange={e => setSyncForm((prev: any) => ({ ...prev, token: e.target.value }))} />
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">URL Server Developer</p>
+            {(syncStatus?.urls ?? []).map((url: string) => (
+              <div key={url} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{url}</div>
+            ))}
+          </div>
+          {syncQr && (
+            <div className="grid grid-cols-1 sm:grid-cols-[180px_minmax(0,1fr)] gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
+              <img src={syncQr} alt="QR pairing" className="w-[180px] h-[180px] rounded-lg bg-white p-2" />
+              <div className="flex flex-col justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">QR Pairing Device</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">QR berisi URL desktop dan token sinkronisasi.</p>
+                </div>
+                <Button type="button" variant="secondary" onClick={copyPairingData} icon={<Copy size={14} />} className="w-full">Salin Data Pairing</Button>
+              </div>
+            </div>
+          )}
+          {syncStatus?.lastRequestAt && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+              Request terakhir: {syncStatus.lastChannel || '-'} pada {new Date(syncStatus.lastRequestAt).toLocaleString('id-ID')} ({syncStatus.requestCount || 0} request)
+            </div>
+          )}
+          {(syncStatus?.devices ?? []).length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Device Terhubung</p>
+              <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                {(syncStatus.devices ?? []).map((device: any) => (
+                  <div key={device.deviceId} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-slate-700 dark:text-slate-200">{device.deviceName || 'Device POS'}</p>
+                        <p className="mt-0.5 truncate text-slate-400">{device.address || '-'} - {device.lastChannel || '-'}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">{device.requestCount || 0} req</span>
+                    </div>
+                    <p className="mt-1 text-slate-400">Terakhir: {device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString('id-ID') : '-'}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {syncStatus?.error && (
+            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-400">{syncStatus.error}</div>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <Button loading={syncLoading} onClick={saveSync} className="w-full">Simpan Sinkronisasi</Button>
+        <Button variant="secondary" loading={syncLoading} onClick={testSync} icon={<RefreshCw size={14} />} className="w-full">Tes Koneksi</Button>
+        {!isAndroidSyncClient && !isSyncClient && (
+          <Button variant="secondary" loading={syncLoading} onClick={rotateSyncToken} className="w-full">Ganti Token</Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TokoSettings({ identitas, f, loading, saveIdentitas }: any) {
+  return (
+    <div className="space-y-3">
+      <SectionTitle>Identitas Toko</SectionTitle>
+      <div className="space-y-3">
+        <Input label="Nama Toko" value={identitas.namatoko ?? ''} onChange={e => f('namatoko', e.target.value)} />
+        <Input label="No. Telepon" value={identitas.nomortelptoko ?? ''} onChange={e => f('nomortelptoko', e.target.value)} />
+        <Input label="No. WhatsApp Owner" value={identitas.nomorwaowner ?? ''} onChange={e => f('nomorwaowner', e.target.value)} />
+        <Input label="Email Owner" value={identitas.alamatemailowner ?? ''} onChange={e => f('alamatemailowner', e.target.value)} />
+        <Input label="Alamat Toko" value={identitas.alamattoko ?? ''} onChange={e => f('alamattoko', e.target.value)} />
+      </div>
+
+      <SectionTitle>Pajak (PPN)</SectionTitle>
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <Input label="Persentase PPN (%)" type="number" value={identitas.pajak_persen ?? 0} onChange={e => f('pajak_persen', Number(e.target.value))} placeholder="0" />
+            <p className="text-xs text-slate-400 mt-1">Isi 0 untuk menonaktifkan pajak.</p>
+          </div>
+          <div className="shrink-0 text-center px-4 py-3 rounded-xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-700">
+            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">{identitas.pajak_persen ?? 0}%</p>
+          </div>
+        </div>
+      </div>
+
+      <SectionTitle>Struk</SectionTitle>
+      <div className="space-y-3">
+        <SettingRow>
+          <div>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Auto Print Struk</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Cetak struk otomatis setelah transaksi</p>
+          </div>
+          <Toggle checked={identitas.auto_print === 1} onChange={v => f('auto_print', v ? 1 : 0)} />
+        </SettingRow>
+        <Input label="Footer Struk" value={identitas.struk_footer ?? 'Terima kasih atas kunjungan Anda'} onChange={e => f('struk_footer', e.target.value)} placeholder="Terima kasih..." />
+      </div>
+
+      <SectionTitle>Barcode</SectionTitle>
+      <div className="space-y-3">
+        <SettingRow>
+          <div>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Auto-generate Barcode</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Generate barcode otomatis untuk produk baru</p>
+          </div>
+          <Toggle checked={identitas.auto_barcode === 1} onChange={v => f('auto_barcode', v ? 1 : 0)} />
+        </SettingRow>
+        <Input label="Prefix Barcode" value={identitas.barcode_prefix ?? 'POS'} onChange={e => f('barcode_prefix', e.target.value)} placeholder="POS" />
+        <p className="text-xs text-slate-400">Contoh: POS0001, POS0002, dst.</p>
+      </div>
+
+      <Button loading={loading} onClick={saveIdentitas} className="w-full">Simpan Pengaturan Toko</Button>
+    </div>
+  )
+}
+
+function PerangkatSettings({ identitas, f, loading, saveIdentitas }: any) {
+  return (
+    <div className="space-y-3">
+      <SectionTitle>Device Info</SectionTitle>
+      <SettingRow>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Platform</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{navigator.userAgent.includes('Mobile') ? 'Android' : 'Desktop'}</p>
+        </div>
+        <Monitor size={20} className="text-primary-500" />
+      </SettingRow>
+
+      <SectionTitle>Data & Penyimpanan</SectionTitle>
+      <SettingRow>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Lokal Database</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">SQLite via Drizzle ORM</p>
+        </div>
+        <Database size={20} className="text-emerald-500" />
+      </SettingRow>
+
+      <Button loading={loading} onClick={saveIdentitas} className="w-full">Simpan Pengaturan Perangkat</Button>
+    </div>
+  )
+}
+
+function NotifikasiSettings({ identitas, f, loading, saveIdentitas }: any) {
+  return (
+    <div className="space-y-3">
+      <SectionTitle>Notifikasi Stok</SectionTitle>
+      <SettingRow>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Notifikasi Stok Menipis</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Tampilkan notifikasi saat stok produk menipis</p>
+        </div>
+        <Toggle checked={identitas.notif_stok === 1} onChange={v => f('notif_stok', v ? 1 : 0)} />
+      </SettingRow>
+      <Input label="Batas Stok Minimum" type="number" value={identitas.min_stok ?? 5} onChange={e => f('min_stok', parseInt(e.target.value, 10) || 5)} placeholder="5" />
+      <p className="text-xs text-slate-400">Notifikasi muncul jika stok produk kurang dari atau sama dengan nilai ini.</p>
+
+      <Button loading={loading} onClick={saveIdentitas} className="w-full">Simpan Pengaturan Notifikasi</Button>
+    </div>
+  )
+}
+
+function BackupSettings({ industrySettings, changeIndustrySetting, industryLoading, saveIndustrySettings }: any) {
+  return (
+    <div className="space-y-3">
+      <SectionTitle>Auto Backup Database</SectionTitle>
+      <SettingRow>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Auto Backup Harian</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Backup database otomatis setiap hari pukul 23:00</p>
+        </div>
+        <Toggle checked={industrySettings.autoBackupEnabled} onChange={v => changeIndustrySetting('autoBackupEnabled', v)} />
+      </SettingRow>
+      <Input label="Retensi Backup (hari)" type="number" min={1} max={365} value={industrySettings.backupRetentionDays} onChange={e => changeIndustrySetting('backupRetentionDays', Number(e.target.value))} />
+
+      <SectionTitle>Google Sheets</SectionTitle>
+      <SettingRow>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">Export Google Sheets Otomatis</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Gunakan URL Web App Apps Script</p>
+        </div>
+        <Toggle checked={industrySettings.googleSheetsEnabled} onChange={v => changeIndustrySetting('googleSheetsEnabled', v)} />
+      </SettingRow>
+      <Input label="Apps Script Web App URL" value={industrySettings.googleSheetsWebAppUrl} onChange={e => changeIndustrySetting('googleSheetsWebAppUrl', e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" icon={<FileSpreadsheet size={16} />} helperText="Buat script dari file Google Sheets target, deploy sebagai Web App, lalu tempel URL /exec di sini." />
+      <div className="flex flex-col gap-2">
+        <Button variant="secondary" onClick={() => navigator.clipboard.writeText(GOOGLE_SHEETS_APPS_SCRIPT).then(() => {}) } icon={<Code2 size={14} />} className="w-full">Salin Template Script</Button>
+      </div>
+
+      <Button loading={industryLoading} onClick={saveIndustrySettings} className="w-full">Simpan Pengaturan Backup</Button>
+    </div>
+  )
+}
+
+function JaringanSettings({ industrySettings, changeIndustrySetting, changeAiProvider, aiModels, loadingAiModels, testingAi, testingSheets, industryLoading, loadAiModels, testAiConnection, testGoogleSheets, saveIndustrySettings, copyGoogleSheetsScript, openAppsScript }: any) {
+  return (
+    <div className="space-y-3">
+      <SectionTitle>Asisten AI</SectionTitle>
+      <SettingRow>
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">AI Online Opsional</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Fallback lokal tetap aktif saat API tidak tersedia</p>
+        </div>
+        <Toggle checked={industrySettings.aiEnabled} onChange={v => changeIndustrySetting('aiEnabled', v)} />
+      </SettingRow>
+
+      <div className="space-y-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Provider AI</label>
+          <select
+            value={industrySettings.aiProvider}
+            onChange={e => changeAiProvider(e.target.value as AiProvider)}
+            className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+          >
+            <option value="local">Lokal gratis</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Gemini</option>
+            <option value="custom">Custom OpenAI-Compatible</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="bluesminds">BluesMinds</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Model</label>
+          <div className="flex gap-2">
+            {aiModels.length > 0 ? (
+              <select
+                value={industrySettings.aiModel}
+                onChange={e => changeIndustrySetting('aiModel', e.target.value)}
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              >
+                {aiModels.map((model: string) => <option key={model} value={model}>{model}</option>)}
+              </select>
+            ) : (
+              <input
+                value={industrySettings.aiModel}
+                onChange={e => changeIndustrySetting('aiModel', e.target.value)}
+                placeholder={defaultModelForProvider(industrySettings.aiProvider) || 'nama-model'}
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              />
+            )}
+            {industrySettings.aiProvider !== 'local' && (
+              <Button type="button" variant="secondary" loading={loadingAiModels} onClick={loadAiModels} icon={<RefreshCw size={14} />} className="shrink-0">Model</Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {industrySettings.aiProvider !== 'local' && (
+        <div className="space-y-3">
+          <Input label="API Key AI" type="password" value={industrySettings.aiApiKey} onChange={e => changeIndustrySetting('aiApiKey', e.target.value)} placeholder="Masukkan API key provider" icon={<KeyRound size={16} />} />
+          <Input label="Base URL" value={industrySettings.aiBaseUrl} onChange={e => changeIndustrySetting('aiBaseUrl', e.target.value)} placeholder={industrySettings.aiProvider === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : appConfig.aiProviderUrl || defaultBaseUrlForProvider(industrySettings.aiProvider)} />
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <Button variant="secondary" loading={testingAi} onClick={testAiConnection} icon={<Bot size={14} />} className="w-full">Tes Koneksi AI</Button>
+      </div>
+
+      <SectionTitle>Integrasi</SectionTitle>
+      <div className="flex flex-col gap-2">
+        <Button variant="secondary" loading={testingSheets} onClick={testGoogleSheets} icon={<CheckCircle2 size={14} />} className="w-full">Tes Google Sheets</Button>
+        <Button variant="secondary" onClick={copyGoogleSheetsScript} icon={<Code2 size={14} />} className="w-full">Salin Template Script</Button>
+        <Button variant="ghost" onClick={openAppsScript} icon={<ExternalLink size={14} />} className="w-full">Buka Apps Script</Button>
+      </div>
+
+      <Button loading={industryLoading} onClick={saveIndustrySettings} className="w-full">Simpan Pengaturan Jaringan</Button>
+    </div>
+  )
+}
+
+function TentangSettings() {
+  return (
+    <div className="space-y-3">
+      <SectionTitle>Aplikasi</SectionTitle>
+      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-4">
+          <img src={appLogo} alt="Zetass POS" className="w-14 h-14 rounded-2xl object-cover shadow-md shadow-red-500/20 border border-slate-200 dark:border-slate-700 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Zetass POS</h3>
+              <span className="px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 border border-red-500/20 text-[10px] font-bold uppercase">v2.0.0</span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Sistem Point of Sale (POS)</p>
+            <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-red-600 text-white text-xs font-bold shadow-sm shadow-red-600/20">
+              <span>Developer By WalZetass-Kar</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <SectionTitle>Detail Teknis</SectionTitle>
+      <div className="grid grid-cols-1 gap-2">
+        <SettingRow>
+          <div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Pengembang</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">WalZetass-Kar</p>
+            <p className="text-[11px] text-slate-400">Principal Engineer & Lead Architect</p>
+          </div>
+          <User size={20} className="text-primary-500" />
+        </SettingRow>
+        <SettingRow>
+          <div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Teknologi</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Vite + React + Capacitor</p>
+            <p className="text-[11px] text-slate-400">SQLite - Drizzle ORM - TailwindCSS</p>
+          </div>
+          <Code2 size={20} className="text-emerald-500" />
+        </SettingRow>
+      </div>
     </div>
   )
 }

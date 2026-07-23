@@ -5,6 +5,7 @@ import { sqlite } from '../../database/connection.js'
 import { demoSession } from '../services/demoSessionManager.js'
 import { validatePasswordStrength } from '../../shared/passwordPolicy.js'
 import { hashPassword } from '../services/crypto.js'
+import { LicenseController } from './LicenseController.js'
 import { getSubscriptionStatus, hasSubscriptionBypass } from '../middleware/subscriptionGuard.js'
 
 // Role hierarchy: developer > admin > operator > kasir
@@ -14,6 +15,7 @@ const UNLIMITED_ACCESS_ROLES = ['developer']
 const LOCAL_ROLES = new Set(ROLE_HIERARCHY)
 const ADMIN_MANAGED_ROLES = new Set(['operator', 'kasir'])
 const PIN_PATTERN = /^\d{4,8}$/
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type UserRoleRecord = { hak_akses?: string | null } | null | undefined
 
@@ -346,6 +348,12 @@ export class UserController {
   }
 
   static async changePassword(username: string, oldPassword: string, newPassword: string) {
+    let localPasswordUpdated = false
+    let remotePasswordUpdated = false
+    let originalPassword = ''
+    let originalPasswordHashType: string | null = null
+    let originalMustChange = 0
+
     try {
       const user = PenggunaModel.findByUsername(username)
       if (!user) {
@@ -381,11 +389,60 @@ export class UserController {
         return { success: false, message: passwordValidation.message }
       }
 
-      await PenggunaModel.updatePassword(username, newPassword)
+      const requiresRemoteSync = Number(user.is_buyer ?? 0) === 1
+      const remoteEmail = (user.email ?? '').trim().toLowerCase() || (EMAIL_PATTERN.test(username) ? username.trim().toLowerCase() : '')
+      originalPassword = user.kata_sandi ?? ''
+      originalPasswordHashType = user.password_hash_type ?? null
+      originalMustChange = Number(user.must_change_password ?? 0)
+
+      const updateResult = await PenggunaModel.updatePassword(username, newPassword)
+      localPasswordUpdated = Number((updateResult as { changes?: number } | undefined)?.changes ?? 0) > 0
+      if (!localPasswordUpdated) {
+        return { success: false, message: 'Gagal mengubah password' }
+      }
+
+      if (requiresRemoteSync) {
+        if (!EMAIL_PATTERN.test(remoteEmail)) {
+          throw new Error('Email akun tidak valid untuk sinkronisasi password ke license server')
+        }
+
+        const remote = await LicenseController.changePassword({
+          email: remoteEmail,
+          oldPassword,
+          newPassword,
+        })
+
+        if (!remote?.success) {
+          throw new Error(remote?.message || 'Gagal sinkronisasi password ke license server')
+        }
+
+        remotePasswordUpdated = true
+      }
+
       AuthSessionModel.revokeAllForUser(username)
 
       return { success: true, message: 'Password berhasil diubah' }
     } catch (error) {
+      if (localPasswordUpdated && !remotePasswordUpdated) {
+        try {
+          sqlite.prepare(`
+            UPDATE mediasoft_pengguna
+            SET kata_sandi = ?,
+                password_hash_type = ?,
+                must_change_password = ?,
+                tgl_wkt_edit = ?
+            WHERE nama_pengguna = ?
+          `).run(
+            originalPassword,
+            originalPasswordHashType,
+            originalMustChange,
+            new Date().toISOString(),
+            username,
+          )
+        } catch {
+          // Ignore restore failures; the original error will be returned below.
+        }
+      }
       return { success: false, message: String(error) }
     }
   }
@@ -399,6 +456,10 @@ export class UserController {
 
       if (isDeveloperAccount(user)) {
         return { success: false, message: developerLockedMessage('direset passwordnya') }
+      }
+
+      if (user.is_buyer) {
+        return { success: false, message: 'Reset password akun pembeli dilakukan melalui tab Pembeli di Developer Panel' }
       }
 
       const passwordValidation = validatePasswordStrength(newPassword)
@@ -442,6 +503,11 @@ export class UserController {
       const deleteUser = sqlite.transaction(() => {
         sqlite.prepare('DELETE FROM mediasoft_grup_pengguna_hak_akses WHERE nama_grup = ?').run(username)
         sqlite.prepare('DELETE FROM mediasoft_grup_pengguna WHERE nama_grup = ?').run(username)
+        sqlite.prepare('DELETE FROM mediasoft_error_logs WHERE user_id = ?').run(username)
+        sqlite.prepare('DELETE FROM mediasoft_shifts WHERE user_id = ?').run(username)
+        sqlite.prepare('DELETE FROM mediasoft_debt_payments WHERE created_by = ?').run(username)
+        sqlite.prepare('DELETE FROM mediasoft_auth_sessions WHERE username = ?').run(username)
+        sqlite.prepare('DELETE FROM mediasoft_user_devices WHERE username = ?').run(username)
         PenggunaModel.delete(username)
 
         if (caller) {

@@ -1,20 +1,20 @@
 import { createContext, useContext, useState, useMemo, useEffect, useCallback, type ReactNode } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { Capacitor } from '@capacitor/core'
 import type { UserSession } from '../../shared/types'
 import { api } from '../utils/api'
 import { secureStorage } from '../utils/secureStorage'
 import { collectAuthDeviceInfo } from '../utils/authDevice'
+import { subscribeLicense, syncBuyerLicense, heartbeat as supabaseHeartbeat } from '../../shared/supabase/license'
+import { logActivity } from '../../shared/supabase/logging'
 
 /** Session TTL: 8 hours in milliseconds */
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000
 /** Check session expiry every 60 seconds */
 const EXPIRY_CHECK_INTERVAL_MS = 60 * 1000
-/** Re-check remote Supabase license every 30 seconds while logged in. */
+/** Re-check remote license (Supabase) every 30 seconds while logged in. */
 const REMOTE_LICENSE_SYNC_INTERVAL_MS = 30 * 1000
 const LICENSE_LAST_SUCCESS_KEY = 'license_last_success_at'
-const LICENSE_OFFLINE_GRACE_MS = Number(import.meta.env.VITE_LICENSE_OFFLINE_GRACE_HOURS ?? 72) * 60 * 60 * 1000
-const SUPABASE_REALTIME_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const SUPABASE_REALTIME_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+const LICENSE_OFFLINE_GRACE_MS = Number(import.meta.env.VITE_LICENSE_OFFLINE_GRACE_HOURS ?? 720) * 60 * 60 * 1000
 
 function numericValue(value: unknown): number | null {
   const n = Number(value)
@@ -54,6 +54,7 @@ interface AuthContextValue {
   isDemo: boolean
   login: (user: UserSession) => void
   logout: () => void
+  refreshUser: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -68,6 +69,7 @@ function toPublicSession(session: StoredSession): UserSession {
     nama_pengguna: session.nama_pengguna,
     nama_lengkap: session.nama_lengkap,
     email: session.email ?? null,
+    foto: (session as any).foto ?? null,
     hak_akses: normalizeLocalRole(session.hak_akses),
     access_expires_at: session.access_expires_at ?? null,
     access_days_remaining: session.access_days_remaining ?? null,
@@ -108,6 +110,7 @@ function restoreSession(): StoredSession | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [storageReady, setStorageReady] = useState(() => !Capacitor.isNativePlatform())
   const [user, setUser] = useState<UserSession | null>(() => {
     const restored = restoreSession()
     return restored ? toPublicSession(restored) : null
@@ -130,6 +133,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     secureStorage.removeItem('pos_session')
   }, [user?.nama_pengguna])
+
+  const refreshUser = useCallback(() => {
+    const raw = secureStorage.getItem('pos_session')
+    if (!raw) return
+    try {
+      const stored = JSON.parse(raw) as StoredSession
+      setUser(toPublicSession(stored))
+    } catch { /* ignore */ }
+  }, [])
 
   const login = useCallback((u: UserSession) => {
     const sessionToken = u.session_token
@@ -163,12 +175,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
     secureStorage.ready(['pos_session', 'rememberMe', 'auth_device_id']).then(() => {
-      if (cancelled || user) return
+      if (cancelled) return
+      setStorageReady(true)
       const restored = restoreSession()
-      if (restored) setUser(toPublicSession(restored))
+      if (restored && !user) setUser(toPublicSession(restored))
     })
     return () => { cancelled = true }
-  }, [user])
+  }, [])
 
   useEffect(() => {
     if (!user?.nama_pengguna) return
@@ -226,13 +239,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const sendHeartbeat = () => {
       if (cancelled) return
       const deviceInfo = collectAuthDeviceInfo()
-      void api('license:heartbeat', {
+      void supabaseHeartbeat({
         email: user.email ?? user.nama_pengguna,
-        customer_id: user.remote_customer_id ?? null,
-        auth_user_id: user.remote_auth_user_id ?? null,
-        device: deviceInfo,
-        ...deviceInfo,
-      }, user.remote_license_token ?? null)
+        customerId: user.remote_customer_id ?? undefined,
+        deviceInfo,
+      })
     }
 
     sendHeartbeat()
@@ -252,16 +263,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const report = (errorType: string, message: string, stack?: string) => {
       const deviceInfo = collectAuthDeviceInfo()
-      void api('license:logError', {
-        email: user.email ?? user.nama_pengguna,
-        customer_id: user.remote_customer_id ?? null,
-        auth_user_id: user.remote_auth_user_id ?? null,
-        error_type: errorType,
-        error_message: message.slice(0, 1000),
-        stack_trace: stack?.slice(0, 8000) ?? null,
-        app_version: deviceInfo.appVersion,
-        platform: deviceInfo.platform,
-        device: deviceInfo,
+      void logActivity({
+        username: user.email ?? user.nama_pengguna,
+        action: 'APP_ERROR',
+        module: 'SYSTEM',
+        detail: `${errorType}: ${message.slice(0, 1000)}`,
+        deviceId: deviceInfo.deviceId,
+        userAgent: deviceInfo.userAgent,
       })
     }
     const onError = (event: ErrorEvent) => report('application', event.message || 'Application error', event.error?.stack)
@@ -287,15 +295,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (syncing) return
       syncing = true
       try {
-        const r = await api<any>('license:syncBuyerLicense', user.nama_pengguna, collectAuthDeviceInfo())
+        if (!user.email || !user.email.includes('@')) {
+          if (cancelled) return
+          syncing = false
+          return
+        }
+        const r = await syncBuyerLicense({
+          email: user.email,
+          customerId: user.remote_customer_id ?? undefined,
+          deviceInfo: collectAuthDeviceInfo(),
+        })
         if (cancelled) return
 
-        const data = r.data ?? {}
+        const data: any = r.data ?? {}
         if (r.success) {
           secureStorage.setItem(LICENSE_LAST_SUCCESS_KEY, String(Date.now()))
           const hasSubscriptionPayload = data?.subscription && typeof data.subscription === 'object'
           const subscriptionExpiresAt = typeof data?.subscription?.expires_at === 'string'
-            ? data.subscription.expires_at
+            ? data.subscription?.expires_at
             : hasSubscriptionPayload
               ? null
               : undefined
@@ -353,8 +370,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (code === 'EXPIRED' && data?.subscription?.expires_at) {
           setUser(prev => prev && prev.nama_pengguna === user.nama_pengguna ? {
             ...prev,
-            access_expires_at: data.subscription.expires_at,
-            subscription_expires_at: data.subscription.expires_at,
+            access_expires_at: data.subscription?.expires_at,
+            subscription_expires_at: data.subscription?.expires_at,
             access_days_remaining: 0,
           } : prev)
           return
@@ -385,39 +402,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.nama_pengguna, logout])
 
   useEffect(() => {
-    if (!user?.remote_license_token || !SUPABASE_REALTIME_URL || !SUPABASE_REALTIME_ANON_KEY) return
+    if (!user?.nama_pengguna) return
 
-    const supabase = createClient(SUPABASE_REALTIME_URL, SUPABASE_REALTIME_ANON_KEY, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-      realtime: {
-        params: { eventsPerSecond: 2 },
-      },
-    })
-
-    supabase.realtime.setAuth(user.remote_license_token)
+    // Realtime license-control via Firestore snapshots.
     const notifySync = () => window.dispatchEvent(new Event('license:sync-now'))
-    const customerId = user.remote_customer_id
-    const channel = supabase.channel(`license-control:${customerId || user.nama_pengguna}`)
-
-    if (customerId) {
-      channel
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'license_customers', filter: `id=eq.${customerId}` }, notifySync)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_subscriptions', filter: `customer_id=eq.${customerId}` }, notifySync)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_devices', filter: `customer_id=eq.${customerId}` }, notifySync)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: `customer_id=eq.${customerId}` }, notifySync)
-    }
-
-    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'popup_rules' }, notifySync)
-    channel.subscribe()
+    const unsubscribe = subscribeLicense(
+      {
+        email: user.email ?? user.nama_pengguna,
+        customerId: user.remote_customer_id ?? undefined,
+      },
+      () => notifySync(),
+      () => {
+        /* error listener (misal: belum Supabase-auth). Diabaikan; sync periodik tetap jalan. */
+      },
+    )
 
     return () => {
-      void supabase.removeChannel(channel)
+      unsubscribe()
     }
-  }, [user?.nama_pengguna, user?.remote_customer_id, user?.remote_license_token])
+  }, [user?.nama_pengguna, user?.email, user?.remote_customer_id])
 
   // Auto-logout when session expires
   useEffect(() => {
@@ -431,8 +434,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval)
   }, [user, logout])
 
+  if (!storageReady) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
+        <div className="animate-pulse text-slate-400 text-sm">Memuat...</div>
+      </div>
+    )
+  }
+
   return (
-    <AuthContext.Provider value={{ user, isDemo, login, logout }}>
+    <AuthContext.Provider value={{ user, isDemo, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )

@@ -1,12 +1,14 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import {
-  Activity, Award, BarChart2, BookOpen, BookOpenCheck, Bot, Building2,
-  Calculator, ChevronLeft, ChevronRight, ClipboardCheck, Clock, CreditCard,
-  Crown, Database, DollarSign, Gift, Globe, History, LayoutDashboard, LogOut,
-  MessageCircle, Package, Printer, Rocket, RotateCcw, Ruler, Settings, Shield,
-  ShieldCheck, ShoppingBag, ShoppingCart, Store, Tag, Truck, UserCircle, Users,
-  Wallet, X,
+  Activity, Award, ArrowRightLeft, ArrowUpDown, BarChart2, Bell, BookOpen, BookOpenCheck, Bot, Building2,
+  Calculator, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Clock, CreditCard,
+  Crown, Database, DollarSign, FileText, Gift, Globe, History, LayoutDashboard, LogOut,
+  MessageCircle, Monitor, Package, Plug, Printer, Rocket, RotateCcw, Ruler, Settings, Shield,
+  ShieldCheck, ShoppingBag, ShoppingCart, Star, Store, Tag, Truck, TrendingUp, UserCircle, Users,
+  Wallet, X, UtensilsCrossed, Grid3X3, CalendarCheck, ScrollText, Bike, Landmark, Hammer,
+  PiggyBank, Ticket, MessageSquare, Megaphone, Globe2, FileSpreadsheet, LineChart, Percent,
+  UserPlus, Briefcase, Clock4, HandCoins, Utensils,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -38,6 +40,8 @@ export const MENU_GROUPS: MenuGroup[] = [
       { to: '/assistant', icon: Bot, label: 'Asisten AI', code: 'nav_dashboard' },
       { to: '/transaksi', icon: ShoppingCart, label: 'Kasir', code: 'nav_penjualan' },
       { to: '/riwayat', icon: History, label: 'Riwayat', code: 'nav_penjualan' },
+      { to: '/customer-display-page', icon: Monitor, label: 'Customer Display', code: 'nav_dashboard' },
+      { to: '/daily-notes', icon: FileText, label: 'Daily Notes', code: 'nav_dashboard' },
     ],
   },
   {
@@ -49,6 +53,10 @@ export const MENU_GROUPS: MenuGroup[] = [
       { to: '/pembelian', icon: ShoppingBag, label: 'Pembelian', code: 'nav_pembelian' },
       { to: '/stock-opname', icon: ClipboardCheck, label: 'Stok Opname', code: 'nav_barang', feature: 'stock_opname' },
       { to: '/branch', icon: Building2, label: 'Cabang/Gudang', code: 'nav_branch', roles: ['developer', 'super_admin', 'admin'], feature: 'multi_branch' },
+      { to: '/stock-transfer', icon: ArrowRightLeft, label: 'Transfer Stok', code: 'nav_branch', roles: ['developer', 'super_admin', 'admin'], feature: 'multi_branch' },
+      { to: '/price-list', icon: ClipboardList, label: 'Price List', code: 'nav_barang' },
+      { to: '/stock-history', icon: History, label: 'Riwayat Stok', code: 'nav_barang' },
+      { to: '/supplier-rating', icon: Star, label: 'Supplier Rating', code: 'nav_supplier' },
     ],
   },
   {
@@ -57,6 +65,34 @@ export const MENU_GROUPS: MenuGroup[] = [
       { to: '/supplier', icon: Truck, label: 'Supplier', code: 'nav_supplier' },
       { to: '/customer', icon: UserCircle, label: 'Customer', code: 'nav_supplier' },
       { to: '/loyalty', icon: Award, label: 'Loyalty', code: 'nav_loyalty' },
+      { to: '/membership-card', icon: CreditCard, label: 'Membership Card', code: 'nav_supplier' },
+      { to: '/sales-commission', icon: TrendingUp, label: 'Komisi Sales', code: 'nav_pengguna' },
+    ],
+  },
+  {
+    label: 'SDM & HR',
+    items: [
+      { to: '/employee', icon: UserPlus, label: 'Karyawan', code: 'nav_pengguna' },
+      { to: '/employee-contract', icon: ScrollText, label: 'Kontrak Karyawan', code: 'nav_pengguna' },
+      { to: '/attendance', icon: Clock, label: 'Absensi', code: 'nav_pengguna' },
+      { to: '/payroll', icon: Briefcase, label: 'Penggajian', code: 'nav_pengguna', roles: ['developer', 'super_admin', 'admin'] },
+      { to: '/tip-pooling', icon: HandCoins, label: 'Tip Pooling', code: 'nav_pengguna' },
+      { to: '/shift-schedule', icon: Clock4, label: 'Jadwal Shift', code: 'nav_pengguna' },
+    ],
+  },
+  {
+    label: 'F&B / Operational',
+    items: [
+      { to: '/kitchen-display', icon: UtensilsCrossed, label: 'KDS Dapur', code: 'nav_penjualan' },
+      { to: '/table-management', icon: Grid3X3, label: 'Meja & Layout', code: 'nav_penjualan' },
+      { to: '/reservation', icon: CalendarCheck, label: 'Reservasi', code: 'nav_penjualan' },
+      { to: '/recipe', icon: ScrollText, label: 'Resep & BOM', code: 'nav_barang' },
+    ],
+  },
+  {
+    label: 'Logistik',
+    items: [
+      { to: '/delivery', icon: Bike, label: 'Pengiriman', code: 'nav_pembelian' },
     ],
   },
   {
@@ -66,11 +102,26 @@ export const MENU_GROUPS: MenuGroup[] = [
       { to: '/accounting', icon: BookOpenCheck, label: 'Akuntansi', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'], feature: 'reports' },
       { to: '/shifts', icon: Clock, label: 'Shift', code: 'nav_pembelian', feature: 'shift_management' },
       { to: '/debts', icon: DollarSign, label: 'Hutang/Piutang', code: 'nav_pembelian', feature: 'debt_management' },
+      { to: '/bank-account', icon: Landmark, label: 'Rekening Bank', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
+      { to: '/fixed-asset', icon: Hammer, label: 'Aset Tetap', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
+      { to: '/budget', icon: PiggyBank, label: 'Anggaran', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
       { to: '/payment', icon: DollarSign, label: 'Pembayaran Lisensi', code: 'nav_plans' },
       { to: '/payment-automation', icon: CreditCard, label: 'Pembayaran Digital', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
       { to: '/returns', icon: RotateCcw, label: 'Return', code: 'nav_penjualan', feature: 'return_refund' },
       { to: '/promo', icon: Gift, label: 'Promo', code: 'nav_promo' },
       { to: '/laporan', icon: BarChart2, label: 'Laporan', code: 'nav_pembelian', feature: 'reports' },
+      { to: '/tax-report', icon: FileText, label: 'Laporan Pajak', code: 'nav_pembelian', feature: 'reports' },
+      { to: '/petty-cash', icon: Wallet, label: 'Petty Cash', code: 'nav_pembelian' },
+      { to: '/cash-flow', icon: ArrowUpDown, label: 'Arus Kas', code: 'nav_pembelian', feature: 'reports' },
+    ],
+  },
+  {
+    label: 'Marketing',
+    items: [
+      { to: '/gift-card', icon: Ticket, label: 'Gift Card', code: 'nav_promo' },
+      { to: '/customer-feedback', icon: MessageSquare, label: 'Feedback', code: 'nav_promo' },
+      { to: '/campaign', icon: Megaphone, label: 'Kampanye', code: 'nav_promo', roles: ['developer', 'super_admin', 'admin'] },
+      { to: '/storefront', icon: Globe2, label: 'Toko Online', code: 'nav_promo', roles: ['developer', 'super_admin', 'admin'] },
     ],
   },
   {
@@ -80,6 +131,9 @@ export const MENU_GROUPS: MenuGroup[] = [
       { to: '/hpp', icon: Calculator, label: 'Kalkulator HPP', code: 'nav_hpp' },
       { to: '/whatsapp', icon: MessageCircle, label: 'WhatsApp', code: 'nav_whatsapp' },
       { to: '/print-queue', icon: Printer, label: 'Antrian Print', code: 'nav_print_queue' },
+      { to: '/label-print', icon: Tag, label: 'Label Cetak', code: 'nav_print_queue' },
+      { to: '/notification-settings', icon: Bell, label: 'Notifikasi', code: 'nav_identitas' },
+      { to: '/integrations', icon: Plug, label: 'Integrasi', code: 'nav_identitas' },
     ],
   },
   {
@@ -91,6 +145,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       { to: '/security', icon: Shield, label: 'Keamanan', code: 'nav_security', roles: ['developer', 'super_admin', 'admin'] },
       { to: '/ecommerce-api', icon: Globe, label: 'E-commerce API', code: 'nav_ecommerce_api', roles: ['developer', 'super_admin', 'admin'], feature: 'api_access' },
       { to: '/marketplace', icon: Store, label: 'Marketplace', code: 'nav_ecommerce_api', roles: ['developer', 'super_admin', 'admin'], feature: 'api_access' },
+      { to: '/audit-trail', icon: Shield, label: 'Audit Trail', code: 'nav_activity_log', roles: ['developer', 'super_admin', 'admin'] },
       { to: '/license-admin', icon: ShieldCheck, label: 'Developer Panel', code: 'nav_license_admin', roles: ['developer', 'super_admin'] },
       { to: '/settings', icon: Settings, label: 'Pengaturan', code: 'nav_identitas' },
     ],
@@ -169,27 +224,29 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
       `}
     >
       {/* Logo */}
-      <div className={`flex items-center justify-between gap-3 border-b border-white/30 dark:border-slate-700/30 ${isCollapsed ? 'lg:px-3 px-5' : 'px-5'} py-5`}>
-        <div className={`flex items-center min-w-0 ${isCollapsed ? 'lg:justify-center lg:flex-1 gap-0' : 'gap-3'}`}>
-          <img src={appLogo} alt="Zetass Pos" className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-sm" />
+      <div className={`border-b border-white/30 dark:border-slate-700/30 ${isCollapsed ? 'lg:flex lg:flex-col lg:items-center lg:gap-2 lg:px-2 lg:py-4 px-5 py-5' : 'flex items-center justify-between gap-3 px-5 py-5'}`}>
+        <div className={`flex items-center min-w-0 ${isCollapsed ? 'lg:justify-center' : 'gap-3'}`}>
+          <img src={appLogo} alt="Zetass Pos" className={`${isCollapsed ? 'h-8 w-8' : 'h-9 w-9'} shrink-0 rounded-lg object-cover shadow-sm`} />
           <div className={`${isCollapsed ? 'lg:hidden' : ''}`}>
             <p className="font-bold text-sm text-slate-800 dark:text-white leading-tight">Zetass Pos</p>
             <p className="text-xs text-slate-500 dark:text-slate-400">Point of Sale</p>
           </div>
         </div>
-        <button
-          onClick={onToggleCollapse}
-          className="hidden lg:inline-flex p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
-          title={isCollapsed ? 'Buka sidebar' : 'Tutup sidebar'}
-        >
-          {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-        </button>
-        <button
-          onClick={onClose}
-          className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
-        >
-          <X size={20} />
-        </button>
+        <div className={`flex items-center ${isCollapsed ? 'lg:justify-center' : 'shrink-0'}`}>
+          <button
+            onClick={onToggleCollapse}
+            className="hidden lg:inline-flex p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+            title={isCollapsed ? 'Buka sidebar' : 'Tutup sidebar'}
+          >
+            {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={18} />}
+          </button>
+          <button
+            onClick={onClose}
+            className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+          >
+            <X size={20} />
+          </button>
+        </div>
       </div>
 
       {/* Nav */}
@@ -309,8 +366,12 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
           </div>
         )}
         <div className={`flex items-center gap-2 px-2 ${isCollapsed ? 'lg:justify-center' : ''}`}>
-          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${isDemo ? 'bg-red-500' : 'bg-primary-600'}`}>
-            {user?.nama_pengguna?.[0]?.toUpperCase() ?? 'U'}
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden ${isDemo ? 'bg-red-500' : 'bg-primary-600'}`}>
+            {user?.foto ? (
+              <img src={user.foto} alt="" className="w-full h-full object-cover" />
+            ) : (
+              user?.nama_pengguna?.[0]?.toUpperCase() ?? 'U'
+            )}
           </div>
           <div className={`min-w-0 flex-1 ${isCollapsed ? 'lg:hidden' : ''}`}>
             <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{user?.nama_lengkap ?? user?.nama_pengguna}</p>

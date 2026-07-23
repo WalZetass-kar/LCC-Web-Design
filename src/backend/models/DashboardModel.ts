@@ -23,6 +23,23 @@ function toNumber(value: unknown, fallback = 0) {
   return Number.isFinite(number) ? number : fallback
 }
 
+function saleAmount(row: { sub_total?: unknown; discount_amount?: unknown }) {
+  return toNumber(row.sub_total) - toNumber(row.discount_amount)
+}
+
+function recordHourKey(value: unknown) {
+  const text = String(value ?? '').trim()
+  if (!text) return null
+  const match = text.match(/(?:^|[T\s])(\d{2}):(\d{2})/)
+  if (match) {
+    const hour = Number(match[1])
+    return Number.isFinite(hour) ? hour : null
+  }
+  const parsed = new Date(text)
+  if (!Number.isNaN(parsed.getTime())) return parsed.getHours()
+  return null
+}
+
 export class DashboardModel {
   static getSummary() {
     const now = new Date()
@@ -36,19 +53,44 @@ export class DashboardModel {
     const weekSales = allSales.filter(s => recordDateKey(s.tgl_wkt_transaksi) >= weekAgo)
     const monthSales = allSales.filter(s => recordDateKey(s.tgl_wkt_transaksi).slice(0, 7) === monthStr)
 
-    const sum = (arr: typeof allSales) => arr.reduce((a, b) => a + toNumber(b.sub_total), 0)
+    const sum = (arr: typeof allSales) => arr.reduce((a, b) => a + saleAmount(b), 0)
 
     const totalBarang = db.select({ count: sql<number>`count(*)` }).from(barang).get()
     const lowStock = db.select().from(barang).where(lte(barang.stok, 5)).all()
+    const lowStockOrdered = [...lowStock].sort((a, b) => toNumber(a.stok) - toNumber(b.stok))
 
     // Last 7 days chart data
     const chartData = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(now.getTime() - (6 - i) * 86400000)
       const dateStr = dateKey(d)
       const label = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' })
-      const total = allSales.filter(s => recordDateKey(s.tgl_wkt_transaksi) === dateStr).reduce((a, b) => a + toNumber(b.sub_total), 0)
+      const total = allSales.filter(s => recordDateKey(s.tgl_wkt_transaksi) === dateStr).reduce((a, b) => a + saleAmount(b), 0)
       return { label, total }
     })
+
+    const hourlySales = Array.from({ length: 24 }, (_, hour) => {
+      const hourSales = todaySales.filter(s => recordHourKey(s.tgl_wkt_transaksi) === hour)
+      return {
+        hour: `${String(hour).padStart(2, '0')}:00`,
+        count: hourSales.length,
+        total: hourSales.reduce((sum, sale) => sum + saleAmount(sale), 0),
+      }
+    })
+
+    const recentTransactions = db.all(sql`
+      SELECT
+        p.kd_tansaksi_jual,
+        p.tgl_wkt_transaksi,
+        p.username_transaksi,
+        COALESCE(c.nama_customer, 'Pelanggan Umum') AS nama_customer,
+        COALESCE(p.total_qty, 0) AS total_qty,
+        COALESCE(p.sub_total, 0) - COALESCE(p.discount_amount, 0) AS total_penjualan,
+        p.jenis_pembayaran
+      FROM mediasoft_penjualan p
+      LEFT JOIN mediasoft_customer c ON c.kd_customer = p.kd_customer
+      ORDER BY p.tgl_wkt_transaksi DESC, p.kd_tansaksi_jual DESC
+      LIMIT 5
+    `)
 
     // Top 5 produk terlaris (minggu ini)
     let topProducts: any[] = []
@@ -86,13 +128,29 @@ export class DashboardModel {
       lowStockCount: lowStock.length,
       chartData,
       predictedTomorrow,
+      hourlySales,
+      recentTransactions: recentTransactions.map((transaction: any) => ({
+        kd_tansaksi_jual: transaction.kd_tansaksi_jual,
+        tgl_wkt_transaksi: transaction.tgl_wkt_transaksi,
+        username_transaksi: transaction.username_transaksi,
+        nama_customer: transaction.nama_customer,
+        total_qty: toNumber(transaction.total_qty),
+        total_penjualan: toNumber(transaction.total_penjualan),
+        jenis_pembayaran: transaction.jenis_pembayaran ?? null,
+      })),
+      alertSummary: {
+        stockOutCount: lowStockOrdered.filter(item => toNumber(item.stok) <= 0).length,
+        lowStockCount: lowStock.length,
+        todayTransactionCount: todaySales.length,
+        todayRevenue: sum(todaySales),
+      },
       topProducts: topProducts.map(p => ({
         kd_barang: p.kd_barang,
         nama_barang: p.nama_barang,
         total_qty: p.total_qty,
         total_revenue: p.total_revenue,
       })),
-      lowStockProducts: lowStock.slice(0, 5).map(b => ({
+      lowStockProducts: lowStockOrdered.slice(0, 5).map(b => ({
         kd_barang: b.kd_barang,
         nama_barang: b.nama_barang,
         stok: b.stok,

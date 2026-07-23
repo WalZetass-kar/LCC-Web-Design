@@ -11,6 +11,7 @@
  * 5. Server-side session management
  */
 
+import './env.js'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -22,11 +23,11 @@ import { initDatabase } from '../backend/utils/dbInit.js'
 import { SyncServerService } from './syncServer.js'
 import { SyncClientService } from './syncClient.js'
 import { registerSecureStorageHandlers } from './secureStorage.js'
+import { PenggunaModel } from '../backend/models/PenggunaModel.js'
 import {
   attachWindowSecurity,
   configureElectronSecurity,
   flushPendingDeepLink,
-  loadDesktopEnv,
   registerDesktopDeepLinks,
 } from './platformSecurity.js'
 
@@ -37,7 +38,6 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
 
-loadDesktopEnv()
 registerDesktopDeepLinks(isDev)
 
 function getAppIconPath() {
@@ -138,6 +138,16 @@ app.whenReady().then(() => {
 
   // Initialize database tables first
   initDatabase()
+  
+  // Force non-bcrypt users to change password on next login
+  try {
+    const flagged = PenggunaModel.forceNonBcryptUsersToChangePassword()
+    if (flagged > 0) {
+      console.log(`🔒 ${flagged} user(s) flagged for password migration to bcrypt`)
+    }
+  } catch (e) {
+    console.error('Password migration flag failed:', e)
+  }
   
   registerSecureStorageHandlers(ipcMain)
   registerIpcHandlers(ipcMain)

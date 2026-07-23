@@ -1,8 +1,10 @@
 packages:
   - 'packages/*'
 allowBuilds:
+  '@firebase/util': set this to true or false
   better-sqlite3: true
   core-js: true
   electron: true
   esbuild: true
   lzma-native: true
+  protobufjs: set this to true or false

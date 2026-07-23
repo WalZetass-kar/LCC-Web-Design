@@ -37,7 +37,10 @@ describe('industry features', () => {
     expect(payload.sheets.map(sheet => sheet.name)).toEqual([
       'Ringkasan',
       'Penjualan 7 Hari',
+      'Jam Ramai Hari Ini',
+      'Transaksi Terbaru',
       'Produk Terlaris',
+      'Ringkasan Alert',
       'Stok Menipis',
     ])
 

@@ -2,12 +2,13 @@ import { PenjualanModel } from '../models/PenjualanModel.js'
 import { CustomerModel } from '../models/CustomerModel.js'
 import { IdentitasModel } from '../models/IdentitasModel.js'
 import { sqlite } from '../../database/connection.js'
-import { validateDemoMode } from '../utils/demoMode.js'
+import { requireAuth } from '../utils/authGuard.js'
 import { withTransaction } from '../utils/transaction.js'
 import { WhatsAppController } from './WhatsAppController.js'
 import { ActivityLogModel } from '../models/ActivityLogModel.js'
 import { checkTransactionLimit, getLimitPopup, getSubscriptionStatus, getUpgradePopup } from '../middleware/subscriptionGuard.js'
 import { PromoService } from '../services/promoService.js'
+import { TaxController } from './TaxController.js'
 
 interface CartItem {
   kd_barang: string
@@ -68,10 +69,7 @@ export class PenjualanController {
   }
 
   private static getTaxAmount(subtotal: number) {
-    const row = sqlite
-      .prepare('SELECT COALESCE(pajak_persen, 0) AS rate FROM mediasoft_identitas LIMIT 1')
-      .get() as { rate?: number } | undefined
-    const rate = Math.max(0, Math.min(100, this.asSafeNumber(row?.rate)))
+    const rate = TaxController.getActiveRate()
     return Math.round(subtotal * rate / 100)
   }
 
@@ -181,9 +179,9 @@ export class PenjualanController {
   }
 
   static async create(payload: CreateTransaksiPayload) {
-    // Block demo user
-    const demoError = validateDemoMode(payload.username)
-    if (demoError) return demoError
+    // Check auth
+    const authError = await requireAuth()
+    if (authError) return authError
 
     const username = String(payload.username || '').trim()
     if (!username) {

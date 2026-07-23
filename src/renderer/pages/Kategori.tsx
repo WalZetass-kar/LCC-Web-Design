@@ -22,9 +22,12 @@ export default function Kategori() {
   const [loadingData, setLoadingData] = useState(true)
 
   const load = async () => {
-    const r = await api<Kategori[]>('kategori:getAll')
-    if (r.success) setData(r.data ?? [])
-    setLoadingData(false)
+    try {
+      const r = await api<Kategori[]>('kategori:getAll')
+      if (r.success) setData(r.data ?? [])
+    } finally {
+      setLoadingData(false)
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -36,20 +39,26 @@ export default function Kategori() {
 
   const handleSave = async () => {
     setLoading(true)
-    const r = modal === 'add'
-      ? await api('kategori:create', form)
-      : await api('kategori:update', selected!.kd_kategori_barang, form)
-    setLoading(false)
-    if (r.success) { toast(r.message as string); closeModal(); load() }
-    else toast(r.message as string, 'error')
+    try {
+      const r = modal === 'add'
+        ? await api('kategori:create', form)
+        : await api('kategori:update', selected?.kd_kategori_barang, form)
+      if (r.success) { toast(r.message as string); closeModal(); load() }
+      else toast(r.message as string, 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleDelete = async () => {
     setLoading(true)
-    const r = await api('kategori:delete', selected!.kd_kategori_barang)
-    setLoading(false)
-    if (r.success) { toast(r.message as string); closeModal(); load() }
-    else toast(r.message as string, 'error')
+    try {
+      const r = await api('kategori:delete', selected?.kd_kategori_barang)
+      if (r.success) { toast(r.message as string); closeModal(); load() }
+      else toast(r.message as string, 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const columns: ColumnDef<Kategori>[] = [

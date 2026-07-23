@@ -145,7 +145,7 @@ function readJsonBody(req: IncomingMessage) {
 
 function sendJson(res: ServerResponse, statusCode: number, data: unknown) {
   res.writeHead(statusCode, {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': 'http://localhost:5173',
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,Authorization',
     'Content-Type': 'application/json; charset=utf-8',
@@ -224,7 +224,7 @@ class SyncServer {
         console.error('❌ Sync server failed:', this.lastError)
         resolve()
       })
-      this.server!.listen(config.port, '0.0.0.0', () => {
+      this.server!.listen(config.port, '127.0.0.1', () => {
         console.log(`🔄 Sync server running at ${localUrls(config.port).join(', ')}`)
         resolve()
       })

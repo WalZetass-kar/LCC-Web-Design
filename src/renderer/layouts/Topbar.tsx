@@ -43,6 +43,39 @@ const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   '/whatsapp': { label: 'WhatsApp', parent: 'Alat Bantu' },
   '/print-queue': { label: 'Antrian Print', parent: 'Alat Bantu' },
   '/payment-automation': { label: 'Pembayaran Digital', parent: 'Keuangan' },
+  '/customer-display-page': { label: 'Customer Display', parent: 'Utama' },
+  '/daily-notes': { label: 'Daily Notes', parent: 'Utama' },
+  '/price-list': { label: 'Price List', parent: 'Inventaris' },
+  '/stock-history': { label: 'Riwayat Stok', parent: 'Inventaris' },
+  '/supplier-rating': { label: 'Supplier Rating', parent: 'Inventaris' },
+  '/membership-card': { label: 'Membership Card', parent: 'Relasi' },
+  '/sales-commission': { label: 'Komisi Sales', parent: 'Relasi' },
+  '/tax-report': { label: 'Laporan Pajak', parent: 'Keuangan' },
+  '/petty-cash': { label: 'Petty Cash', parent: 'Keuangan' },
+  '/cash-flow': { label: 'Arus Kas', parent: 'Keuangan' },
+  '/label-print': { label: 'Label Cetak', parent: 'Alat Bantu' },
+  '/notification-settings': { label: 'Notifikasi', parent: 'Alat Bantu' },
+  '/integrations': { label: 'Integrasi', parent: 'Alat Bantu' },
+  '/audit-trail': { label: 'Audit Trail', parent: 'Administrasi' },
+  // New Feature Routes
+  '/employee': { label: 'Karyawan', parent: 'SDM & HR' },
+  '/employee-contract': { label: 'Kontrak Karyawan', parent: 'SDM & HR' },
+  '/attendance': { label: 'Absensi', parent: 'SDM & HR' },
+  '/payroll': { label: 'Penggajian', parent: 'SDM & HR' },
+  '/tip-pooling': { label: 'Tip Pooling', parent: 'SDM & HR' },
+  '/shift-schedule': { label: 'Jadwal Shift', parent: 'SDM & HR' },
+  '/kitchen-display': { label: 'KDS Dapur', parent: 'F&B' },
+  '/table-management': { label: 'Meja & Layout', parent: 'F&B' },
+  '/reservation': { label: 'Reservasi', parent: 'F&B' },
+  '/recipe': { label: 'Resep & BOM', parent: 'Inventaris' },
+  '/delivery': { label: 'Pengiriman', parent: 'Logistik' },
+  '/bank-account': { label: 'Rekening Bank', parent: 'Keuangan' },
+  '/fixed-asset': { label: 'Aset Tetap', parent: 'Keuangan' },
+  '/budget': { label: 'Anggaran', parent: 'Keuangan' },
+  '/gift-card': { label: 'Gift Card', parent: 'Marketing' },
+  '/customer-feedback': { label: 'Feedback', parent: 'Marketing' },
+  '/campaign': { label: 'Kampanye', parent: 'Marketing' },
+  '/storefront': { label: 'Toko Online', parent: 'Marketing' },
 }
 
 const JENIS_COLOR: Record<string, string> = {
@@ -139,11 +172,11 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   return (
     <header className="h-14 glass border-b border-white/30 dark:border-slate-700/30 flex items-center justify-between px-4 sm:px-6 shrink-0 relative z-30">
       <div className="flex items-center gap-3 min-w-0">
-        <button onClick={onMenuClick} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors shrink-0" title="Buka/tutup sidebar">
+        <button onClick={onMenuClick} aria-label="Toggle sidebar" className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors shrink-0" title="Buka/tutup sidebar">
           <Menu size={20} />
         </button>
         <nav className="flex items-center gap-1 text-sm min-w-0">
-          <button onClick={() => navigate('/')} className="text-slate-400 hover:text-pink-500 transition-colors shrink-0" title="Dashboard">
+          <button onClick={() => navigate('/')} className="text-slate-400 hover:text-primary-500 transition-colors shrink-0" title="Dashboard">
             <Home size={14} />
           </button>
           {parentLabel && (
@@ -168,7 +201,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           </div>
         )}
 
-        <button onClick={toggleMode} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title="Toggle dark mode">
+        <button onClick={toggleMode} aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title="Toggle dark mode">
           {mode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
@@ -176,6 +209,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
         <div ref={notifRef} className="relative">
           <button
             onClick={() => setShowNotif(v => !v)}
+            aria-label={`Notifikasi${unreadCount > 0 ? `, ${unreadCount} belum dibaca` : ''}`}
             className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors relative"
           >
             <Bell size={18} />
@@ -242,8 +276,12 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           )}
         </div>
 
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center text-white text-xs font-bold ml-1 cursor-default select-none shadow-md shadow-primary-500/20" title={user?.nama_lengkap ?? user?.nama_pengguna ?? ''}>
-          {initials}
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-400 flex items-center justify-center text-white text-xs font-bold ml-1 cursor-default select-none shadow-md shadow-primary-500/20 overflow-hidden" title={user?.nama_lengkap ?? user?.nama_pengguna ?? ''}>
+          {user?.foto ? (
+            <img src={user.foto} alt="" className="w-full h-full object-cover" />
+          ) : (
+            initials
+          )}
         </div>
       </div>
     </header>

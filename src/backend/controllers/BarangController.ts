@@ -1,5 +1,5 @@
 import { BarangModel } from '../models/BarangModel.js'
-import { validateDemoMode } from '../utils/demoMode.js'
+import { requireAuth } from '../utils/authGuard.js'
 import { type PaginationParams } from '../utils/pagination.js'
 import { batchDelete, batchUpdate, batchInsert } from '../utils/transaction.js'
 import { BackupController } from './BackupController.js'
@@ -91,9 +91,9 @@ export class BarangController {
   /**
    * Bulk delete products
    */
-  static bulkDelete(ids: string[], username?: string) {
-    const demoError = validateDemoMode(username)
-    if (demoError) return demoError
+  static async bulkDelete(ids: string[], username?: string) {
+    const authError = await requireAuth();
+    if (authError) return authError
 
     // Auto backup before bulk delete
     BackupController.autoBackup('bulk_delete_products')
@@ -110,9 +110,9 @@ export class BarangController {
   /**
    * Bulk update products
    */
-  static bulkUpdate(updates: Array<{ kd_barang: string; [key: string]: any }>, username?: string) {
-    const demoError = validateDemoMode(username)
-    if (demoError) return demoError
+  static async bulkUpdate(updates: Array<{ kd_barang: string; [key: string]: any }>, username?: string) {
+    const authError = await requireAuth();
+    if (authError) return authError
 
     // Auto backup before bulk update
     BackupController.autoBackup('bulk_update_products')
@@ -127,9 +127,9 @@ export class BarangController {
   /**
    * Bulk import products from CSV
    */
-  static bulkImport(products: any[], username?: string) {
-    const demoError = validateDemoMode(username)
-    if (demoError) return demoError
+  static async bulkImport(products: any[], username?: string) {
+    const authError = await requireAuth();
+    if (authError) return authError
 
     const account = username || 'system'
     const subscription = getSubscriptionStatus(account)
@@ -193,10 +193,10 @@ export class BarangController {
     return { success: true, data: BarangModel.search(q) }
   }
 
-  static create(data: Record<string, unknown>) {
+  static async create(data: Record<string, any>) {
     const username = String(data.nama_pengguna || 'system')
-    const demoError = validateDemoMode(username)
-    if (demoError) return demoError
+    const authError = await requireAuth();
+    if (authError) return authError
 
     if (!data.kd_barang || !data.nama_barang) {
       return { success: false, message: 'Kode dan nama barang wajib diisi' }
@@ -244,9 +244,9 @@ export class BarangController {
     return { success: true, message: 'Produk berhasil ditambahkan' }
   }
 
-  static update(kd: string, data: Record<string, unknown>) {
-    const demoError = validateDemoMode(data.nama_pengguna as string)
-    if (demoError) return demoError
+  static async update(kd: string, data: Record<string, any>) {
+    const authError = await requireAuth();
+    if (authError) return authError
 
     const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
     const enriched = { ...data, tgl_wkt_ubah: now }
@@ -254,9 +254,9 @@ export class BarangController {
     return { success: true, message: 'Produk berhasil diperbarui' }
   }
 
-  static delete(kd: string, username?: string) {
-    const demoError = validateDemoMode(username)
-    if (demoError) return demoError
+  static async delete(kd: string, username?: string) {
+    const authError = await requireAuth();
+    if (authError) return authError
 
     BarangModel.delete(kd)
     return { success: true, message: 'Produk berhasil dihapus' }

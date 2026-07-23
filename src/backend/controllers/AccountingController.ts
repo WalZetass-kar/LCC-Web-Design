@@ -212,7 +212,7 @@ export class AccountingController {
       initTables()
       const range = this.periodRange(startDate, endDate)
       const sales = queryNumber(`
-        SELECT COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)), 0) AS value
+        SELECT COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0)), 0) AS value
         FROM mediasoft_penjualan
         WHERE date(tgl_wkt_transaksi) BETWEEN date(?) AND date(?)
       `, range)

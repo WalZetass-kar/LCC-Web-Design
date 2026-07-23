@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Plus } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
+import { SkeletonPage } from '../../components/Skeleton'
 
 interface FeatureRow { id: string; code: string; name: string; category: string | null; is_active: number | boolean }
 
@@ -27,6 +28,8 @@ export default function LicenseFeaturesPage() {
   }, [toast])
 
   useEffect(() => { void load() }, [load])
+
+  if (loading) return <SkeletonPage rows={6} />
 
   return (
     <div className="space-y-4">

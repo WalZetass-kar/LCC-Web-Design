@@ -11,6 +11,7 @@ import { api } from '../utils/api'
 import { formatRupiah, formatDateTime } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
+import EmptyState from '../components/EmptyState'
 
 interface KasDrawer {
   kd_kas: string
@@ -54,18 +55,21 @@ export default function Kas() {
   const [deleteTransaksi, setDeleteTransaksi] = useState<KasTransaksi | null>(null)
 
   const load = async () => {
-    const [r1, r2] = await Promise.all([
-      api<KasDrawer>('kas:getActiveKas', user?.nama_pengguna),
-      api<KasDrawer[]>('kas:getAllKas'),
-    ])
-    if (r1.success && r1.data) {
-      setActiveDrawer(r1.data)
-      loadTransactions(r1.data.kd_kas)
-    } else {
-      setActiveDrawer(null)
+    try {
+      const [r1, r2] = await Promise.all([
+        api<KasDrawer>('kas:getActiveKas', user?.nama_pengguna),
+        api<KasDrawer[]>('kas:getAllKas'),
+      ])
+      if (r1.success && r1.data) {
+        setActiveDrawer(r1.data)
+        loadTransactions(r1.data.kd_kas)
+      } else {
+        setActiveDrawer(null)
+      }
+      if (r2.success) setHistory(r2.data ?? [])
+    } finally {
+      setLoadingData(false)
     }
-    if (r2.success) setHistory(r2.data ?? [])
-    setLoadingData(false)
   }
 
   const loadTransactions = async (kd_kas: string) => {
@@ -80,15 +84,18 @@ export default function Kas() {
       return toast('Modal awal harus lebih dari 0', 'error')
     }
     setLoading(true)
-    const r = await api('kas:bukaKas', user?.nama_pengguna, parseFloat(modalAwal))
-    setLoading(false)
-    if (r.success) {
-      toast(r.message as string)
-      setModal(null)
-      setModalAwal('')
-      load()
-    } else {
-      toast(r.message as string, 'error')
+    try {
+      const r = await api('kas:bukaKas', user?.nama_pengguna, parseFloat(modalAwal))
+      if (r.success) {
+        toast(r.message as string)
+        setModal(null)
+        setModalAwal('')
+        load()
+      } else {
+        toast(r.message as string, 'error')
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -97,15 +104,18 @@ export default function Kas() {
       return toast('Modal akhir wajib diisi', 'error')
     }
     setLoading(true)
-    const r = await api('kas:tutupKas', activeDrawer!.kd_kas, parseFloat(modalAkhir))
-    setLoading(false)
-    if (r.success) {
-      toast(r.message as string)
-      setModal(null)
-      setModalAkhir('')
-      load()
-    } else {
-      toast(r.message as string, 'error')
+    try {
+      const r = await api('kas:tutupKas', activeDrawer?.kd_kas, parseFloat(modalAkhir))
+      if (r.success) {
+        toast(r.message as string)
+        setModal(null)
+        setModalAkhir('')
+        load()
+      } else {
+        toast(r.message as string, 'error')
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -113,16 +123,23 @@ export default function Kas() {
     if (!expense.jumlah || !expense.keterangan) {
       return toast('Jumlah dan keterangan wajib diisi', 'error')
     }
+    const amount = parseFloat(expense.jumlah)
+    if (isNaN(amount) || amount <= 0) {
+      return toast('Jumlah harus berupa angka positif', 'error')
+    }
     setLoading(true)
-    const r = await api('kas:addPengeluaran', activeDrawer!.kd_kas, parseFloat(expense.jumlah), expense.keterangan, user?.nama_pengguna)
-    setLoading(false)
-    if (r.success) {
-      toast(r.message as string)
-      setModal(null)
-      setExpense({ jumlah: '', keterangan: '' })
-      load()
-    } else {
-      toast(r.message as string, 'error')
+    try {
+      const r = await api('kas:addPengeluaran', activeDrawer?.kd_kas, parseFloat(expense.jumlah), expense.keterangan, user?.nama_pengguna)
+      if (r.success) {
+        toast(r.message as string)
+        setModal(null)
+        setExpense({ jumlah: '', keterangan: '' })
+        load()
+      } else {
+        toast(r.message as string, 'error')
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -130,16 +147,23 @@ export default function Kas() {
     if (!income.jumlah || !income.keterangan) {
       return toast('Jumlah dan keterangan wajib diisi', 'error')
     }
+    const amount = parseFloat(income.jumlah)
+    if (isNaN(amount) || amount <= 0) {
+      return toast('Jumlah harus berupa angka positif', 'error')
+    }
     setLoading(true)
-    const r = await api('kas:addPemasukan', activeDrawer!.kd_kas, parseFloat(income.jumlah), income.keterangan, user?.nama_pengguna)
-    setLoading(false)
-    if (r.success) {
-      toast(r.message as string)
-      setModal(null)
-      setIncome({ jumlah: '', keterangan: '' })
-      load()
-    } else {
-      toast(r.message as string, 'error')
+    try {
+      const r = await api('kas:addPemasukan', activeDrawer?.kd_kas, parseFloat(income.jumlah), income.keterangan, user?.nama_pengguna)
+      if (r.success) {
+        toast(r.message as string)
+        setModal(null)
+        setIncome({ jumlah: '', keterangan: '' })
+        load()
+      } else {
+        toast(r.message as string, 'error')
+      }
+    } finally {
+      setLoading(false)
     }
   }
   
@@ -235,33 +259,41 @@ export default function Kas() {
       )}
 
       {/* Transactions Today */}
-      {activeDrawer && transactions.length > 0 && (
+      {activeDrawer && (
         <Card title="Transaksi Hari Ini">
-          <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin">
-            {transactions.map(t => (
-              <div key={t.kd_kas_transaksi} className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 dark:bg-slate-700/50 group">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t.keterangan}</p>
-                  <p className="text-xs text-slate-400">{formatDateTime(t.tgl_transaksi)}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${t.jenis === 'MASUK' ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {t.jenis === 'MASUK' ? '+' : '-'} {formatRupiah(t.jumlah)}
-                    </p>
-                    <Badge label={t.jenis} variant={t.jenis === 'MASUK' ? 'green' : 'red'} />
+          {transactions.length === 0 ? (
+            <EmptyState
+              icon={<TrendingUp size={36} strokeWidth={1.5} />}
+              title="Belum ada transaksi"
+              description="Transaksi kas hari ini akan muncul di sini"
+            />
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto scrollbar-thin">
+              {transactions.map(t => (
+                <div key={t.kd_kas_transaksi} className="flex items-center justify-between p-3 rounded-xl bg-slate-50/80 dark:bg-slate-700/50 group">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{t.keterangan}</p>
+                    <p className="text-xs text-slate-400">{formatDateTime(t.tgl_transaksi)}</p>
                   </div>
-                  <button
-                    onClick={() => setDeleteTransaksi(t)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-all"
-                    title="Hapus"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <p className={`text-sm font-bold ${t.jenis === 'MASUK' ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {t.jenis === 'MASUK' ? '+' : '-'} {formatRupiah(t.jumlah)}
+                      </p>
+                      <Badge label={t.jenis} variant={t.jenis === 'MASUK' ? 'green' : 'red'} />
+                    </div>
+                    <button
+                      onClick={() => setDeleteTransaksi(t)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-all"
+                      title="Hapus"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       )}
 

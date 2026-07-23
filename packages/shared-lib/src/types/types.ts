@@ -73,6 +73,7 @@ export interface DashboardSummary {
   lowStockCount: number
   chartData: { label: string; total: number }[]
   predictedTomorrow?: number
+  hourlySales?: { hour: string; count: number; total: number }[]
   topProducts: {
     kd_barang: string | null
     nama_barang: string | null

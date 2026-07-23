@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Ban, CheckCircle2, Clock3, Eye, Search, ShieldCheck } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
+import { SkeletonPage } from '../../components/Skeleton'
 
 interface DeviceRow {
   id: string
@@ -79,6 +80,8 @@ export default function LicenseDevicesPage() {
       toast(r.message || 'Gagal menjalankan aksi', 'error')
     }
   }
+
+  if (loading) return <SkeletonPage rows={6} />
 
   return (
     <div className="space-y-4">

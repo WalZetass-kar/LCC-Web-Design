@@ -7,6 +7,7 @@ import Badge from '../components/Badge'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { formatRupiah } from '../utils/format'
+import { SkeletonPage } from '../components/Skeleton'
 
 interface GatewaySettings {
   provider: string
@@ -126,6 +127,8 @@ export default function PaymentAutomation() {
       toast(r.message as string || 'Gagal hapus QRIS', 'error')
     }
   }
+
+  if (loading) return <SkeletonPage rows={6} />
 
   return (
     <div className="space-y-4">

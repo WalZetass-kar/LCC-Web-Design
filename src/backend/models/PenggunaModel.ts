@@ -1,4 +1,4 @@
-import { db } from '../../database/connection.js'
+import { db, sqlite } from '../../database/connection.js'
 import { pengguna } from '../../database/schema.js'
 import { eq, and } from 'drizzle-orm'
 import { hashPassword } from '../services/crypto.js'
@@ -38,16 +38,17 @@ export class PenggunaModel {
    * @returns User object or undefined
    */
   static findActiveByUsername(nama_pengguna: string) {
-    return db
-      .select()
-      .from(pengguna)
-      .where(
-        and(
-          eq(pengguna.nama_pengguna, nama_pengguna),
-          eq(pengguna.status_user, 'Aktif')
-        )
-      )
-      .get()
+    const input = (nama_pengguna || '').trim()
+    if (!input) return undefined
+
+    const row = sqlite.prepare(`
+      SELECT * FROM mediasoft_pengguna
+      WHERE (lower(nama_pengguna) = lower(?) OR lower(email) = lower(?))
+        AND status_user = 'Aktif'
+      LIMIT 1
+    `).get(input, input) as typeof pengguna.$inferSelect | undefined
+
+    return row
   }
 
   /**
@@ -167,5 +168,28 @@ export class PenggunaModel {
   static getPasswordHashType(nama_pengguna: string): 'sha1' | 'bcrypt' | null {
     const user = this.findByUsername(nama_pengguna)
     return (user?.password_hash_type as 'sha1' | 'bcrypt') || null
+  }
+
+  /**
+   * Force all non-bcrypt users to change password on next login
+   * Called on app startup to ensure security
+   * @returns Number of users flagged
+   */
+  static forceNonBcryptUsersToChangePassword(): number {
+    try {
+      // Flag all active users who don't have bcrypt password
+      const result = sqlite.prepare(`
+        UPDATE mediasoft_pengguna 
+        SET must_change_password = 1 
+        WHERE status_user = 'Aktif' 
+        AND (password_hash_type IS NULL OR password_hash_type != 'bcrypt')
+        AND (must_change_password IS NULL OR must_change_password != 1)
+      `).run()
+      
+      return result.changes
+    } catch (error) {
+      console.error('Failed to flag non-bcrypt users:', error)
+      return 0
+    }
   }
 }

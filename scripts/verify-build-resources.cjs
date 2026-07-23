@@ -46,8 +46,8 @@ const requiredDirs = [
 ]
 
 const requiredDesktopTargets = {
-  win: ['nsis'],
-  linux: ['AppImage', 'deb'],
+  win: ['nsis', 'nsis-portable', 'zip'],
+  linux: ['AppImage', 'deb', 'rpm', 'tar.gz'],
   mac: ['dmg'],
 }
 
@@ -90,7 +90,8 @@ for (const dir of requiredDirs) {
 }
 
 for (const [platform, targets] of Object.entries(requiredDesktopTargets)) {
-  const configuredTargets = list(packageJson.build?.[platform]?.target)
+  const rawTarget = packageJson.build?.[platform]?.target
+  const configuredTargets = list(rawTarget).map(t => (typeof t === 'object' && t.target) ? t.target : t)
   for (const target of targets) {
     if (!configuredTargets.includes(target)) {
       failures.push(`Electron Builder ${platform} target must include: ${target}`)

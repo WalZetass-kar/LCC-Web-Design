@@ -14,6 +14,23 @@ type SecureStoreFile = Record<string, StoredSecureValue>
 
 const KEY_PATTERN = /^[a-zA-Z0-9_.:-]{1,128}$/
 
+const ALLOWED_KEYS = new Set([
+  'pos_session',
+  'rememberMe',
+  'theme-color',
+  'theme-mode',
+  'hasSeenTour',
+  'printQueue',
+  'auth_device_id',
+  'license_last_success_at',
+  'integrations.ai_api_key',
+  'zetass-pos-android-store-v3',
+  'pos_demo_state',
+  'pos_popup_dismissed_at',
+  'pos_first_login_shown',
+  'offline_queue',
+])
+
 function storageFilePath(): string {
   return path.join(app.getPath('userData'), 'secure-storage.json')
 }
@@ -25,6 +42,9 @@ function fallbackKey(): Buffer {
 function validateKey(key: string): string {
   if (!KEY_PATTERN.test(key)) {
     throw new Error('Secure storage key tidak valid')
+  }
+  if (!ALLOWED_KEYS.has(key)) {
+    throw new Error(`Secure storage key "${key}" tidak diizinkan`)
   }
   return key
 }

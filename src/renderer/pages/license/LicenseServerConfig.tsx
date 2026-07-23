@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ServerCog, Wifi, WifiOff, LogIn, RefreshCw, CheckCircle } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
+import { SkeletonPage } from '../../components/Skeleton'
 
 type LicenseConfig = {
   url: string
@@ -9,7 +10,7 @@ type LicenseConfig = {
   hasRefreshToken?: boolean
 }
 
-const DEFAULT_LICENSE_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
+const DEFAULT_LICENSE_URL = import.meta.env.VITE_LICENSE_SERVER_URL || 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
 const DEFAULT_ADMIN_EMAIL = import.meta.env.VITE_LICENSE_ADMIN_EMAIL || 'admin@lcc-web-design.local'
 
 export default function LicenseServerConfig() {
@@ -35,7 +36,7 @@ export default function LicenseServerConfig() {
         if (r.data.url) setForm(f => ({ ...f, url: r.data!.url }))
         if (r.data.connected && !r.data.hasRefreshToken) {
           setConnectionTone('info')
-          setConnectionMessage('Server sudah tersimpan, tapi sesi admin lama belum punya refresh token. Login ulang dengan akun Supabase developer.')
+          setConnectionMessage('Server sudah tersimpan, tapi sesi admin lama belum punya refresh token. Login ulang dengan akun admin license server.')
         }
       }
     })
@@ -88,6 +89,8 @@ export default function LicenseServerConfig() {
   const adminReady = Boolean(config?.connected && config.hasRefreshToken)
   const needsLogin = Boolean(config?.connected && !config.hasRefreshToken)
 
+  if (loading) return <SkeletonPage rows={6} />
+
   return (
     <div className="max-w-none space-y-4">
       {adminReady && (
@@ -115,7 +118,7 @@ export default function LicenseServerConfig() {
                 <input
                   required value={form.url}
                   onChange={e => { setForm({ ...form, url: e.target.value }); setPingOk(null) }}
-                  placeholder="https://PROJECT_ID.supabase.co/functions/v1/mediasoft-license"
+                  placeholder="https://SUPABASE_PROJECT.supabase.co/functions/v1/mediasoft-license"
                   className="w-full pl-9 pr-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500"
                 />
               </div>
@@ -139,7 +142,7 @@ export default function LicenseServerConfig() {
           <div>
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1.5">Password</label>
             <input type="password" required value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
-              placeholder="Password Supabase Auth"
+              placeholder="Password admin license server"
               className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500" />
           </div>
           {connectionMessage && (
@@ -184,7 +187,7 @@ export default function LicenseServerConfig() {
           </button>
         </div>
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-          Sync menarik paket dan popup dari Supabase ke database lokal aplikasi ini. Akun pembeli, fitur, popup, dan persetujuan lisensi dikelola dari tab Developer Panel lain.
+           Sync menarik paket dan popup dari Supabase ke database lokal aplikasi ini. Akun pembeli, fitur, popup, dan persetujuan lisensi dikelola dari Dashboard Developer (Supabase).
         </p>
       </div>
 
@@ -192,7 +195,7 @@ export default function LicenseServerConfig() {
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tips</p>
         <ul className="space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
           <li>• Server aktif: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license</code></li>
-          <li>• Login admin: gunakan email Supabase Auth yang sudah diberi role developer di <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">license_admins</code></li>
+          <li>• Login admin: gunakan email Supabase Auth yang sudah diverifikasi dan punya role <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">super_admin</code></li>
           <li>• Pembeli login memakai email dan password akun yang dibuat admin</li>
           <li>• Token admin tersimpan di database lokal aplikasi ini</li>
         </ul>

@@ -1,0 +1,14 @@
+node_modules
+.git
+dist
+dist-electron
+data
+backups
+*.db
+*.log
+.env
+.env.*
+!.env.example
+android
+ios
+tests

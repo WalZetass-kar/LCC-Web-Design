@@ -9,8 +9,8 @@ def releaseStorePassword = envOrProp('ZETASS_POS_RELEASE_STORE_PASSWORD')
 def releaseKeyAlias = envOrProp('ZETASS_POS_RELEASE_KEY_ALIAS') ?: 'zetass-pos'
 def releaseKeyPassword = envOrProp('ZETASS_POS_RELEASE_KEY_PASSWORD') ?: releaseStorePassword
 def hasReleaseSigning = releaseStoreFilePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
-def defaultPinnedDomain = 'azhkvmkmimepmflzqqty.supabase.co'
-def defaultCertPinSha256 = 'p51goejPCgGH+Oog/MU2k6PObcEfTrrr73jUcuWJ7w0='
+def defaultPinnedDomain = ''
+def defaultCertPinSha256 = ''
 def pinnedDomain = envOrProp('ZETASS_POS_PINNED_DOMAIN') ?: defaultPinnedDomain
 def certPinSha256 = envOrProp('ZETASS_POS_CERT_PIN_SHA256') ?: envOrProp('VITE_CERT_PIN_SHA256') ?: defaultCertPinSha256
 def isReleaseRequested = {
@@ -28,8 +28,8 @@ android {
         applicationId "com.zetass.pos"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "2.0"
+        versionCode 20000
+        versionName "2.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -59,6 +59,13 @@ android {
                 abiFilters "arm64-v8a"
             }
         }
+    }
+}
+
+// Rename APK/AAB output to ZetassPOS
+android.applicationVariants.configureEach { variant ->
+    variant.outputs.all { output ->
+        outputFileName = "ZetassPOS.apk"
     }
 }
 

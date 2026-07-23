@@ -16,6 +16,18 @@ export class DashboardModel {
     const monthSales = allSales.filter(s => s.tgl_wkt_transaksi?.startsWith(monthStr))
 
     const sum = (arr: typeof allSales) => arr.reduce((a, b) => a + (b.sub_total ?? 0), 0)
+    const recordHourKey = (value: unknown) => {
+      const text = String(value ?? '').trim()
+      if (!text) return null
+      const match = text.match(/(?:^|[T\s])(\d{2}):(\d{2})/)
+      if (match) {
+        const hour = Number(match[1])
+        return Number.isFinite(hour) ? hour : null
+      }
+      const parsed = new Date(text)
+      if (!Number.isNaN(parsed.getTime())) return parsed.getHours()
+      return null
+    }
 
     const totalBarang = db.select({ count: sql<number>`count(*)` }).from(barang).get()
     const lowStock = db.select().from(barang).where(lte(barang.stok, 5)).all()
@@ -27,6 +39,15 @@ export class DashboardModel {
       const label = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' })
       const total = allSales.filter(s => s.tgl_wkt_transaksi?.startsWith(dateStr)).reduce((a, b) => a + (b.sub_total ?? 0), 0)
       return { label, total }
+    })
+
+    const hourlySales = Array.from({ length: 24 }, (_, hour) => {
+      const hourSales = todaySales.filter(s => recordHourKey(s.tgl_wkt_transaksi) === hour)
+      return {
+        hour: `${String(hour).padStart(2, '0')}:00`,
+        count: hourSales.length,
+        total: hourSales.reduce((a, b) => a + (b.sub_total ?? 0), 0),
+      }
     })
 
     // Top 5 produk terlaris (minggu ini)
@@ -65,6 +86,7 @@ export class DashboardModel {
       lowStockCount: lowStock.length,
       chartData,
       predictedTomorrow,
+      hourlySales,
       topProducts: topProducts.map(p => ({
         kd_barang: p.kd_barang,
         nama_barang: p.nama_barang,

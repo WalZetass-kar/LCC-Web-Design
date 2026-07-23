@@ -1,6 +1,6 @@
 import { db } from '../../database/connection.js'
 import { customer, penjualan } from '../../database/schema.js'
-import { eq, like, or, desc } from 'drizzle-orm'
+import { eq, like, or, desc, sql } from 'drizzle-orm'
 
 export class CustomerModel {
   static generateKode(): string {
@@ -23,14 +23,15 @@ export class CustomerModel {
   }
 
   static search(query: string) {
+    const escapedQuery = query.replace(/[%_]/g, '\\$&')
     return db
       .select()
       .from(customer)
       .where(
         or(
-          like(customer.nama_customer, `%${query}%`),
-          like(customer.no_telp, `%${query}%`),
-          like(customer.email, `%${query}%`)
+          like(customer.nama_customer, `%${escapedQuery}%`),
+          like(customer.no_telp, `%${escapedQuery}%`),
+          like(customer.email, `%${escapedQuery}%`)
         )
       )
       .all()
@@ -62,18 +63,14 @@ export class CustomerModel {
   }
 
   static addPoin(kd: string, poin: number) {
-    const cust = this.getById(kd)
-    if (!cust) return
     return db.update(customer).set({
-      poin: (cust.poin ?? 0) + poin,
+      poin: sql`${customer.poin} + ${poin}`,
     }).where(eq(customer.kd_customer, kd)).run()
   }
 
   static addTotalBelanja(kd: string, jumlah: number) {
-    const cust = this.getById(kd)
-    if (!cust) return
     return db.update(customer).set({
-      total_belanja: (cust.total_belanja ?? 0) + jumlah,
+      total_belanja: sql`${customer.total_belanja} + ${jumlah}`,
     }).where(eq(customer.kd_customer, kd)).run()
   }
 

@@ -7,6 +7,8 @@ import Modal from '../components/Modal'
 import Badge from '../components/Badge'
 import { useToast } from '../contexts/ToastContext'
 import { api } from '../utils/api'
+import { SkeletonPage } from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
 
 interface SecuritySettings {
   loginAttempts: number
@@ -32,6 +34,7 @@ interface ActiveSession {
 export default function Security() {
   const toast = useToast()
   const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [settings, setSettings] = useState<SecuritySettings>({
     loginAttempts: 5,
     lockDuration: 15,
@@ -51,10 +54,12 @@ export default function Security() {
   }
 
   useEffect(() => {
-    api<any>('security:get').then(r => {
-      if (r.success && r.data) setSettings(r.data)
-    })
-    loadSessions()
+    Promise.all([
+      api<any>('security:get').then(r => {
+        if (r.success && r.data) setSettings(r.data)
+      }),
+      loadSessions(),
+    ]).finally(() => setInitialLoading(false))
   }, [])
 
   const handleSave = async () => {
@@ -85,6 +90,8 @@ export default function Security() {
       toast(r.message as string ?? 'Gagal revoke session', 'error')
     }
   }
+
+  if (initialLoading) return <SkeletonPage rows={4} />
 
   return (
     <div className="space-y-6">
@@ -163,7 +170,7 @@ export default function Security() {
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {sessions.length === 0 ? (
-                <tr><td colSpan={6} className="py-8 text-center text-slate-400">Tidak ada sesi aktif</td></tr>
+                <tr><td colSpan={6} className="py-8 text-center text-slate-400"><EmptyState icon={<Shield size={32} strokeWidth={1.5} />} title="Tidak ada sesi aktif" description="Semua sesi pengguna sudah tidak aktif" className="py-4" /></td></tr>
               ) : sessions.map(session => (
                 <tr key={session.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                   <td className="px-3 py-2 font-medium text-slate-700 dark:text-slate-200">{session.username}</td>

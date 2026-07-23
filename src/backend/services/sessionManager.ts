@@ -1,7 +1,10 @@
 /**
  * Session Manager Service
  * Handles user sessions and automatic timeout
+ * Reads configuration from SecurityController settings
  */
+
+import { sqlite } from '../../database/connection.js'
 
 interface UserSession {
   username: string
@@ -10,10 +13,17 @@ interface UserSession {
   hakAkses: string
 }
 
+function getSessionTimeout(): number {
+  try {
+    const row = sqlite.prepare('SELECT session_timeout FROM mediasoft_security_settings WHERE id = 1').get() as any
+    return (row?.session_timeout ?? 30) * 60 * 1000 // convert minutes to ms
+  } catch {
+    return 30 * 60 * 1000
+  }
+}
+
 class SessionManager {
   private sessions: Map<string, UserSession> = new Map()
-  private readonly SESSION_TIMEOUT = 30 * 60 * 1000 // 30 minutes
-  private readonly WARNING_THRESHOLD = 29 * 60 * 1000 // 29 minutes (1 min before timeout)
 
   /**
    * Create a new session for a user
@@ -71,16 +81,18 @@ class SessionManager {
 
     const now = Date.now()
     const inactiveTime = now - session.lastActivity
+    const sessionTimeout = getSessionTimeout()
+    const warningThreshold = sessionTimeout - 60 * 1000 // 1 minute before timeout
 
     // Session expired
-    if (inactiveTime > this.SESSION_TIMEOUT) {
+    if (inactiveTime > sessionTimeout) {
       this.sessions.delete(sessionId)
       return { valid: false }
     }
 
     // Session valid but should warn user
-    if (inactiveTime > this.WARNING_THRESHOLD) {
-      const remainingTime = Math.ceil((this.SESSION_TIMEOUT - inactiveTime) / 1000)
+    if (inactiveTime > warningThreshold) {
+      const remainingTime = Math.ceil((sessionTimeout - inactiveTime) / 1000)
       return {
         valid: true,
         session,
@@ -114,9 +126,10 @@ class SessionManager {
    */
   cleanup(): void {
     const now = Date.now()
+    const sessionTimeout = getSessionTimeout()
 
     for (const [sessionId, session] of this.sessions.entries()) {
-      if (now - session.lastActivity > this.SESSION_TIMEOUT) {
+      if (now - session.lastActivity > sessionTimeout) {
         this.sessions.delete(sessionId)
       }
     }

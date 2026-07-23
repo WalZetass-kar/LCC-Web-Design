@@ -46,6 +46,7 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   'barang:update',
   'barang:delete',
   'barang:bulkImport',
+  'barang:batchUpdatePrice',
 
   // Kategori
   'kategori:create',
@@ -251,6 +252,15 @@ const MUTATION_CHANNELS: Set<string> = new Set([
   'branch:update',
   'branch:delete',
   'branch:transferStock',
+  'stock:transfer',
+
+  // Feature hub mutations
+  'dailyNotes:create',
+  'dailyNotes:update',
+  'dailyNotes:delete',
+  'pettyCash:create',
+  'pettyCash:delete',
+  'notifSettings:save',
 
   'loyalty:redeemPoints',
   'loyalty:createTier',
@@ -326,6 +336,8 @@ const READ_CHANNELS: Set<string> = new Set([
   // Barang
   'barang:getAll',
   'barang:search',
+  'barang:getByKategori',
+  'barang:getByBranch',
 
   // Kategori
   'kategori:getAll',
@@ -471,6 +483,18 @@ const READ_CHANNELS: Set<string> = new Set([
 
   // Mobile app
   'mobile:getSummary',
+
+  // Feature hub reads
+  'dailyNotes:getAll',
+  'pettyCash:getAll',
+  'notifSettings:get',
+  'priceList:get',
+  'cashFlow:getAll',
+  'taxReport:getSummary',
+  'salesCommission:getAll',
+  'supplierRating:getAll',
+  'membership:getAll',
+  'stockHistory:getAll',
 
   // Tutorials (all users can read)
   'tutorial:getAll',
@@ -664,6 +688,7 @@ const PRE_AUTH_CHANNELS: Set<string> = new Set([
   'auth:changePassword',
   'auth:checkIdentitas',
   'auth:restoreSession',
+  'system:checkDb',
   'auth:logout',
   'demo:getStatus',
   'license:checkAppUpdate',
@@ -722,6 +747,13 @@ export function canInvokeRemoteSyncChannel(channel: string): boolean {
 
 const FEATURE_CHANNELS: Array<{ match: (channel: string) => boolean; feature: string }> = [
   { match: channel => channel.startsWith('laporan:'), feature: 'reports' },
+  { match: channel => channel === 'priceList:get', feature: 'reports' },
+  { match: channel => channel === 'cashFlow:getAll', feature: 'reports' },
+  { match: channel => channel === 'taxReport:getSummary', feature: 'reports' },
+  { match: channel => channel === 'salesCommission:getAll', feature: 'reports' },
+  { match: channel => channel === 'supplierRating:getAll', feature: 'reports' },
+  { match: channel => channel === 'membership:getAll', feature: 'reports' },
+  { match: channel => channel === 'stockHistory:getAll', feature: 'reports' },
   { match: channel => channel === 'export:penjualanExcel' || channel === 'export:stokExcel' || channel === 'export:toExcel', feature: 'export_excel' },
   { match: channel => channel === 'export:penjualanPDF' || channel === 'export:stokPDF' || channel === 'export:toPDF', feature: 'export_pdf' },
   { match: channel => channel === 'backup:restore' || channel === 'backup:import', feature: 'restore' },
@@ -730,6 +762,7 @@ const FEATURE_CHANNELS: Array<{ match: (channel: string) => boolean; feature: st
   { match: channel => channel.startsWith('shift:'), feature: 'shift_management' },
   { match: channel => channel.startsWith('debt:'), feature: 'debt_management' },
   { match: channel => channel.startsWith('branch:'), feature: 'multi_branch' },
+  { match: channel => channel === 'stock:transfer' || channel === 'barang:getByBranch', feature: 'multi_branch' },
   { match: channel => channel.startsWith('return:'), feature: 'return_refund' },
   { match: channel => channel.startsWith('ecommerce:'), feature: 'api_access' },
   { match: channel => channel.startsWith('marketplace:'), feature: 'api_access' },

@@ -1,0 +1,246 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  NODE_VERSION: '20'
+  JAVA_VERSION: '21'
+
+jobs:
+  # ─────────────────────────────────────────────────────
+  # VALIDATE & LINT
+  # ─────────────────────────────────────────────────────
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+  # ─────────────────────────────────────────────────────
+  # BUILD WINDOWS
+  # ─────────────────────────────────────────────────────
+  build-windows:
+    name: Build Windows
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: npm run build:desktop
+      - name: Build Windows (NSIS + Portable + ZIP)
+        run: npx electron-builder --win nsis portable zip --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: List Windows artifacts
+        run: dir release\
+        shell: cmd
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            release/*.exe
+            release/*.msi
+            release/*.zip
+          retention-days: 5
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────
+  # BUILD LINUX
+  # ─────────────────────────────────────────────────────
+  build-linux:
+    name: Build Linux
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm libarchive-tools
+      - run: npm run build:desktop
+      - name: Build Linux (AppImage + deb + rpm + tar.gz)
+        run: npx electron-builder --linux AppImage deb rpm tar.gz --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: List Linux artifacts
+        run: ls -la release/
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/*.tar.gz
+          retention-days: 5
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────
+  # BUILD ANDROID
+  # ─────────────────────────────────────────────────────
+  build-android-debug:
+    name: Build Android (Debug)
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - run: npm run android:debug
+      - name: Upload Android Debug
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug
+          path: release/ZetassPOS.apk
+          retention-days: 5
+          if-no-files-found: warn
+
+  build-android-release:
+    name: Build Android (Release + AAB)
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Generate release keystore
+        run: node scripts/prepare-android-signing.cjs
+      - name: Build Android Release APK
+        run: npm run android:release
+        env:
+          ZETASS_POS_ALLOW_LAN_HTTP: 'false'
+      - name: Rename release APK
+        run: mv release/ZetassPOS.apk release/ZetassPOS-v${{ needs.validate.outputs.version }}-release.apk || true
+      - name: Build Android AAB
+        run: npm run android:aab
+        env:
+          ZETASS_POS_ALLOW_LAN_HTTP: 'false'
+      - name: Rename release AAB
+        run: mv release/ZetassPOS.aab release/ZetassPOS-v${{ needs.validate.outputs.version }}-release.aab || true
+      - name: Upload Android Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: |
+            release/ZetassPOS*.apk
+            release/ZetassPOS*.aab
+          retention-days: 5
+          if-no-files-found: warn
+
+  # ─────────────────────────────────────────────────────
+  # CREATE GITHUB RELEASE
+  # ─────────────────────────────────────────────────────
+  create-release:
+    name: Create GitHub Release
+    needs: [validate, build-windows, build-linux, build-android-debug, build-android-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Generate changelog
+        run: npm run release:changelog || true
+
+      - name: Generate release notes
+        run: node scripts/generate-release-notes.cjs || true
+
+      - name: List all release files
+        run: |
+          echo "=== Release Artifacts ==="
+          find release-artifacts -type f | sort
+          echo "=== Release Dir ==="
+          ls -la release/ 2>/dev/null || echo "No release/ dir"
+          echo "=== SHA256 Checksums ==="
+          find release-artifacts -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.apk" -o -name "*.aab" \) -exec sha256sum {} \;
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          # Copy from artifacts
+          find release-artifacts -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.apk" -o -name "*.aab" \) -exec cp {} release-assets/ \;
+          # Copy from release/ if exists
+          find release -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.apk" -o -name "*.aab" \) -exec cp {} release-assets/ \; 2>/dev/null || true
+          echo "=== Final release assets ==="
+          ls -la release-assets/
+
+      - name: Read release notes
+        id: notes
+        run: |
+          if [ -f release/RELEASE_NOTES.md ]; then
+            echo "body<<EOF" >> "$GITHUB_OUTPUT"
+            cat release/RELEASE_NOTES.md >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          else
+            echo "body=## Zetass Pos ${{ needs.validate.outputs.version }}\n\nSee [CHANGELOG.md](CHANGELOG.md) for details." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.version }}
+          name: Zetass POS ${{ needs.validate.outputs.version }}
+          body: ${{ steps.notes.outputs.body }}
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

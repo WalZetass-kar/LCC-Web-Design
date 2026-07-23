@@ -1,7 +1,7 @@
 import http from 'http'
 import https from 'https'
 import { IndustrySettingsController } from './IndustrySettingsController.js'
-import { buildAssistantPrompt, buildLocalAssistantResponse } from '../../shared/dashboardAssistant.js'
+import { buildAssistantPrompt, buildAssistantSystemPrompt, buildLocalAssistantResponse } from '../../shared/dashboardAssistant.js'
 import {
   defaultBaseUrlForProvider,
   defaultModelForProvider,
@@ -15,22 +15,22 @@ import { assertHttpsEndpoint } from '../../shared/endpointSecurity.js'
 
 interface AssistantRequest {
   question: string
-  summary: DashboardSummary
+  summary?: DashboardSummary
 }
 
 interface ChatCompletionResponse {
   choices?: Array<{ message?: { content?: string } }>
-  error?: { message?: string }
+  error?: { message?: string; type?: string; code?: string } | string
 }
 
 interface ModelsResponse {
   data?: Array<{ id?: string; name?: string }>
   models?: Array<{ id?: string; name?: string }>
-  error?: { message?: string }
+  error?: { message?: string; type?: string } | string
 }
 
-const AI_TIMEOUT_MS = 30000
-const DEFAULT_SUPABASE_URL = 'https://azhkvmkmimepmflzqqty.supabase.co'
+const AI_TIMEOUT_MS = 60000
+const DEFAULT_AI_REFERER = process.env.VITE_AI_REFERER_URL || ''
 
 interface JsonHttpResponse<T> {
   ok: boolean
@@ -47,12 +47,13 @@ function defaultBaseUrl(settings: IndustrySettings) {
 }
 
 function aiRefererUrl() {
-  const raw = process.env.VITE_AI_REFERER_URL || process.env.VITE_API_BASE_URL || process.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL
+  const raw = process.env.VITE_AI_REFERER_URL || process.env.VITE_API_BASE_URL || DEFAULT_AI_REFERER
+  if (!raw) return undefined
   try {
     const parsed = new URL(raw)
     return parsed.protocol === 'https:' ? parsed.toString().replace(/\/+$/, '') : undefined
   } catch {
-    return DEFAULT_SUPABASE_URL
+    return undefined
   }
 }
 
@@ -83,7 +84,7 @@ function requestJson<T>(
       port: parsed.port ? Number(parsed.port) : (isHttps ? 443 : 80),
       path: parsed.pathname + parsed.search,
       method,
-      family: isLocalHost(parsed.hostname) ? undefined : 4,
+      family: undefined,
       headers: {
         ...headers,
         ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
@@ -134,7 +135,7 @@ function formatAiError(error: unknown, settings?: IndustrySettings) {
   const details = [message, cause?.message, cause?.code].filter(Boolean).join(' ')
 
   if (/abort|timeout/i.test(details)) {
-    return 'Koneksi AI timeout. Periksa koneksi internet atau coba lagi beberapa saat.'
+    return 'Koneksi AI timeout (60 detik). Server AI lambat merespons. Coba model yang lebih cepat (contoh: blackbox, google/gemma-3n-e4b-it) atau periksa koneksi internet.'
   }
 
   if (/fetch failed|failed to fetch|networkerror|enotfound|eai_again|econnrefused|econnreset|etimedout|cert|certificate/i.test(details)) {
@@ -173,30 +174,54 @@ async function askOpenAiCompatible(settings: IndustrySettings, prompt: string) {
   if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL AI tidak valid')
   const chatUrl = openAiCompatibleChatUrl(endpoint.url)
 
+  const isBluesminds = settings.aiProvider === 'bluesminds'
+  const isOpenRouter = settings.aiProvider === 'openrouter'
   const referer = aiRefererUrl()
-  const response = await requestJson<ChatCompletionResponse>('POST', chatUrl, {
-      'Authorization': `Bearer ${settings.aiApiKey}`,
-      'Content-Type': 'application/json',
-      ...(referer ? { 'HTTP-Referer': referer } : {}),
-      'X-Title': 'Zetass Pos',
-    },
-    {
-      model,
-      temperature: 0.2,
-      max_tokens: 600,
-      messages: [
-        {
-          role: 'system',
-          content: 'Kamu adalah Asisten Zetass-Kar, analis POS yang menjawab ringkas, akurat, dan praktis dalam Bahasa Indonesia.',
-        },
-        { role: 'user', content: prompt },
-      ],
-    })
+
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${settings.aiApiKey}`,
+    'Content-Type': 'application/json',
+  }
+  if (isOpenRouter && referer) {
+    headers['HTTP-Referer'] = referer
+    headers['X-Title'] = 'Zetass Pos'
+  }
+
+  const body: Record<string, unknown> = {
+    model,
+    temperature: 0.2,
+    messages: [
+      {
+        role: 'system',
+        content: buildAssistantSystemPrompt(),
+      },
+      { role: 'user', content: prompt },
+    ],
+  }
+  if (isBluesminds) {
+    body['max_completion_tokens'] = 600
+  } else {
+    body['max_tokens'] = 600
+  }
+
+  const response = await requestJson<ChatCompletionResponse>('POST', chatUrl, headers, body)
 
   const data = response.data
-  if (!data) throw new Error(nonJsonAiResponseMessage(settings))
+  if (!data) {
+    const detail = `Status: ${response.status}. Server tidak mengembalikan JSON.`
+    throw new Error(isBluesminds
+      ? `BluesMinds error: ${detail} Pastikan model "${model}" tersedia di akun Anda.`
+      : nonJsonAiResponseMessage(settings))
+  }
   if (!response.ok || data?.error) {
-    throw new Error(data?.error?.message || `AI HTTP ${response.status}`)
+    const errObj = data?.error
+    const errorMsg = typeof errObj === 'string'
+      ? errObj
+      : (errObj?.message || errObj?.toString() || `HTTP ${response.status}`)
+    const errType = typeof errObj === 'object' && errObj?.type ? ` (${errObj.type})` : ''
+    throw new Error(isBluesminds
+      ? `BluesMinds: ${errorMsg}${errType}. Model: ${model}`
+      : errorMsg)
   }
 
   const answer = data?.choices?.[0]?.message?.content?.trim()
@@ -213,18 +238,25 @@ async function listOpenAiCompatibleModels(settings: IndustrySettings) {
   if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL AI tidak valid')
   const modelsUrl = openAiCompatibleModelsUrl(endpoint.url)
 
+  const isOpenRouter = settings.aiProvider === 'openrouter'
   const referer = aiRefererUrl()
-  const response = await requestJson<ModelsResponse>('GET', modelsUrl, {
-      'Authorization': `Bearer ${settings.aiApiKey}`,
-      'Content-Type': 'application/json',
-      ...(referer ? { 'HTTP-Referer': referer } : {}),
-      'X-Title': 'Zetass Pos',
-    })
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${settings.aiApiKey}`,
+    'Content-Type': 'application/json',
+  }
+  if (isOpenRouter && referer) {
+    headers['HTTP-Referer'] = referer
+    headers['X-Title'] = 'Zetass Pos'
+  }
+
+  const response = await requestJson<ModelsResponse>('GET', modelsUrl, headers)
 
   const data = response.data
   if (!data) throw new Error(nonJsonAiResponseMessage(settings))
   if (!response.ok || data?.error) {
-    throw new Error(data?.error?.message || `AI models HTTP ${response.status}`)
+    const err = data?.error
+    const errMsg = typeof err === 'string' ? err : (err?.message || `AI models HTTP ${response.status}`)
+    throw new Error(errMsg)
   }
 
   const rows = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : []
@@ -271,7 +303,6 @@ export class AssistantController {
     try {
       const question = String(input?.question ?? '').trim()
       if (!question) return { success: false, message: 'Pertanyaan wajib diisi' }
-      if (!input?.summary) return { success: false, message: 'Data dashboard belum tersedia' }
 
       const settings = IndustrySettingsController.getSettings()
       const localAnswer = buildLocalAssistantResponse(question, input.summary)

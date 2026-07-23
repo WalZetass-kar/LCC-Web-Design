@@ -21,6 +21,7 @@ import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { formatRupiah } from '../utils/format'
 import type { SubscriptionPlan } from '../../shared/types'
+import { SkeletonStatGrid } from '../components/Skeleton'
 
 // ─── Form State ───────────────────────────────────────────────────────
 
@@ -230,6 +231,8 @@ export default function SubscriptionPlans() {
   const recommendedPlan = plans.find(p => p.is_recommended && p.is_active)
 
   // ─── Render ───────────────────────────────────────────────────────
+
+  if (loading) return <SkeletonStatGrid count={3} />
 
   return (
     <div className="space-y-4">

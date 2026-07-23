@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Megaphone, Plus, Trash2 } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
+import { SkeletonPage } from '../../components/Skeleton'
 
 interface Announcement {
   id: string
@@ -33,11 +34,13 @@ export default function LicenseAnnouncementsPage() {
   const [rows, setRows] = useState<Announcement[]>([])
   const [form, setForm] = useState(empty)
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   async function load() {
     const r = await api<Announcement[]>('license:getAnnouncements')
     if (r.success) setRows(r.data ?? [])
     else toast(r.message || 'Gagal memuat pengumuman', 'error')
+    setLoading(false)
   }
 
   useEffect(() => { void load() }, [])
@@ -61,6 +64,8 @@ export default function LicenseAnnouncementsPage() {
   }
 
   const input = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800'
+
+  if (loading) return <SkeletonPage rows={6} />
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">

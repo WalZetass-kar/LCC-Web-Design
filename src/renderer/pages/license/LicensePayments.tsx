@@ -3,6 +3,7 @@ import { Plus, CheckCircle, Trash2 } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { SkeletonPage } from '../../components/Skeleton'
 
 interface PaymentRow {
   id: string
@@ -56,6 +57,8 @@ export default function LicensePaymentsPage() {
     setDeletePayment(null)
     void load()
   }
+
+  if (loading) return <SkeletonPage rows={6} />
 
   return (
     <div className="space-y-4">

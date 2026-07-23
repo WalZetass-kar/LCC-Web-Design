@@ -11,6 +11,9 @@ import {
   ShieldCheck,
   XCircle,
   Zap,
+  Sparkles,
+  RefreshCw,
+  Clock,
 } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -21,6 +24,7 @@ import Textarea from '../components/Textarea'
 import { useToast } from '../contexts/ToastContext'
 import { api } from '../utils/api'
 import type { Customer } from '../../shared/types'
+import { SkeletonPage } from '../components/Skeleton'
 
 interface WhatsAppSettings {
   provider: 'fonnte'
@@ -89,7 +93,7 @@ function Toggle({ checked, onChange, title }: { checked: boolean; onChange: () =
       title={title}
       onClick={onChange}
       className={`h-7 w-12 shrink-0 rounded-full p-0.5 transition-colors ${
-        checked ? 'bg-primary-600' : 'bg-slate-300 dark:bg-slate-700'
+        checked ? 'bg-red-600' : 'bg-slate-300 dark:bg-slate-700'
       }`}
     >
       <span
@@ -192,7 +196,7 @@ export default function WhatsApp() {
     const r = await api('whatsapp:test', {
       phone,
       apiKey: settings.apiKey,
-      message: 'Test notifikasi dari Zetass Pos berhasil.',
+      message: 'Test notifikasi dari Zetass POS berhasil.',
     })
     setTesting(false)
 
@@ -315,48 +319,62 @@ export default function WhatsApp() {
   const previewTarget = targets[0] ?? { nama_customer: 'Customer', total_belanja: 0, poin: 0 }
   const progressPercent = broadcastProgress.total ? Math.round(((broadcastProgress.sent + broadcastProgress.failed) / broadcastProgress.total) * 100) : 0
 
+  if (loading) return <SkeletonPage rows={6} />
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="heading-1 flex items-center gap-2">
+    <div className="space-y-5 select-none">
+      
+      {/* Header Action Bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
               <MessageCircle className="text-emerald-500" size={26} />
-              WhatsApp
+              Integrasi WhatsApp Gateway
             </h1>
             <Badge label={settings.enabled ? 'Aktif' : 'Nonaktif'} variant={settings.enabled ? 'green' : 'gray'} />
           </div>
-          <p className="text-body mt-1">Atur API Fonnte dan notifikasi otomatis POS.</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+            Kelola API Fonnte, struk WhatsApp otomatis ke customer, dan fitur blast broadcast.
+          </p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+
+        <div className="flex w-full sm:w-auto gap-2">
           <Button
             variant="secondary"
             onClick={() => setTestModal(true)}
-            icon={<Send size={16} />}
-            className="w-full sm:w-auto"
+            icon={<Send size={15} />}
+            className="w-full sm:w-auto font-bold border-slate-200 dark:border-slate-800"
           >
-            Test
+            Pesan Test
           </Button>
-          <Button onClick={handleSave} loading={loading} icon={<CheckCircle size={16} />} className="w-full sm:w-auto">
-            Simpan
+          <Button
+            onClick={handleSave}
+            loading={loading}
+            icon={<CheckCircle size={15} />}
+            className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20"
+          >
+            Simpan Konfigurasi
           </Button>
         </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-4">
-          <Card className={settings.enabled ? 'border-emerald-200 dark:border-emerald-900/60' : ''}>
+          
+          {/* Status Card */}
+          <Card className={`rounded-3xl border ${settings.enabled ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-slate-800'}`}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
-                <div className={`rounded-lg p-2 ${settings.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+                <div className={`rounded-2xl p-2.5 ${settings.enabled ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>
                   {settings.enabled ? <CheckCircle size={22} /> : <XCircle size={22} />}
                 </div>
                 <div>
-                  <p className="font-semibold text-slate-800 dark:text-slate-100">
-                    Status WhatsApp {settings.enabled ? 'aktif' : 'nonaktif'}
+                  <p className="font-extrabold text-slate-900 dark:text-white text-sm">
+                    Status WhatsApp Gateway {settings.enabled ? 'Aktif' : 'Nonaktif'}
                   </p>
-                  <p className="text-caption">
-                    {settings.enabled ? `${activeCount} jenis notifikasi dipilih` : 'Aktifkan setelah API key benar'}
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    {settings.enabled ? `${activeCount} jenis notifikasi otomatis aktif` : 'Aktifkan stempel toggle di kanan jika API key sudah terisi'}
                   </p>
                 </div>
               </div>
@@ -367,27 +385,28 @@ export default function WhatsApp() {
               />
             </div>
             {lastTestMessage && (
-              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 text-xs font-bold text-slate-700 dark:text-slate-300">
                 {lastTestMessage}
               </div>
             )}
           </Card>
 
-          <Card title="Konfigurasi API" subtitle="Token disimpan lokal di database aplikasi.">
+          {/* API Configuration Card */}
+          <Card title="Konfigurasi API Fonnte" subtitle="Token API disimpan dengan aman secara lokal di sistem aplikasi." className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3.5 sm:grid-cols-2">
                 <div>
-                  <label className="text-label mb-2 block">Gateway</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1 block">Provider Gateway</label>
                   <select
                     value={settings.provider}
                     onChange={e => setSettings(prev => ({ ...prev, provider: e.target.value as 'fonnte' }))}
-                    className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-red-600"
                   >
-                    <option value="fonnte">Fonnte</option>
+                    <option value="fonnte">Fonnte WhatsApp API Gateway</option>
                   </select>
                 </div>
                 <Input
-                  label="Maksimal Pesan per Menit"
+                  label="Rate Limit (Pesan / Menit)"
                   type="number"
                   min={1}
                   max={60}
@@ -396,19 +415,19 @@ export default function WhatsApp() {
                 />
               </div>
               <div>
-                <label className="text-label mb-2 block">API Key / Token Fonnte</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1 block">API Key / Token Fonnte</label>
                 <div className="relative">
                   <Input
                     type={showKey ? 'text' : 'password'}
                     value={settings.apiKey}
                     onChange={e => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
-                    placeholder="Masukkan API key Fonnte"
+                    placeholder="Masukkan API Key Fonnte..."
                     className="pr-10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowKey(prev => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                     title={showKey ? 'Sembunyikan API key' : 'Tampilkan API key'}
                   >
                     {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -417,22 +436,23 @@ export default function WhatsApp() {
                 <button
                   type="button"
                   onClick={() => window.open('https://fonnte.com', '_blank')}
-                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-700"
                 >
-                  Buka Fonnte
+                  Buka Situs Fonnte.com
                   <ExternalLink size={12} />
                 </button>
               </div>
             </div>
           </Card>
 
-          <Card title="Notifikasi Otomatis">
+          {/* Automatic Trigger Notifications */}
+          <Card title="Notifikasi Otomatis POS" subtitle="Pengiriman otomatis sesuai event aplikasi" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="grid gap-3 md:grid-cols-2">
               {notificationItems.map(item => (
-                <div key={item.key} className="flex min-h-24 items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
+                <div key={item.key} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4">
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-800 dark:text-slate-100">{item.label}</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.desc}</p>
+                    <p className="font-extrabold text-xs text-slate-900 dark:text-white">{item.label}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-500 font-medium">{item.desc}</p>
                   </div>
                   <Toggle
                     checked={settings[item.key]}
@@ -444,48 +464,50 @@ export default function WhatsApp() {
             </div>
           </Card>
 
-          <Card title="Template Pesan Transaksi">
+          {/* Transaction Template */}
+          <Card title="Template Struk Transaksi WhatsApp" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <Textarea
               value={settings.messageTemplate}
               onChange={e => setSettings(prev => ({ ...prev, messageTemplate: e.target.value }))}
-              rows={5}
+              rows={4}
               placeholder={DEFAULT_TEMPLATE}
               helperText="Variabel: {customer}, {total}, {invoice}"
             />
-            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            <div className="mt-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3.5 text-xs text-slate-700 dark:text-slate-300 font-medium">
               {settings.messageTemplate || DEFAULT_TEMPLATE}
             </div>
           </Card>
 
-          <Card title="Broadcast Customer">
+          {/* Customer Broadcast */}
+          <Card title="Fitur Broadcast Pesan Massal" subtitle="Kirim pesan promosi atau pemberitahuan ke member" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
                 <Input
-                  label="Judul"
+                  label="Judul Kampanye"
                   value={broadcastTitle}
                   onChange={e => setBroadcastTitle(e.target.value)}
                 />
                 <div>
-                  <label className="text-label mb-2 block">Target</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1 block">Target Pelanggan</label>
                   <select
                     value={targetMode}
                     onChange={e => setTargetMode(e.target.value as typeof targetMode)}
-                    className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-red-600"
                   >
-                    <option value="active">Customer aktif</option>
-                    <option value="all">Semua customer</option>
-                    <option value="manual">Manual</option>
+                    <option value="active">Member Aktif</option>
+                    <option value="all">Semua Member Toko</option>
+                    <option value="manual">Manual Input HP</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-label mb-2 block">Jadwal</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1 block">Waktu Pengiriman</label>
                   <select
                     value={scheduleMode}
                     onChange={e => setScheduleMode(e.target.value as typeof scheduleMode)}
-                    className="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-red-600"
                   >
-                    <option value="now">Kirim sekarang</option>
-                    <option value="scheduled">Jadwalkan</option>
+                    <option value="now">Kirim Sekarang</option>
+                    <option value="scheduled">Jadwalkan Jam</option>
                   </select>
                 </div>
               </div>
@@ -510,10 +532,10 @@ export default function WhatsApp() {
               )}
 
               <div>
-                <label className="text-label mb-2 block">Template Broadcast</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1 block">Template Broadcast</label>
                 {templates.length > 0 && (
                   <select
-                    className="mb-2 w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500"
+                    className="mb-2 w-full h-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-red-600"
                     onChange={e => {
                       const selected = templates.find(item => String(item.id) === e.target.value)
                       if (selected) {
@@ -528,35 +550,35 @@ export default function WhatsApp() {
                 <Textarea
                   value={broadcastTemplate}
                   onChange={e => setBroadcastTemplate(e.target.value)}
-                  rows={5}
+                  rows={4}
                   placeholder={DEFAULT_BROADCAST_TEMPLATE}
                   helperText="Variabel: {{nama_customer}}, {{total_belanja}}, {{poin_loyalty}}"
                 />
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3.5 text-xs font-medium text-slate-700 dark:text-slate-300">
                 {renderBroadcastTemplate(broadcastTemplate || DEFAULT_BROADCAST_TEMPLATE, previewTarget)}
               </div>
 
               {broadcastProgress.running && (
                 <div className="space-y-2">
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                    <div className="h-full bg-primary-600 transition-all" style={{ width: `${progressPercent}%` }} />
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                    <div className="h-full bg-red-600 transition-all" style={{ width: `${progressPercent}%` }} />
                   </div>
-                  <p className="text-xs text-slate-500">{broadcastProgress.sent + broadcastProgress.failed}/{broadcastProgress.total} diproses · {broadcastProgress.sent} terkirim · {broadcastProgress.failed} gagal</p>
+                  <p className="text-xs font-bold text-slate-500">{broadcastProgress.sent + broadcastProgress.failed}/{broadcastProgress.total} diproses · {broadcastProgress.sent} terkirim · {broadcastProgress.failed} gagal</p>
                 </div>
               )}
 
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button onClick={sendBroadcast} loading={broadcastProgress.running} icon={<Send size={16} />} className="w-full sm:w-auto">
-                  {scheduleMode === 'scheduled' ? 'Jadwalkan' : 'Kirim Broadcast'}
+                <Button onClick={sendBroadcast} loading={broadcastProgress.running} icon={<Send size={16} />} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20">
+                  {scheduleMode === 'scheduled' ? 'Jadwalkan Broadcast' : 'Mulai Broadcast Sekarang'}
                 </Button>
-                <Button variant="secondary" onClick={saveCurrentTemplate} className="w-full sm:w-auto">
-                  Simpan Template
+                <Button variant="secondary" onClick={saveCurrentTemplate} className="w-full sm:w-auto font-bold border-slate-200 dark:border-slate-800">
+                  Simpan Template Ini
                 </Button>
                 {broadcastProgress.running && (
-                  <Button variant="danger" onClick={() => { cancelBroadcastRef.current = true }} className="w-full sm:w-auto">
-                    Batalkan
+                  <Button variant="danger" onClick={() => { cancelBroadcastRef.current = true }} className="w-full sm:w-auto font-bold">
+                    Hentikan Broadcast
                   </Button>
                 )}
               </div>
@@ -564,54 +586,55 @@ export default function WhatsApp() {
           </Card>
         </div>
 
+        {/* Sidebar Info */}
         <div className="space-y-4">
-          <Card title="Checklist">
-            <div className="space-y-3 text-sm">
-              <div className="flex items-start gap-2">
+          <Card title="Status Gateway" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="space-y-3 text-xs font-medium">
+              <div className="flex items-start gap-2.5">
                 <ShieldCheck size={18} className={settings.apiKey.trim() ? 'mt-0.5 text-emerald-500' : 'mt-0.5 text-slate-400'} />
                 <div>
-                  <p className="font-medium text-slate-800 dark:text-slate-100">API key</p>
-                  <p className="text-caption">{settings.apiKey.trim() ? 'Sudah diisi' : 'Belum diisi'}</p>
+                  <p className="font-bold text-slate-900 dark:text-white">Fonnte API Key</p>
+                  <p className="text-slate-400 text-[11px]">{settings.apiKey.trim() ? 'Tersimpan & Terhubung' : 'Belum Diisi'}</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2.5">
                 <Bell size={18} className={settings.enabled ? 'mt-0.5 text-emerald-500' : 'mt-0.5 text-slate-400'} />
                 <div>
-                  <p className="font-medium text-slate-800 dark:text-slate-100">Status</p>
-                  <p className="text-caption">{settings.enabled ? 'Notifikasi berjalan' : 'Masih nonaktif'}</p>
+                  <p className="font-bold text-slate-900 dark:text-white">Status Notifikasi</p>
+                  <p className="text-slate-400 text-[11px]">{settings.enabled ? 'Berjalan Otomatis' : 'Sistem Nonaktif'}</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2.5">
                 <Zap size={18} className={activeCount > 0 ? 'mt-0.5 text-emerald-500' : 'mt-0.5 text-slate-400'} />
                 <div>
-                  <p className="font-medium text-slate-800 dark:text-slate-100">Trigger</p>
-                  <p className="text-caption">{activeCount} dari {notificationItems.length} aktif</p>
+                  <p className="font-bold text-slate-900 dark:text-white">Trigger Aktif</p>
+                  <p className="text-slate-400 text-[11px]">{activeCount} dari {notificationItems.length} Event Aktif</p>
                 </div>
               </div>
             </div>
           </Card>
 
-          <Card title="Nomor Customer">
-            <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-              <AlertCircle size={17} className="mt-0.5 shrink-0" />
-              <p>Nomor di data customer boleh ditulis 08..., +628..., atau 628.... Sistem akan mengirim ke format 628....</p>
+          <Card title="Catatan Format Nomor" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 p-3 text-xs text-amber-800 dark:text-amber-200 font-medium">
+              <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+              <p>Nomor HP boleh ditulis dalam format 08..., +628..., atau 628.... Sistem akan memformat otomatis ke 628....</p>
             </div>
           </Card>
 
-          <Card title="History Broadcast">
-            <div className="max-h-80 space-y-2 overflow-y-auto text-sm">
+          <Card title="Riwayat Broadcast" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="max-h-80 space-y-2 overflow-y-auto text-xs">
               {history.length === 0 ? (
-                <p className="text-caption">Belum ada history broadcast</p>
+                <p className="text-slate-400 font-bold text-center py-6">Belum ada riwayat broadcast</p>
               ) : history.slice(0, 10).map(item => (
-                <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+                <div key={item.id} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-semibold text-slate-800 dark:text-slate-100">{item.title}</p>
-                      <p className="text-xs text-slate-500">{item.delivered}/{item.total_targets} delivered · {item.failed} failed</p>
+                      <p className="font-bold text-slate-900 dark:text-white">{item.title}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{item.delivered}/{item.total_targets} terkirim · {item.failed} gagal</p>
                     </div>
                     <Badge label={item.status} variant={item.status === 'completed' ? 'green' : item.status === 'scheduled' ? 'blue' : item.failed > 0 ? 'red' : 'gray'} />
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-400">{new Date(item.created_at).toLocaleString('id-ID')}</p>
+                  <p className="mt-1 text-[10px] text-slate-400 font-mono">{new Date(item.created_at).toLocaleString('id-ID')}</p>
                 </div>
               ))}
             </div>
@@ -619,25 +642,26 @@ export default function WhatsApp() {
         </div>
       </div>
 
+      {/* Test Message Modal */}
       <Modal
         open={testModal}
         onClose={() => setTestModal(false)}
-        title="Kirim Pesan Test"
+        title="Kirim Pesan Test WhatsApp"
         size="sm"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setTestModal(false)} className="w-full sm:w-auto">Batal</Button>
-            <Button onClick={handleTest} loading={testing} className="w-full sm:w-auto">Kirim</Button>
+            <Button variant="secondary" onClick={() => setTestModal(false)} className="w-full sm:w-auto font-bold">Batal</Button>
+            <Button onClick={handleTest} loading={testing} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0">Kirim Test</Button>
           </>
         }
       >
         <div className="space-y-3">
           <Input
-            label="Nomor HP"
+            label="Nomor HP Target *"
             value={testNumber}
             onChange={e => setTestNumber(e.target.value)}
             placeholder="08123456789"
-            helperText={normalizedTestNumber ? `Akan dikirim ke ${normalizedTestNumber}` : 'Contoh: 08123456789'}
+            helperText={normalizedTestNumber ? `Akan dikirim ke +${normalizedTestNumber}` : 'Contoh: 08123456789'}
           />
         </div>
       </Modal>

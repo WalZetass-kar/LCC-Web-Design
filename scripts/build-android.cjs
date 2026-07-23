@@ -5,8 +5,8 @@ const path = require('path')
 const rootDir = path.resolve(__dirname, '..')
 const androidDir = path.join(rootDir, 'android')
 const releaseDir = path.join(rootDir, 'release')
-const releaseApkName = 'Zetass Pos.apk'
-const releaseAabName = 'Zetass Pos.aab'
+const releaseApkName = 'ZetassPOS.apk'
+const releaseAabName = 'ZetassPOS.aab'
 const task = process.argv[2] || 'assembleDebug'
 const signingEnvPath = path.join(rootDir, '.keys', 'android-release.env')
 
@@ -113,7 +113,11 @@ const status = result.status ?? 1
 if (status === 0 && (task === 'assembleDebug' || task === 'assembleRelease' || task === 'bundleRelease')) {
   const isBundle = task === 'bundleRelease'
   const sourceArtifact = task === 'assembleDebug'
-    ? path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
+    ? (function() {
+        const preferred = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'ZetassPOS.apk')
+        const fallback = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
+        return fs.existsSync(preferred) ? preferred : fallback
+      })()
     : task === 'assembleRelease'
       ? path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
       : path.join(androidDir, 'app', 'build', 'outputs', 'bundle', 'release', 'app-release.aab')
@@ -121,8 +125,8 @@ if (status === 0 && (task === 'assembleDebug' || task === 'assembleRelease' || t
     fs.mkdirSync(releaseDir, { recursive: true })
     for (const entry of fs.readdirSync(releaseDir)) {
       const isSameArtifactType = isBundle
-        ? (/^Zetass Pos .*\.aab$/i.test(entry) || entry === releaseAabName)
-        : (/^Zetass Pos .*\.apk$/i.test(entry) || entry === releaseApkName)
+        ? (/^Zetass.*\.aab$/i.test(entry) || entry === releaseAabName)
+        : (/^Zetass.*\.apk$/i.test(entry) || entry === releaseApkName)
       if (isSameArtifactType) {
         fs.rmSync(path.join(releaseDir, entry), { force: true })
       }

@@ -8,6 +8,8 @@ import { validatePasswordStrength } from '../../shared/passwordPolicy.js'
 import { DeviceController, detectPlatformOS } from './DeviceController.js'
 import { sqlite } from '../../database/connection.js'
 import { LicenseController } from './LicenseController.js'
+import { tryCloudSignIn, updatePasswordCloud } from '../../shared/supabase/auth.js'
+import { syncBuyerLicense } from '../../shared/supabase/license.js'
 
 function isAccessExpired(expiresAt?: string | null): boolean {
   if (!expiresAt) return false
@@ -402,32 +404,50 @@ async function loginRemoteBuyer(input: {
     : (input.existingUser?.email ?? '').trim().toLowerCase()
   if (!EMAIL_PATTERN.test(email)) return null
 
-  const remote = await LicenseController.loginBuyer({ email, password: input.password }, input.device)
-  if (!remote) return null
-  if (!remote.success) {
-    const message = remote.message || 'Login pembeli ke license server pusat gagal'
-    if (message.toLowerCase().includes('tidak ditemukan') && input.existingUser?.nama_pengguna) {
-      sqlite.prepare(`DELETE FROM mediasoft_pengguna WHERE nama_pengguna = ? AND is_buyer = 1`).run(input.existingUser.nama_pengguna)
-    }
-    return {
-      success: false,
-      message,
-      data: {
-        ...(remote.data as any),
-        error_code: (remote.data as any)?.error_code ?? (message.toLowerCase().includes('tidak ditemukan') ? 'NOT_FOUND' : undefined),
+  // 1. Direct Supabase Cloud Auth attempt
+  const cloudRes = await tryCloudSignIn(email, input.password)
+  if (cloudRes.success && cloudRes.user) {
+    const syncRes = await syncBuyerLicense({ email, deviceInfo: input.device })
+    const user = await upsertRemoteBuyerCache({
+      loginName: input.loginName,
+      password: input.password,
+      remote: {
+        customer: { id: cloudRes.user.id, email: cloudRes.user.email, name: cloudRes.user.user_metadata?.name || input.loginName },
+        subscription: syncRes.data?.subscription,
+        access_token: cloudRes.session?.access_token,
+        refresh_token: cloudRes.session?.refresh_token,
       },
-    }
+      existingUser: input.existingUser,
+    })
+    if (!user) return { success: false, message: 'Akun pembeli gagal disimpan di device ini' }
+    return { success: true, user, remote: { customer: cloudRes.user, access_token: cloudRes.session?.access_token } }
   }
 
-  const user = await upsertRemoteBuyerCache({
-    loginName: input.loginName,
-    password: input.password,
-    remote: remote.data,
-    existingUser: input.existingUser,
-  })
-  if (!user) return { success: false, message: 'Akun pembeli gagal disimpan di device ini' }
+  // 2. Fallback to LicenseController if cloud auth is handled by central license server
+  const remote = await LicenseController.loginBuyer({ email, password: input.password }, input.device)
+  if (remote?.success && remote.data) {
+    const user = await upsertRemoteBuyerCache({
+      loginName: input.loginName,
+      password: input.password,
+      remote: remote.data,
+      existingUser: input.existingUser,
+    })
+    if (!user) return { success: false, message: 'Akun pembeli gagal disimpan di device ini' }
+    return { success: true, user, remote: remote.data }
+  }
 
-  return { success: true, user, remote: remote.data }
+  const failureMessage = cloudRes.message || remote?.message || 'Login pembeli ke server Supabase gagal'
+  if (failureMessage.toLowerCase().includes('tidak ditemukan') && input.existingUser?.nama_pengguna) {
+    sqlite.prepare(`DELETE FROM mediasoft_pengguna WHERE nama_pengguna = ? AND is_buyer = 1`).run(input.existingUser.nama_pengguna)
+  }
+  return {
+    success: false,
+    message: failureMessage,
+    data: {
+      ...((remote?.data as any) ?? {}),
+      error_code: (remote?.data as any)?.error_code ?? (failureMessage.toLowerCase().includes('tidak ditemukan') ? 'NOT_FOUND' : undefined),
+    },
+  }
 }
 
 function completeRemoteBuyerLogin(user: AuthUserRecord, device: AuthDeviceInfo, remote?: any) {
@@ -1254,20 +1274,19 @@ export class AuthController {
     deviceInfo?: AuthDeviceInfo | string | null
   ) {
     const device = withDetectedDeviceInfo(normalizeDeviceInfo(deviceInfo))
-    // Validate new password strength
-    const validation = validatePasswordStrength(newPassword)
-    if (!validation.valid) {
-      return { success: false, message: validation.message }
-    }
-
-    // Verify old password
     const user = PenggunaModel.findActiveByUsername(username)
     if (!user) {
       return { success: false, message: 'User tidak ditemukan' }
     }
 
+    const validation = validatePasswordStrength(newPassword)
+    if (!validation.valid) {
+      return { success: false, message: validation.message }
+    }
+
     const hashType = user.password_hash_type || 'sha1'
     let oldPasswordValid = false
+    const remoteEmail = (user.email ?? '').trim().toLowerCase() || (EMAIL_PATTERN.test(username) ? username.trim().toLowerCase() : '')
 
     try {
       if (hashType === 'bcrypt') {
@@ -1277,6 +1296,14 @@ export class AuthController {
         oldPasswordValid = isSHA1Hash(storedPassword)
           ? encryptPassword(oldPassword) === storedPassword
           : oldPassword === storedPassword
+      }
+
+      // If local check fails but email exists, verify old password against Supabase Cloud Auth
+      if (!oldPasswordValid && EMAIL_PATTERN.test(remoteEmail)) {
+        const cloudAuthCheck = await tryCloudSignIn(remoteEmail, oldPassword)
+        if (cloudAuthCheck.success) {
+          oldPasswordValid = true
+        }
       }
     } catch (error) {
       console.error('Password verification error:', error)
@@ -1294,15 +1321,51 @@ export class AuthController {
         user_agent: device.userAgent ?? null,
         detail: `Password lama salah. ${deviceDetail(device)}`,
       })
-      
+
       return { success: false, message: 'Password lama salah' }
     }
 
-    // Update password
+    const originalPassword = user.kata_sandi ?? ''
+    const originalPasswordHashType = user.password_hash_type ?? null
+    const originalMustChange = Number(user.must_change_password ?? 0)
+    const requiresRemoteSync = Number(user.is_buyer ?? 0) === 1 || user.hak_akses === 'developer'
+    let localPasswordUpdated = false
+    let remotePasswordUpdated = false
+
     try {
-      await PenggunaModel.updatePassword(username, newPassword)
+      const updateResult = await PenggunaModel.updatePassword(username, newPassword)
+      localPasswordUpdated = Number((updateResult as { changes?: number } | undefined)?.changes ?? 0) > 0
+      if (!localPasswordUpdated) {
+        return { success: false, message: 'Gagal mengubah password' }
+      }
+
+      // Update Supabase Cloud Auth if user has an email
+      if (EMAIL_PATTERN.test(remoteEmail)) {
+        const cloudUpdate = await updatePasswordCloud(newPassword)
+        if (cloudUpdate.success) {
+          remotePasswordUpdated = true
+        }
+      }
+
+      if (requiresRemoteSync && !remotePasswordUpdated) {
+        if (EMAIL_PATTERN.test(remoteEmail)) {
+          try {
+            const remote = await LicenseController.changePassword({
+              email: remoteEmail,
+              oldPassword,
+              newPassword,
+            })
+            if (remote?.success) {
+              remotePasswordUpdated = true
+            }
+          } catch {
+            // Ignore deprecated license API error if local/cloud update is done
+          }
+        }
+      }
+
       AuthSessionModel.revokeAllForUser(username)
-      
+
       ActivityLogModel.create({
         username,
         aktivitas: 'CHANGE_PASSWORD',
@@ -1320,8 +1383,24 @@ export class AuthController {
         data: { strength: validation.strength },
       }
     } catch (error) {
+      if (localPasswordUpdated && !remotePasswordUpdated) {
+        sqlite.prepare(`
+          UPDATE mediasoft_pengguna
+          SET kata_sandi = ?,
+              password_hash_type = ?,
+              must_change_password = ?,
+              tgl_wkt_edit = ?
+          WHERE nama_pengguna = ?
+        `).run(
+          originalPassword,
+          originalPasswordHashType,
+          originalMustChange,
+          new Date().toISOString(),
+          username,
+        )
+      }
       console.error('Password update error:', error)
-      return { success: false, message: 'Gagal mengubah password' }
+      return { success: false, message: error instanceof Error ? error.message : 'Gagal mengubah password' }
     }
   }
 

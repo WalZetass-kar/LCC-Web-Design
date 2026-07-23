@@ -8,6 +8,7 @@ import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatRupiah } from '../utils/format'
+import { SkeletonPage } from '../components/Skeleton'
 
 interface Account {
   id: number
@@ -121,6 +122,8 @@ export default function Accounting() {
       toast(r.message as string, 'error')
     }
   }
+
+  if (loading) return <SkeletonPage rows={6} />
 
   return (
     <div className="space-y-4">

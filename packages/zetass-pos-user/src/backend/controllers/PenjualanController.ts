@@ -30,6 +30,59 @@ interface CreateTransaksiPayload {
 }
 
 export class PenjualanController {
+  private static asSafeNumber(value: unknown, fallback = 0) {
+    const numeric = Number(value ?? fallback)
+    return Number.isFinite(numeric) ? numeric : fallback
+  }
+
+  private static clampPercentage(value: unknown) {
+    return Math.max(0, Math.min(100, this.asSafeNumber(value)))
+  }
+
+  private static buildTrustedItems(items: CartItem[]) {
+    const merged = new Map<string, number>()
+    for (const item of items) {
+      const kd_barang = String(item?.kd_barang ?? '').trim()
+      const qty = this.asSafeNumber(item?.qty)
+      if (!kd_barang) throw new Error('Kode barang tidak valid')
+      if (!Number.isInteger(qty) || qty <= 0) throw new Error(`Qty ${kd_barang} harus bilangan bulat lebih dari 0`)
+      merged.set(kd_barang, (merged.get(kd_barang) ?? 0) + qty)
+    }
+
+    const trusted: CartItem[] = []
+    for (const [kd_barang, qty] of merged) {
+      const row = sqlite.prepare(`
+        SELECT
+          b.kd_barang,
+          b.nama_barang,
+          COALESCE(b.stok, 0) AS stok,
+          COALESCE(h.harga_barang, 0) AS harga_jual,
+          COALESCE(h.harga_modal, 0) AS harga_modal,
+          COALESCE(h.potongan, 0) AS disc
+        FROM mediasoft_barang b
+        LEFT JOIN mediasoft_harga h ON b.kd_barang = h.kd_barang
+        WHERE b.kd_barang = ?
+        LIMIT 1
+      `).get(kd_barang) as (CartItem & { stok?: number }) | undefined
+
+      if (!row) throw new Error(`Barang ${kd_barang} tidak ditemukan`)
+      if ((row.stok ?? 0) < qty) throw new Error(`Stok ${row.nama_barang || kd_barang} tidak mencukupi`)
+      const harga_jual = this.asSafeNumber(row.harga_jual)
+      if (harga_jual < 0) throw new Error(`Harga jual ${row.nama_barang || kd_barang} tidak valid`)
+
+      trusted.push({
+        kd_barang,
+        nama_barang: row.nama_barang || kd_barang,
+        harga_jual,
+        harga_modal: Math.max(0, this.asSafeNumber(row.harga_modal)),
+        qty,
+        disc: this.clampPercentage(row.disc),
+      })
+    }
+
+    return trusted
+  }
+
   private static getLowStockProducts(items: CartItem[]) {
     const productIds = [...new Set(items.map(item => item.kd_barang).filter(Boolean))]
     if (!productIds.length) return []
@@ -157,29 +210,44 @@ export class PenjualanController {
       }
     }
 
+    let trustedItems: CartItem[]
+    try {
+      trustedItems = this.buildTrustedItems(payload.items)
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : String(error) }
+    }
+
     const now = new Date()
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
     const timeStr = now.getTime().toString().slice(-4)
     const kd_transaksi = `FJ-${dateStr}${timeStr}`
 
-    const sub_total = payload.items.reduce((sum, item) => {
+    const sub_total = trustedItems.reduce((sum, item) => {
       const disc_amount = (item.harga_jual * item.disc) / 100
       return sum + (item.harga_jual - disc_amount) * item.qty
     }, 0)
 
-    const pajak = payload.pajak ?? 0
-    const diskon_promo = payload.diskon_promo ?? 0
-    const total_bayar = sub_total + pajak - diskon_promo
-    const kembalian = payload.yang_dibayar - total_bayar
+    const pajakRow = sqlite
+      .prepare('SELECT COALESCE(pajak_persen, 0) AS rate FROM mediasoft_identitas LIMIT 1')
+      .get() as { rate?: number } | undefined
+    const pajakRate = Math.max(0, Math.min(100, this.asSafeNumber(pajakRow?.rate)))
+    const pajak = Math.round(sub_total * pajakRate / 100)
+    const diskon_promo = Math.max(0, this.asSafeNumber(payload.diskon_promo))
+    const total_bayar = Math.max(0, sub_total + pajak - diskon_promo)
+    const yang_dibayar = Math.max(0, this.asSafeNumber(payload.yang_dibayar))
+    if (yang_dibayar < total_bayar) {
+      return { success: false, message: 'Pembayaran kurang dari total transaksi' }
+    }
+    const kembalian = yang_dibayar - total_bayar
 
     const header = {
       kd_tansaksi_jual: kd_transaksi,
       tgl_wkt_transaksi: now.toISOString().replace('T', ' ').slice(0, 19),
       username_transaksi: payload.username || 'KASIR',
-      total_qty: payload.items.reduce((s, i) => s + i.qty, 0),
+      total_qty: trustedItems.reduce((s, i) => s + i.qty, 0),
       sub_total,
       pajak,
-      yang_dibayar: payload.yang_dibayar,
+      yang_dibayar,
       kembalian,
       jenis_pembayaran: payload.jenis_pembayaran || 'TUNAI',
       kd_customer: payload.kd_customer || null,
@@ -187,7 +255,7 @@ export class PenjualanController {
       shift_id: payload.shift_id ?? null,
     }
 
-    const details = payload.items.map(item => {
+    const details = trustedItems.map(item => {
       const disc_amount = (item.harga_jual * item.disc) / 100
       const harga_disc = disc_amount * item.qty
       const total_harga_jual = (item.harga_jual - disc_amount) * item.qty
@@ -205,13 +273,11 @@ export class PenjualanController {
       }
     })
 
-    // Execute all operations in a transaction
     const result = await withTransaction(() => {
       PenjualanModel.create(header, details)
 
-      // Update customer poin & total_belanja if customer selected
       if (payload.kd_customer) {
-        const poinEarned = Math.floor(sub_total / 10000) // 1 poin per Rp10.000
+        const poinEarned = Math.floor(sub_total / 10000)
         CustomerModel.addPoin(payload.kd_customer, poinEarned)
         CustomerModel.updateTotalBelanja(payload.kd_customer, sub_total)
       }
@@ -222,7 +288,7 @@ export class PenjualanController {
             total_transactions = COALESCE(total_transactions, 0) + 1
         WHERE id = ?
       `).run(total_bayar, payload.shift_id)
-      
+
       return kd_transaksi
     })
 

@@ -68,6 +68,7 @@ export default function BackupPage() {
     const permission = await ensureStoragePermission();
     if (!permission.granted) return toast(permission.message ?? "Izin penyimpanan ditolak", "error");
     setCreating(true);
+    toast("Membuat backup...", "info");
     const r = await api(
       "backup:create",
       user?.nama_pengguna ?? "system",
@@ -84,6 +85,7 @@ export default function BackupPage() {
     if (!selected) return;
     if (guardPremiumFeature('backup_restore', 'Restore Database')) return;
     setActionLoading(true);
+    toast("Merestore database...", "info");
     const r = await api("backup:restore", selected.kd_backup);
     setActionLoading(false);
     if (r.success) {
@@ -118,6 +120,16 @@ export default function BackupPage() {
     if (guardPremiumFeature('backup_restore', 'Import Database')) return;
     const permission = await ensureStoragePermission();
     if (!permission.granted) return toast(permission.message ?? "Izin penyimpanan ditolak", "error");
+
+    // Validate SQLite header before importing
+    const headerSlice = importFile.slice(0, 16);
+    const headerBuffer = await headerSlice.arrayBuffer();
+    const headerBytes = new Uint8Array(headerBuffer);
+    const SQLITE_HEADER = [83, 81, 76, 105, 116, 101, 32, 102, 111, 114, 109, 97, 116, 32, 51, 0]; // "SQLite format 3\0"
+    const isValidSqlite = SQLITE_HEADER.every((byte, i) => headerBytes[i] === byte);
+    if (!isValidSqlite) {
+      return toast("File bukan database SQLite yang valid. Pastikan file backup tidak corrupt.", "error");
+    }
 
     // Read file as base64
     const reader = new FileReader();

@@ -1,7 +1,7 @@
 import { BackupModel } from '../models/BackupModel.js'
 import { IndustrySettingsController } from './IndustrySettingsController.js'
 import Database from 'better-sqlite3'
-import { sqlite } from '../../database/connection.js'
+import { sqlite, reopenDatabase } from '../../database/connection.js'
 import { app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -88,6 +88,7 @@ function replaceLiveDatabase(sourcePath: string, targetDb: string) {
   removeWalArtifacts(targetDb)
   fs.copyFileSync(sourcePath, targetDb)
   removeWalArtifacts(targetDb)
+  reopenDatabase()
 }
 
 function scheduleRestart() {

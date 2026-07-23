@@ -16,7 +16,7 @@ import type {
   UserSession,
 } from '../../shared/types'
 import bcrypt from 'bcryptjs'
-import { buildAssistantPrompt, buildLocalAssistantResponse } from '../../shared/dashboardAssistant'
+import { buildAssistantPrompt, buildAssistantSystemPrompt, buildLocalAssistantResponse } from '../../shared/dashboardAssistant'
 import { dashboardSummaryToSheetsPayload, testGoogleSheetsPayload } from '../../shared/googleSheetsExport'
 import {
   DEFAULT_INDUSTRY_SETTINGS,
@@ -47,6 +47,7 @@ type MobileUser = Pengguna & {
   remote_license_refresh_token?: string | null
   remote_customer_id?: string | null
   remote_auth_user_id?: string | null
+  foto?: string | null
 }
 
 interface MobileAuthDeviceInfo {
@@ -114,7 +115,7 @@ interface MobileStore {
 const STORAGE_KEY = 'zetass-pos-android-store-v3'
 const AI_API_KEY_STORAGE_KEY = 'integrations.ai_api_key'
 const STORE_VERSION = 3
-const DEFAULT_LICENSE_SERVER_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
+const DEFAULT_LICENSE_SERVER_URL = 'https://PROJECT_ID.supabaseapp.com'
 const LICENSE_LAST_SUCCESS_KEY = 'license_last_success_at'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const REMOTE_READ_FALLBACK_CHANNELS = new Set([
@@ -146,7 +147,7 @@ function normalizeMobileLocalRole(role?: string | null): string {
 }
 
 function appConfigRefererUrl() {
-  const raw = import.meta.env.VITE_AI_REFERER_URL || import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_SUPABASE_URL || DEFAULT_LICENSE_SERVER_URL
+  const raw = import.meta.env.VITE_AI_REFERER_URL || import.meta.env.VITE_API_BASE_URL || DEFAULT_LICENSE_SERVER_URL
   try {
     const parsed = new URL(raw)
     return parsed.protocol === 'https:' ? parsed.toString().replace(/\/+$/, '') : DEFAULT_LICENSE_SERVER_URL
@@ -572,6 +573,27 @@ async function verifyMobilePassword(password: string, user: MobileUser) {
   return bcrypt.compare(password, user.password_hash)
 }
 
+async function syncMobileRemotePasswordChange(user: MobileUser, oldPassword: string, newPassword: string) {
+  const remoteRequired = Number(user.is_buyer ?? 0) === 1 || normalizeMobileLocalRole(user.hak_akses) === 'developer'
+  if (!remoteRequired) return null
+
+  const token = user.remote_license_token ?? null
+  if (!token) {
+    return fail('Session license tidak ditemukan. Login ulang untuk mengganti password')
+  }
+
+  const email = String(user.email ?? '').trim().toLowerCase()
+  if (!EMAIL_PATTERN.test(email)) {
+    return fail('Email akun tidak valid untuk sinkronisasi password')
+  }
+
+  return mobileLicenseRequest<AnyRecord>('POST', '/auth/change-password', {
+    email,
+    old_password: oldPassword,
+    new_password: newPassword,
+  }, token)
+}
+
 function createMobileSession(user: MobileUser, device: MobileAuthDeviceInfo): UserSession {
   const tokenBytes = new Uint8Array(32)
   crypto.getRandomValues(tokenBytes)
@@ -723,18 +745,37 @@ function saleAmount(row: Partial<Penjualan>) {
   return toNumber(row.sub_total) - toNumber(row.discount_amount) + toNumber(row.pajak)
 }
 
+function timestampValue(value: unknown) {
+  const parsed = new Date(String(value ?? '')).getTime()
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function recordHourKey(value: unknown) {
+  const text = String(value ?? '').trim()
+  if (!text) return null
+  const match = text.match(/(?:^|[T\s])(\d{2}):(\d{2})/)
+  if (match) {
+    const hour = Number(match[1])
+    return Number.isFinite(hour) ? hour : null
+  }
+  const parsed = new Date(text)
+  if (!Number.isNaN(parsed.getTime())) return parsed.getHours()
+  return null
+}
+
 function dashboardSummary(store: MobileStore): DashboardSummary {
   const today = dateKey()
   const nowDate = new Date()
   const weekStart = new Date(nowDate)
   weekStart.setDate(nowDate.getDate() - 6)
   const monthKey = today.slice(0, 7)
+  const customerMap = new Map(store.customers.map(item => [item.kd_customer, item.nama_customer]))
 
   const todaySales = store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) === today)
   const weekSales = store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) >= dateKey(weekStart))
   const monthSales = store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi).slice(0, 7) === monthKey)
 
-  const total = (rows: Penjualan[]) => rows.reduce((sum, item) => sum + toNumber(item.sub_total), 0)
+  const total = (rows: Penjualan[]) => rows.reduce((sum, item) => sum + saleAmount(item), 0)
 
   const chartData = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(nowDate)
@@ -744,6 +785,15 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
     return {
       label,
       total: total(store.penjualan.filter(item => recordDateKey(item.tgl_wkt_transaksi) === key)),
+    }
+  })
+
+  const hourlySales = Array.from({ length: 24 }, (_, hour) => {
+    const hourSales = todaySales.filter(item => recordHourKey(item.tgl_wkt_transaksi) === hour)
+    return {
+      hour: `${String(hour).padStart(2, '0')}:00`,
+      count: hourSales.length,
+      total: hourSales.reduce((sum, item) => sum + saleAmount(item), 0),
     }
   })
 
@@ -760,11 +810,25 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
 
   const lowStockProducts = getBarangList(store)
     .filter(item => toNumber(item.stok) <= toNumber(item.stok_minimum, 5))
+    .sort((a, b) => toNumber(a.stok) - toNumber(b.stok))
     .map(item => ({
       kd_barang: item.kd_barang,
       nama_barang: item.nama_barang,
       stok: item.stok,
       stok_minimum: item.stok_minimum,
+    }))
+
+  const recentTransactions = [...store.penjualan]
+    .sort((a, b) => timestampValue(b.tgl_wkt_transaksi) - timestampValue(a.tgl_wkt_transaksi))
+    .slice(0, 5)
+    .map(item => ({
+      kd_tansaksi_jual: item.kd_tansaksi_jual,
+      tgl_wkt_transaksi: item.tgl_wkt_transaksi,
+      username_transaksi: item.username_transaksi,
+      nama_customer: item.nama_customer || customerMap.get(item.kd_customer || '') || 'Pelanggan Umum',
+      total_qty: toNumber(item.total_qty),
+      total_penjualan: saleAmount(item),
+      jenis_pembayaran: item.jenis_pembayaran ?? null,
     }))
 
   return {
@@ -775,6 +839,14 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
     lowStockCount: lowStockProducts.length,
     chartData,
     predictedTomorrow: Math.round(chartData.reduce((sum, item) => sum + item.total, 0) / 7),
+    hourlySales,
+    recentTransactions,
+    alertSummary: {
+      stockOutCount: lowStockProducts.filter(item => toNumber(item.stok) <= 0).length,
+      lowStockCount: lowStockProducts.length,
+      todayTransactionCount: todaySales.length,
+      todayRevenue: total(todaySales),
+    },
     topProducts: [...productMap.values()].sort((a, b) => b.total_qty - a.total_qty).slice(0, 5),
     lowStockProducts,
   }
@@ -1083,29 +1155,14 @@ function normalizeBaseUrl(value: string) {
 }
 
 function normalizeLicenseBaseUrl(rawUrl: string): string {
-  const trimmed = rawUrl.trim().replace(/\/+$/, '')
-  if (!trimmed) return ''
-
-  let parsed: URL
-  try { parsed = new URL(trimmed) }
-  catch { return trimmed }
-
-  const path = parsed.pathname.replace(/\/+$/, '')
-  const isSupabaseProjectRoot = parsed.hostname.endsWith('.supabase.co') && (path === '' || path === '/')
-  if (isSupabaseProjectRoot) {
-    return `${parsed.origin}/functions/v1/mediasoft-license`
-  }
-
-  if (path.includes('/functions/v1/')) return trimmed
-  if (path.endsWith('/api')) return trimmed
-
-  return `${trimmed}/api`
+  // Di Supabase tidak ada base URL edge function; kita simpan project id / kosong.
+  return (rawUrl || '').trim()
 }
 
 function getMobileLicenseEndpoint(): string {
   const envUrl = (
     import.meta.env.VITE_LICENSE_SERVER_URL ||
-    import.meta.env.VITE_SUPABASE_LICENSE_SERVER_URL ||
+    import.meta.env.VITE_FIREBASE_PROJECT_ID ||
     DEFAULT_LICENSE_SERVER_URL
   ).trim()
   return normalizeLicenseBaseUrl(envUrl)
@@ -1598,7 +1655,10 @@ async function listMobileAiModels(store: MobileStore, input?: Partial<IndustrySe
   const settings = normalizeIndustrySettings({ ...store.industrySettings, ...(input ?? {}) })
   const apiKey = settings.aiApiKey || secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || ''
   if (!settings.aiEnabled || settings.aiProvider === 'local') return fail('Aktifkan AI online dan pilih provider terlebih dahulu')
-  if (settings.aiProvider === 'gemini') return fail('Daftar model otomatis saat ini hanya untuk provider OpenAI-compatible')
+  if (settings.aiProvider === 'gemini') {
+    const geminiModels = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-002', 'gemini-1.5-pro-002']
+    return ok(geminiModels, `${geminiModels.length} model Gemini tersedia`)
+  }
   if (!apiKey) return fail('API key AI belum diisi')
 
   const baseUrl = settings.aiBaseUrl || defaultBaseUrlForProvider(settings.aiProvider)
@@ -1655,49 +1715,46 @@ function formatMobileAiError(error: unknown, settings: IndustrySettings) {
   return message || 'Gagal memuat model AI'
 }
 
-async function askMobileAi(store: MobileStore, input: { question?: string; summary?: DashboardSummary }) {
-  const question = String(input?.question ?? '').trim()
-  if (!question || !input?.summary) return fail('Pertanyaan dan data dashboard wajib tersedia')
-
+async function requestMobileAiOnline(store: MobileStore, input: { question: string; summary?: DashboardSummary }) {
   const settings = normalizeIndustrySettings(store.industrySettings)
   const apiKey = settings.aiApiKey || secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || ''
-  const localAnswer = buildLocalAssistantResponse(question, input.summary)
-  if (!settings.aiEnabled || settings.aiProvider === 'local' || !apiKey) {
-    return ok({ answer: localAnswer, provider: 'local', online: false })
-  }
+  const prompt = buildAssistantPrompt(input.question, input.summary)
 
-  try {
-    const prompt = buildAssistantPrompt(question, input.summary)
-    if (settings.aiProvider === 'gemini') {
-      const model = settings.aiModel || defaultModelForProvider('gemini')
-      const baseUrl = settings.aiBaseUrl || defaultBaseUrlForProvider('gemini')
-      const endpoint = assertHttpsEndpoint(baseUrl, 'Base URL Gemini')
-      if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL Gemini tidak valid')
-      const controller = new AbortController()
-      const timeout = window.setTimeout(() => controller.abort(), 30000)
+  if (settings.aiProvider === 'gemini') {
+    const model = settings.aiModel || defaultModelForProvider('gemini')
+    const baseUrl = settings.aiBaseUrl || defaultBaseUrlForProvider('gemini')
+    const endpoint = assertHttpsEndpoint(baseUrl, 'Base URL Gemini')
+    if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL Gemini tidak valid')
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 30000)
+    try {
       const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 600 } }),
-      }).finally(() => window.clearTimeout(timeout))
+      })
       const data = await response.json().catch(() => null) as any
       if (!response.ok || data?.error) throw new Error(data?.error?.message || `Gemini HTTP ${response.status}`)
       const answer = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text).filter(Boolean).join('\n').trim()
       if (!answer) throw new Error('Gemini tidak mengembalikan jawaban')
-      return ok({ answer, provider: settings.aiProvider, online: true })
+      return { answer, provider: settings.aiProvider, online: true }
+    } finally {
+      window.clearTimeout(timeout)
     }
+  }
 
-    const model = settings.aiModel || defaultModelForProvider(settings.aiProvider)
-    const url = settings.aiProvider === 'custom'
-      ? settings.aiBaseUrl
-      : settings.aiBaseUrl || defaultBaseUrlForProvider(settings.aiProvider)
+  const model = settings.aiModel || defaultModelForProvider(settings.aiProvider)
+  const url = settings.aiProvider === 'custom'
+    ? settings.aiBaseUrl
+    : settings.aiBaseUrl || defaultBaseUrlForProvider(settings.aiProvider)
 
-    if (!url || !model) throw new Error('URL atau model AI belum diisi')
-    const endpoint = assertHttpsEndpoint(url, 'Base URL AI')
-    if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL AI tidak valid')
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 30000)
+  if (!url || !model) throw new Error('URL atau model AI belum diisi')
+  const endpoint = assertHttpsEndpoint(url, 'Base URL AI')
+  if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL AI tidak valid')
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 30000)
+  try {
     const response = await fetch(openAiCompatibleChatUrl(endpoint.url), {
       method: 'POST',
       headers: {
@@ -1712,16 +1769,53 @@ async function askMobileAi(store: MobileStore, input: { question?: string; summa
         temperature: 0.2,
         max_tokens: 600,
         messages: [
-          { role: 'system', content: 'Kamu adalah Asisten Zetass-Kar untuk aplikasi POS. Jawab ringkas dan akurat dalam Bahasa Indonesia.' },
+          { role: 'system', content: buildAssistantSystemPrompt() },
           { role: 'user', content: prompt },
         ],
       }),
-    }).finally(() => window.clearTimeout(timeout))
+    })
     const data = await response.json().catch(() => null) as any
     if (!response.ok || data?.error) throw new Error(data?.error?.message || `AI HTTP ${response.status}`)
     const answer = data?.choices?.[0]?.message?.content?.trim()
     if (!answer) throw new Error('AI tidak mengembalikan jawaban')
-    return ok({ answer, provider: settings.aiProvider, online: true })
+    return { answer, provider: settings.aiProvider, online: true }
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+async function testMobileAi(store: MobileStore, input: { question: string; summary?: DashboardSummary }) {
+  const settings = normalizeIndustrySettings(store.industrySettings)
+  const apiKey = settings.aiApiKey || secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || ''
+  if (!settings.aiEnabled || settings.aiProvider === 'local') return fail('Aktifkan AI online dan pilih provider terlebih dahulu')
+  if (settings.aiProvider === 'gemini') {
+    const geminiModels = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-002', 'gemini-1.5-pro-002']
+    return ok(geminiModels, `${geminiModels.length} model Gemini tersedia`)
+  }
+  if (!apiKey) return fail('API key AI belum diisi')
+
+  try {
+    const result = await requestMobileAiOnline({ ...store, industrySettings: { ...settings, aiApiKey: '' } }, input)
+    return ok(result, 'Koneksi AI berhasil')
+  } catch (error) {
+    return fail(formatMobileAiError(error, settings))
+  }
+}
+
+async function askMobileAi(store: MobileStore, input: { question?: string; summary?: DashboardSummary }) {
+  const question = String(input?.question ?? '').trim()
+  if (!question) return fail('Pertanyaan wajib diisi')
+
+  const settings = normalizeIndustrySettings(store.industrySettings)
+  const apiKey = settings.aiApiKey || secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || ''
+  const localAnswer = buildLocalAssistantResponse(question, input.summary)
+  if (!settings.aiEnabled || settings.aiProvider === 'local' || !apiKey) {
+    return ok({ answer: localAnswer, provider: 'local', online: false })
+  }
+
+  try {
+    const online = await requestMobileAiOnline(store, { question, summary: input.summary })
+    return ok(online)
   } catch (error) {
     return ok({
       answer: `${localAnswer}\n\nAI online belum bisa dipakai: ${error instanceof Error ? error.message : String(error)}`,
@@ -2028,7 +2122,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         ...(args[0] as Partial<IndustrySettings>),
       })
       if (settings.aiApiKey) secureStorage.setItem(AI_API_KEY_STORAGE_KEY, settings.aiApiKey)
-      const result = await askMobileAi(
+      const result = await testMobileAi(
         { ...store, industrySettings: { ...settings, aiApiKey: '' } },
         {
           question: 'Tes koneksi AI',
@@ -2336,13 +2430,35 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const validation = validatePasswordStrength(newPassword)
       if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
 
-      user.password_hash = await hashMobilePassword(newPassword)
-      user.password_hash_type = 'bcrypt'
-      user.password = undefined
-      user.must_change_password = 0
-      auditAuth(store, username, 'CHANGE_PASSWORD', 'Password berhasil diubah', authDevice(args[3]))
-      saveStore(store)
-      return ok({ strength: validation.strength } as T, 'Password berhasil diubah')
+      const original = {
+        password_hash: user.password_hash ?? undefined,
+        password_hash_type: user.password_hash_type ?? 'bcrypt',
+        password: user.password ?? undefined,
+        must_change_password: user.must_change_password ?? 0,
+      }
+
+      try {
+        user.password_hash = await hashMobilePassword(newPassword)
+        user.password_hash_type = 'bcrypt'
+        user.password = undefined
+        user.must_change_password = 0
+
+        const remote = await syncMobileRemotePasswordChange(user, oldPassword, newPassword)
+        if (remote && !remote.success) {
+          throw new Error(remote.message ?? 'Gagal sinkronisasi password ke license server')
+        }
+
+        auditAuth(store, username, 'CHANGE_PASSWORD', 'Password berhasil diubah', authDevice(args[3]))
+        saveStore(store)
+        return ok({ strength: validation.strength } as T, 'Password berhasil diubah')
+      } catch (error) {
+        user.password_hash = original.password_hash ?? undefined
+        user.password_hash_type = original.password_hash_type as any
+        user.password = original.password ?? undefined
+        user.must_change_password = original.must_change_password
+        saveStore(store)
+        return fail(error instanceof Error ? error.message : 'Gagal mengubah password')
+      }
     }
 
     case 'auth:restoreSession': {
@@ -2894,6 +3010,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         nama_lengkap: data.nama_lengkap ?? row.nama_lengkap,
         email: data.email ?? row.email,
         no_telp: data.no_telp ?? row.no_telp,
+        foto: data.foto ?? row.foto,
         hak_akses: data.hak_akses === undefined ? row.hak_akses : nextRole,
         access_expires_at: data.access_expires_at ?? row.access_expires_at,
         pin_enabled: pinEnabled && nextRole === 'kasir' ? 1 : 0,
@@ -2920,12 +3037,33 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       if (!(await verifyMobilePassword(oldPassword, row))) return fail('Password lama salah')
       const validation = validatePasswordStrength(newPassword)
       if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
-      row.password_hash = await hashMobilePassword(newPassword)
-      row.password_hash_type = 'bcrypt'
-      row.password = undefined
-      row.must_change_password = 0
-      saveStore(store)
-      return ok(undefined as T, 'Password berhasil diubah')
+      const original = {
+        password_hash: row.password_hash ?? undefined,
+        password_hash_type: row.password_hash_type ?? 'bcrypt',
+        password: row.password ?? undefined,
+        must_change_password: row.must_change_password ?? 0,
+      }
+      try {
+        row.password_hash = await hashMobilePassword(newPassword)
+        row.password_hash_type = 'bcrypt'
+        row.password = undefined
+        row.must_change_password = 0
+
+        const remote = await syncMobileRemotePasswordChange(row, oldPassword, newPassword)
+        if (remote && !remote.success) {
+          throw new Error(remote.message ?? 'Gagal sinkronisasi password ke license server')
+        }
+
+        saveStore(store)
+        return ok(undefined as T, 'Password berhasil diubah')
+      } catch (error) {
+        row.password_hash = original.password_hash ?? undefined
+        row.password_hash_type = original.password_hash_type as any
+        row.password = original.password ?? undefined
+        row.must_change_password = original.must_change_password
+        saveStore(store)
+        return fail(error instanceof Error ? error.message : 'Gagal mengubah password')
+      }
     }
 
     case 'user:resetPassword': {
@@ -3097,6 +3235,12 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
     case 'payment:cancelQris':
       return ok(undefined as T)
+
+    case 'tax:getActiveRate': {
+      const activeTax = store.taxes.find(t => t.is_active === 1)
+      const rate = activeTax ? activeTax.rate : 0
+      return ok({ rate } as T)
+    }
 
     case 'tax:getActive':
       return ok(store.taxes.find(item => item.is_active === 1) as T)
@@ -3705,6 +3849,73 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       store.identitas.barcode_prefix = (args[0] as AnyRecord)?.prefix ?? store.identitas.barcode_prefix
       saveStore(store)
       return ok(undefined as T, 'Pengaturan barcode disimpan')
+
+    case 'marketplace:getChannels': {
+      const channels = (store as any).marketplaceChannels ?? []
+      const logs = (store as any).marketplaceLogs ?? []
+      return ok({ channels, logs } as T)
+    }
+    case 'marketplace:saveChannel': {
+      const data = (args[0] ?? {}) as AnyRecord
+      if (!(store as any).marketplaceChannels) (store as any).marketplaceChannels = []
+      const channels = (store as any).marketplaceChannels as AnyRecord[]
+      const idx = channels.findIndex((c: AnyRecord) => String(c.id) === String(data.id))
+      const row = {
+        id: data.id ?? nextCounter(store, 'barcode'),
+        platform: data.platform ?? 'shopee',
+        name: data.name ?? '',
+        store_url: data.store_url ?? '',
+        auto_sync: data.auto_sync ? 1 : 0,
+        sync_stock: data.sync_stock ? 1 : 0,
+        sync_orders: data.sync_orders ? 1 : 0,
+        is_active: 1,
+        last_sync_at: null,
+        last_status: 'pending',
+      }
+      if (idx >= 0) channels[idx] = { ...channels[idx], ...row }
+      else channels.push(row)
+      saveStore(store)
+      return ok(row as T, 'Channel disimpan')
+    }
+    case 'marketplace:deleteChannel': {
+      const id = args[0]
+      const ch = ((store as any).marketplaceChannels ?? []) as AnyRecord[]
+      ;(store as any).marketplaceChannels = ch.filter((c: AnyRecord) => String(c.id) !== String(id))
+      saveStore(store)
+      return ok(undefined as T, 'Channel dihapus')
+    }
+    case 'marketplace:getSkuMap': {
+      const maps = (store as any).marketplaceSkuMaps ?? []
+      const channelId = args[0] ? Number(args[0]) : undefined
+      const filtered = channelId ? maps.filter((m: AnyRecord) => m.channel_id === channelId) : maps
+      const allBarang = getBarangList(store)
+      const mappedSkus = new Set(filtered.map((m: AnyRecord) => String(m.local_sku)))
+      const unmapped = allBarang.filter(b => !mappedSkus.has(b.kd_barang)).map(b => ({
+        kd_barang: b.kd_barang,
+        nama_barang: b.nama_barang ?? '',
+        barcode: b.barcode ?? null,
+        stok: b.stok ?? 0,
+      }))
+      return ok({ maps: filtered, unmapped } as T)
+    }
+    case 'marketplace:saveSkuMap': {
+      const data = (args[0] ?? {}) as AnyRecord
+      if (!(store as any).marketplaceSkuMaps) (store as any).marketplaceSkuMaps = []
+      const maps = (store as any).marketplaceSkuMaps as AnyRecord[]
+      maps.push({
+        id: nextCounter(store, 'barcode'),
+        channel_id: data.channel_id ?? 0,
+        local_sku: data.local_sku ?? '',
+        remote_sku: data.remote_sku ?? '',
+        remote_product_id: data.remote_product_id ?? '',
+        last_stock: 0,
+        is_active: 1,
+      })
+      saveStore(store)
+      return ok(undefined as T, 'Mapping SKU disimpan')
+    }
+    case 'marketplace:runStockSync':
+      return ok(undefined as T, 'Sync marketplace selesai (offline mode)')
 
     default:
       if (channel.includes(':get') || channel.includes(':search') || channel.startsWith('laporan:')) {

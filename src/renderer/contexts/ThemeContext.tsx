@@ -23,12 +23,45 @@ function hexToRgb(hex: string): string {
     : '236, 72, 153'
 }
 
+function mixHex(hex: string, target: string, amount: number): string {
+  const parse = (h: string) => {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h)
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [0, 0, 0]
+  }
+  const [r1, g1, b1] = parse(hex)
+  const [r2, g2, b2] = parse(target)
+  const r = Math.round(r1 + (r2 - r1) * amount)
+  const g = Math.round(g1 + (g2 - g1) * amount)
+  const b = Math.round(b1 + (b2 - b1) * amount)
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
+}
+
+function generateCustomShades(hex: string) {
+  return {
+    '50': mixHex(hex, '#ffffff', 0.92),
+    '100': mixHex(hex, '#ffffff', 0.82),
+    '200': mixHex(hex, '#ffffff', 0.62),
+    '300': mixHex(hex, '#ffffff', 0.40),
+    '400': mixHex(hex, '#ffffff', 0.18),
+    '500': hex,
+    '600': mixHex(hex, '#000000', 0.15),
+    '700': mixHex(hex, '#000000', 0.28),
+    '800': mixHex(hex, '#000000', 0.40),
+    '900': mixHex(hex, '#000000', 0.52),
+  }
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [color, setColorState] = useState<ThemeColor>(
     () => (secureStorage.getItem('theme-color') as ThemeColor) || 'pink'
   )
   const [mode, setModeState] = useState<ThemeMode>(
-    () => (secureStorage.getItem('theme-mode') as ThemeMode) || 'light'
+    () => {
+      const stored = secureStorage.getItem('theme-mode') as ThemeMode | null
+      if (stored === 'light' || stored === 'dark') return stored
+      if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark'
+      return 'light'
+    }
   )
 
   useEffect(() => {
@@ -50,16 +83,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } else if (color.startsWith('#')) {
       document.documentElement.setAttribute('data-theme', 'custom')
       const rgb = hexToRgb(color)
-      document.documentElement.style.setProperty('--color-primary-50', `${color}10`)
-      document.documentElement.style.setProperty('--color-primary-100', `${color}20`)
-      document.documentElement.style.setProperty('--color-primary-200', `${color}40`)
-      document.documentElement.style.setProperty('--color-primary-300', `${color}60`)
-      document.documentElement.style.setProperty('--color-primary-400', `${color}80`)
-      document.documentElement.style.setProperty('--color-primary-500', color)
-      document.documentElement.style.setProperty('--color-primary-600', color)
-      document.documentElement.style.setProperty('--color-primary-700', color)
-      document.documentElement.style.setProperty('--color-primary-800', color)
-      document.documentElement.style.setProperty('--color-primary-900', color)
+      const shades = generateCustomShades(color)
+      document.documentElement.style.setProperty('--color-primary-50', shades['50'])
+      document.documentElement.style.setProperty('--color-primary-100', shades['100'])
+      document.documentElement.style.setProperty('--color-primary-200', shades['200'])
+      document.documentElement.style.setProperty('--color-primary-300', shades['300'])
+      document.documentElement.style.setProperty('--color-primary-400', shades['400'])
+      document.documentElement.style.setProperty('--color-primary-500', shades['500'])
+      document.documentElement.style.setProperty('--color-primary-600', shades['600'])
+      document.documentElement.style.setProperty('--color-primary-700', shades['700'])
+      document.documentElement.style.setProperty('--color-primary-800', shades['800'])
+      document.documentElement.style.setProperty('--color-primary-900', shades['900'])
       document.documentElement.style.setProperty('--glass-shadow-rgb', rgb)
       document.documentElement.style.setProperty('--chart-bar-color', color)
     }

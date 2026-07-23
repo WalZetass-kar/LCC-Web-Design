@@ -40,7 +40,7 @@ export class MobileAppController {
     try {
       const today = this.dateKey()
       const sales = sqlite.prepare(`
-        SELECT COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0) + COALESCE(pajak, 0)), 0) as total
+        SELECT COALESCE(SUM(COALESCE(sub_total, 0) - COALESCE(discount_amount, 0)), 0) as total
         FROM mediasoft_penjualan
         WHERE substr(tgl_wkt_transaksi, 1, 10) = ?
       `).get(today) as { total: number }

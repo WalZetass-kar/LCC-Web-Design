@@ -15,6 +15,8 @@
     "dev:with-license": "concurrently -k \"npm run dev:license\" \"npm run dev\"",
     "dev:vite": "vite",
     "dev:electron": "wait-on http://localhost:5173 && npm run build:electron && electron .",
+    "dev:electron:watch": "tsc -p tsconfig.electron.json --watch",
+    "dev:watch": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron:watch\" \"sleep 3 && wait-on http://localhost:5173 && electron .\"",
     "build": "npm run verify:build-resources && npm run build:electron && npm run build:vite && electron-builder",
     "build:vite": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json && node scripts/copy-electron-assets.cjs",
@@ -53,28 +55,36 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm run test",
-    "smoke:supabase-license": "node scripts/supabase-license-smoke.mjs",
+    "lint": "eslint src/**/*.ts src/**/*.tsx",
+    "qa:stress": "ELECTRON_RUN_AS_NODE=1 electron scripts/qa-stress.mjs",
     "rebuild:electron": "./node_modules/.bin/electron-rebuild -f -w better-sqlite3",
     "rebuild:node": "npm rebuild better-sqlite3",
     "desktop:linux": "npm run build:desktop && electron-builder --linux --publish never",
     "desktop:mac": "npm run build:desktop && electron-builder --mac --publish never",
     "desktop:all:ci": "npm run build:desktop && electron-builder --win --linux --mac --publish never",
-    "postinstall": "npm run rebuild:electron"
+    "postinstall": "npm run rebuild:electron",
+    "test:e2e": "playwright test",
+    "release:patch": "npm version patch --no-git-tag-version && npm run release:tag",
+    "release:minor": "npm version minor --no-git-tag-version && npm run release:tag",
+    "release:major": "npm version major --no-git-tag-version && npm run release:tag",
+    "release:tag": "node scripts/sync-version.cjs && git add -A && git commit -m \"chore: release v$(node -p 'require(./package.json').version')\" && git tag v$(node -p 'require(./package.json').version') && git push origin main --tags",
+    "release:changelog": "node scripts/generate-changelog.cjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.0",
     "@capacitor/android": "^8.3.4",
     "@capacitor/app": "^8.1.0",
+    "@capacitor/barcode-scanner": "latest",
     "@capacitor/core": "^8.3.4",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/ios": "^8.3.4",
     "@capacitor/preferences": "^8.0.1",
-    "@capacitor/barcode-scanner": "latest",
     "@capgo/capacitor-native-biometric": "latest",
-    "capacitor-thermal-printer": "latest",
+    "@opentelemetry/api": "^1.9.1",
     "@supabase/supabase-js": "^2.106.2",
     "@tanstack/react-table": "^8.17.3",
     "@types/qrcode": "^1.5.6",
+    "axios": "^1.17.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^11.3.0",
     "crypto-js": "^4.2.0",
@@ -83,6 +93,7 @@
     "drizzle-orm": "^0.33.0",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
+    "framer-motion": "^12.42.2",
     "i18next": "^26.0.10",
     "jsbarcode": "^3.11.6",
     "jspdf": "^2.5.2",
@@ -97,7 +108,10 @@
     "react-i18next": "^17.0.7",
     "react-router-dom": "^6.23.1",
     "react-to-print": "^2.15.1",
+    "react-virtuoso": "^4.18.11",
     "recharts": "^2.12.0",
+    "uuid": "^14.0.1",
+    "ws": "^8.21.0",
     "xlsx": "^0.18.5",
     "zod": "^3.25.76"
   },
@@ -111,6 +125,8 @@
     "@types/node-cron": "^3.0.11",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@types/uuid": "^11.0.0",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.3.0",
     "@vitest/ui": "^1.6.1",
     "autoprefixer": "^10.4.19",
@@ -120,6 +136,7 @@
     "electron-builder": "^24.13.3",
     "electron-rebuild": "^3.2.9",
     "eslint": "^8.57.0",
+    "jsdom": "^24.0.0",
     "postcss": "^8.4.38",
     "prettier": "^3.2.5",
     "tailwindcss": "^3.4.3",
@@ -134,6 +151,7 @@
   "build": {
     "appId": "com.zetass.pos",
     "productName": "Zetass Pos",
+    "npmRebuild": false,
     "directories": {
       "output": "release"
     },
@@ -158,10 +176,6 @@
       {
         "from": "build/icon.ico",
         "to": "app-icon.ico"
-      },
-      {
-        "from": "src/renderer/assets",
-        "to": "renderer-assets"
       }
     ],
     "protocols": [
@@ -173,22 +187,49 @@
       }
     ],
     "asarUnpack": [
+      "node_modules/better-sqlite3/**",
+      "node_modules/bindings/**",
+      "node_modules/file-uri-to-path/**",
       "node_modules/**/*.node"
     ],
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "publish": {
+      "provider": "github",
+      "owner": "WalZetass-kar",
+      "repo": "LCC-Web-Design",
+      "releaseType": "release"
+    },
     "linux": {
       "target": [
         "AppImage",
-        "deb"
+        "deb",
+        "rpm",
+        "tar.gz"
       ],
       "category": "Office",
-      "maintainer": "Zetass"
+      "maintainer": "Zetass",
+      "icon": "build/icon.png",
+      "desktop": {
+        "Name": "Zetass Pos",
+        "Comment": "Desktop Point of Sale Application",
+        "Categories": "Office;Finance;",
+        "Keywords": "pos;point-of-sale;cashier;retail;"
+      }
     },
     "win": {
       "target": [
-        "nsis",
-        "msi",
-        "zip"
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "nsis-portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
       ],
       "icon": "build/icon.ico",
       "signAndEditExecutable": false
@@ -198,7 +239,8 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.business"
+      "category": "public.app-category.business",
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
@@ -207,7 +249,13 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Zetass Pos",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
     },
     "msi": {
       "oneClick": false,

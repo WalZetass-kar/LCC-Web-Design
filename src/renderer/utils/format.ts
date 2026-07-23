@@ -1,5 +1,7 @@
-export const formatRupiah = (n: number | null | undefined) =>
-  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n ?? 0)
+export const formatRupiah = (n: number | null | undefined) => {
+  const val = Number(n)
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Number.isFinite(val) ? val : 0)
+}
 
 export const formatDate = (s: string | null | undefined) => {
   if (!s) return '-'

@@ -35,13 +35,22 @@ Thumbs.db
 *.swo
 *~
 
-# Environment
+# Environment & Secrets
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
+.env.supabase.local
 .keys/
 *.keystore
 *.jks
+*.pem
+*.key
+credentials.json
+service-account*.json
+google-services.json
+GoogleService-Info.plist
 
 # Temporary files
 *.tmp
@@ -49,3 +58,29 @@ Thumbs.db
 .cache/
 .local-jdk21/
 openjdk-*.deb
+
+# Android build outputs
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties
+
+# iOS
+ios/App/build/
+ios/App/Pods/
+ios/App/DerivedData/
+
+# Test results
+test-results/
+coverage/
+
+# Release artifacts (generated, not tracked)
+release/*.exe
+release/*.msi
+release/*.zip
+release/*.AppImage
+release/*.deb
+release/*.rpm
+release/*.tar.gz
+release/*.apk
+release/*.aab

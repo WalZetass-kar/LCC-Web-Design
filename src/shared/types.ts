@@ -65,6 +65,23 @@ export interface CartItem {
   disc: number
 }
 
+export interface DashboardRecentTransaction {
+  kd_tansaksi_jual: string
+  tgl_wkt_transaksi: string | null
+  username_transaksi: string | null
+  nama_customer: string | null
+  total_qty: number
+  total_penjualan: number
+  jenis_pembayaran: string | null
+}
+
+export interface DashboardAlertSummary {
+  stockOutCount: number
+  lowStockCount: number
+  todayTransactionCount: number
+  todayRevenue: number
+}
+
 export interface DashboardSummary {
   today: { count: number; total: number }
   week: { count: number; total: number }
@@ -73,6 +90,9 @@ export interface DashboardSummary {
   lowStockCount: number
   chartData: { label: string; total: number }[]
   predictedTomorrow?: number
+  hourlySales?: { hour: string; count: number; total: number }[]
+  recentTransactions?: DashboardRecentTransaction[]
+  alertSummary?: DashboardAlertSummary
   topProducts: {
     kd_barang: string | null
     nama_barang: string | null
@@ -255,6 +275,7 @@ export interface UserSession {
   nama_pengguna: string
   nama_lengkap: string | null
   email?: string | null
+  foto?: string | null
   hak_akses: string | null
   access_expires_at?: string | null
   access_days_remaining?: number | null

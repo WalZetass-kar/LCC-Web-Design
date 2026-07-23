@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { Bot, Send, Trash2, Sparkles, ShoppingCart, TrendingUp, Package, AlertTriangle, HelpCircle } from 'lucide-react'
-import Card from '../components/Card'
+import { Bot, Send, Trash2, Sparkles, ShoppingCart, TrendingUp, AlertTriangle, HelpCircle } from 'lucide-react'
 import Button from '../components/Button'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
@@ -15,10 +14,10 @@ interface Message {
 }
 
 const assistantSuggestions = [
+  { text: 'Jelaskan topik ini', icon: <HelpCircle size={14} /> },
+  { text: 'Buat ringkasan singkat', icon: <Sparkles size={14} /> },
+  { text: 'Beri ide atau rekomendasi', icon: <TrendingUp size={14} /> },
   { text: 'Pemasukan hari ini', icon: <ShoppingCart size={14} /> },
-  { text: 'Pemasukan minggu ini', icon: <TrendingUp size={14} /> },
-  { text: 'Prediksi besok', icon: <Sparkles size={14} /> },
-  { text: 'Produk terlaris', icon: <Package size={14} /> },
   { text: 'Stok menipis', icon: <AlertTriangle size={14} /> },
 ]
 
@@ -30,7 +29,7 @@ export default function Assistant() {
     {
       id: 'welcome',
       sender: 'assistant',
-      text: 'Halo! Saya Asisten AI Zetass-Kar. Saya siap membantu Anda menganalisis data toko secara langsung.\n\nAnda bisa menanyakan tentang:\n• Pemasukan hari ini, minggu ini, atau bulan ini\n• Produk terlaris minggu ini\n• Produk yang stoknya menipis\n• Prediksi pendapatan besok',
+      text: 'Halo! Saya Asisten AI Zetass-Kar. Saya bisa bantu pertanyaan umum, lalu pakai data toko kalau konteksnya memang soal bisnis atau operasional.\n\nCoba tanya apa saja, misalnya:\n• Jelaskan topik tertentu dengan singkat\n• Ringkas teks atau ide\n• Beri rekomendasi\n• Pemasukan hari ini, minggu ini, atau bulan ini\n• Produk terlaris minggu ini\n• Produk yang stoknya menipis',
       timestamp: new Date(),
     },
   ])
@@ -67,11 +66,6 @@ export default function Assistant() {
     const prompt = (questionText ?? assistantInput).trim()
     if (!prompt) return
 
-    if (!summary) {
-      toast('Data toko belum siap. Harap tunggu sebentar...', 'error')
-      return
-    }
-
     // Add user message
     const userMsgId = `user-${Date.now()}`
     setMessages(prev => [
@@ -89,7 +83,7 @@ export default function Assistant() {
     try {
       const r = await api<{ answer: string; provider: string; online: boolean }>('assistant:ask', {
         question: prompt,
-        summary,
+        summary: summary ?? undefined,
       })
 
       const replyMsgId = `assistant-${Date.now()}`
@@ -105,7 +99,7 @@ export default function Assistant() {
         ])
       } else {
         // Fallback to local assistant
-        const localAnswer = buildLocalAssistantResponse(prompt, summary)
+        const localAnswer = buildLocalAssistantResponse(prompt, summary ?? undefined)
         setMessages(prev => [
           ...prev,
           {
@@ -119,7 +113,7 @@ export default function Assistant() {
       }
     } catch {
       const replyMsgId = `assistant-${Date.now()}`
-      const localAnswer = buildLocalAssistantResponse(prompt, summary)
+      const localAnswer = buildLocalAssistantResponse(prompt, summary ?? undefined)
       setMessages(prev => [
         ...prev,
         {
@@ -144,7 +138,7 @@ export default function Assistant() {
       {
         id: 'welcome',
         sender: 'assistant',
-        text: 'Riwayat percakapan dibersihkan. Ada yang bisa saya bantu lagi mengenai data toko Anda?',
+        text: 'Riwayat percakapan dibersihkan. Ada yang ingin kita bahas lagi?',
         timestamp: new Date(),
       },
     ])
@@ -160,7 +154,7 @@ export default function Assistant() {
             Asisten AI Pintar
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Analisis data penjualan, stok barang, dan prediksi bisnis gratis & instan.
+            Tanya apa saja, dari pertanyaan umum sampai data toko.
           </p>
         </div>
         <Button
@@ -244,7 +238,7 @@ export default function Assistant() {
                 key={suggestion.text}
                 type="button"
                 onClick={() => askAssistant(suggestion.text)}
-                disabled={assistantLoading || loading}
+                disabled={assistantLoading}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border border-slate-200 dark:border-slate-700 hover:border-primary-400 dark:hover:border-primary-500 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:text-primary-600 dark:hover:text-primary-400 active:scale-95 transition-all shadow-sm"
               >
                 {suggestion.icon}
@@ -258,12 +252,8 @@ export default function Assistant() {
             <input
               value={assistantInput}
               onChange={event => setAssistantInput(event.target.value)}
-              placeholder={
-                loading
-                  ? 'Sedang memuat data toko...'
-                  : 'Tulis pertanyaan Anda di sini... (contoh: "siapa produk terlaris minggu ini?")'
-              }
-              disabled={loading || assistantLoading}
+              placeholder='Tulis pertanyaan apa saja... (contoh: "jelaskan inflasi singkat" atau "pemasukan hari ini")'
+              disabled={assistantLoading}
               className="flex-1 min-w-0 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-700 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-inner disabled:opacity-50"
             />
             <Button
@@ -271,7 +261,7 @@ export default function Assistant() {
               icon={<Send size={15} />}
               className="px-5 shrink-0"
               loading={assistantLoading}
-              disabled={loading || !assistantInput.trim()}
+              disabled={assistantLoading || !assistantInput.trim()}
             >
               Kirim
             </Button>

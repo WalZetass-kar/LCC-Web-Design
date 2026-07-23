@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Save } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
+import { SkeletonPage } from '../../components/Skeleton'
 
 interface PopupRow {
   id: string
@@ -40,6 +41,8 @@ export default function LicensePopupsPage() {
   }, [toast])
 
   useEffect(() => { void load() }, [load])
+
+  if (loading) return <SkeletonPage rows={6} />
 
   return (
     <div className="space-y-4">

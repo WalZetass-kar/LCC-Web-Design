@@ -16,7 +16,7 @@ import type {
   UserSession,
 } from '../../shared/types'
 import bcrypt from 'bcryptjs'
-import { buildAssistantPrompt, buildLocalAssistantResponse } from '../../shared/dashboardAssistant'
+import { buildAssistantPrompt, buildAssistantSystemPrompt, buildLocalAssistantResponse } from '../../shared/dashboardAssistant'
 import { dashboardSummaryToSheetsPayload, testGoogleSheetsPayload } from '../../shared/googleSheetsExport'
 import {
   DEFAULT_INDUSTRY_SETTINGS,
@@ -687,6 +687,19 @@ function saleTotal(details: PenjualanDetailItem[], pajak = 0, discount = 0) {
   return subtotal + toNumber(pajak) - toNumber(discount)
 }
 
+function recordHourKey(value: unknown) {
+  const text = String(value ?? '').trim()
+  if (!text) return null
+  const match = text.match(/(?:^|[T\s])(\d{2}):(\d{2})/)
+  if (match) {
+    const hour = Number(match[1])
+    return Number.isFinite(hour) ? hour : null
+  }
+  const parsed = new Date(text)
+  if (!Number.isNaN(parsed.getTime())) return parsed.getHours()
+  return null
+}
+
 function dashboardSummary(store: MobileStore): DashboardSummary {
   const today = dateKey()
   const nowDate = new Date()
@@ -708,6 +721,15 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
     return {
       label,
       total: total(store.penjualan.filter(item => (item.tgl_wkt_transaksi ?? '').slice(0, 10) === key)),
+    }
+  })
+
+  const hourlySales = Array.from({ length: 24 }, (_, hour) => {
+    const hourSales = todaySales.filter(item => recordHourKey(item.tgl_wkt_transaksi) === hour)
+    return {
+      hour: `${String(hour).padStart(2, '0')}:00`,
+      count: hourSales.length,
+      total: hourSales.reduce((sum, item) => sum + toNumber(item.sub_total), 0),
     }
   })
 
@@ -739,6 +761,7 @@ function dashboardSummary(store: MobileStore): DashboardSummary {
     lowStockCount: lowStockProducts.length,
     chartData,
     predictedTomorrow: Math.round(chartData.reduce((sum, item) => sum + item.total, 0) / 7),
+    hourlySales,
     topProducts: [...productMap.values()].sort((a, b) => b.total_qty - a.total_qty).slice(0, 5),
     lowStockProducts,
   }
@@ -1446,7 +1469,10 @@ async function listMobileAiModels(store: MobileStore, input?: Partial<IndustrySe
   const settings = normalizeIndustrySettings({ ...store.industrySettings, ...(input ?? {}) })
   const apiKey = settings.aiApiKey || secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || ''
   if (!settings.aiEnabled || settings.aiProvider === 'local') return fail('Aktifkan AI online dan pilih provider terlebih dahulu')
-  if (settings.aiProvider === 'gemini') return fail('Daftar model otomatis saat ini hanya untuk provider OpenAI-compatible')
+  if (settings.aiProvider === 'gemini') {
+    const geminiModels = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-002', 'gemini-1.5-pro-002']
+    return ok(geminiModels, `${geminiModels.length} model Gemini tersedia`)
+  }
   if (!apiKey) return fail('API key AI belum diisi')
 
   const baseUrl = settings.aiBaseUrl || defaultBaseUrlForProvider(settings.aiProvider)
@@ -1503,49 +1529,46 @@ function formatMobileAiError(error: unknown, settings: IndustrySettings) {
   return message || 'Gagal memuat model AI'
 }
 
-async function askMobileAi(store: MobileStore, input: { question?: string; summary?: DashboardSummary }) {
-  const question = String(input?.question ?? '').trim()
-  if (!question || !input?.summary) return fail('Pertanyaan dan data dashboard wajib tersedia')
-
+async function requestMobileAiOnline(store: MobileStore, input: { question: string; summary?: DashboardSummary }) {
   const settings = normalizeIndustrySettings(store.industrySettings)
   const apiKey = settings.aiApiKey || secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || ''
-  const localAnswer = buildLocalAssistantResponse(question, input.summary)
-  if (!settings.aiEnabled || settings.aiProvider === 'local' || !apiKey) {
-    return ok({ answer: localAnswer, provider: 'local', online: false })
-  }
+  const prompt = buildAssistantPrompt(input.question, input.summary)
 
-  try {
-    const prompt = buildAssistantPrompt(question, input.summary)
-    if (settings.aiProvider === 'gemini') {
-      const model = settings.aiModel || defaultModelForProvider('gemini')
-      const baseUrl = settings.aiBaseUrl || defaultBaseUrlForProvider('gemini')
-      const endpoint = assertHttpsEndpoint(baseUrl, 'Base URL Gemini')
-      if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL Gemini tidak valid')
-      const controller = new AbortController()
-      const timeout = window.setTimeout(() => controller.abort(), 30000)
+  if (settings.aiProvider === 'gemini') {
+    const model = settings.aiModel || defaultModelForProvider('gemini')
+    const baseUrl = settings.aiBaseUrl || defaultBaseUrlForProvider('gemini')
+    const endpoint = assertHttpsEndpoint(baseUrl, 'Base URL Gemini')
+    if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL Gemini tidak valid')
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 30000)
+    try {
       const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 600 } }),
-      }).finally(() => window.clearTimeout(timeout))
+      })
       const data = await response.json().catch(() => null) as any
       if (!response.ok || data?.error) throw new Error(data?.error?.message || `Gemini HTTP ${response.status}`)
       const answer = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text).filter(Boolean).join('\n').trim()
       if (!answer) throw new Error('Gemini tidak mengembalikan jawaban')
-      return ok({ answer, provider: settings.aiProvider, online: true })
+      return { answer, provider: settings.aiProvider, online: true }
+    } finally {
+      window.clearTimeout(timeout)
     }
+  }
 
-    const model = settings.aiModel || defaultModelForProvider(settings.aiProvider)
-    const url = settings.aiProvider === 'custom'
-      ? settings.aiBaseUrl
-      : settings.aiBaseUrl || defaultBaseUrlForProvider(settings.aiProvider)
+  const model = settings.aiModel || defaultModelForProvider(settings.aiProvider)
+  const url = settings.aiProvider === 'custom'
+    ? settings.aiBaseUrl
+    : settings.aiBaseUrl || defaultBaseUrlForProvider(settings.aiProvider)
 
-    if (!url || !model) throw new Error('URL atau model AI belum diisi')
-    const endpoint = assertHttpsEndpoint(url, 'Base URL AI')
-    if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL AI tidak valid')
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 30000)
+  if (!url || !model) throw new Error('URL atau model AI belum diisi')
+  const endpoint = assertHttpsEndpoint(url, 'Base URL AI')
+  if (!endpoint.valid || !endpoint.url) throw new Error(endpoint.message || 'Base URL AI tidak valid')
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 30000)
+  try {
     const response = await fetch(openAiCompatibleChatUrl(endpoint.url), {
       method: 'POST',
       headers: {
@@ -1560,16 +1583,53 @@ async function askMobileAi(store: MobileStore, input: { question?: string; summa
         temperature: 0.2,
         max_tokens: 600,
         messages: [
-          { role: 'system', content: 'Kamu adalah Asisten Zetass-Kar untuk aplikasi POS. Jawab ringkas dan akurat dalam Bahasa Indonesia.' },
+          { role: 'system', content: buildAssistantSystemPrompt() },
           { role: 'user', content: prompt },
         ],
       }),
-    }).finally(() => window.clearTimeout(timeout))
+    })
     const data = await response.json().catch(() => null) as any
     if (!response.ok || data?.error) throw new Error(data?.error?.message || `AI HTTP ${response.status}`)
     const answer = data?.choices?.[0]?.message?.content?.trim()
     if (!answer) throw new Error('AI tidak mengembalikan jawaban')
-    return ok({ answer, provider: settings.aiProvider, online: true })
+    return { answer, provider: settings.aiProvider, online: true }
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+async function testMobileAi(store: MobileStore, input: { question: string; summary?: DashboardSummary }) {
+  const settings = normalizeIndustrySettings(store.industrySettings)
+  const apiKey = settings.aiApiKey || secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || ''
+  if (!settings.aiEnabled || settings.aiProvider === 'local') return fail('Aktifkan AI online dan pilih provider terlebih dahulu')
+  if (settings.aiProvider === 'gemini') {
+    const geminiModels = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-002', 'gemini-1.5-pro-002']
+    return ok(geminiModels, `${geminiModels.length} model Gemini tersedia`)
+  }
+  if (!apiKey) return fail('API key AI belum diisi')
+
+  try {
+    const result = await requestMobileAiOnline({ ...store, industrySettings: { ...settings, aiApiKey: '' } }, input)
+    return ok(result, 'Koneksi AI berhasil')
+  } catch (error) {
+    return fail(formatMobileAiError(error, settings))
+  }
+}
+
+async function askMobileAi(store: MobileStore, input: { question?: string; summary?: DashboardSummary }) {
+  const question = String(input?.question ?? '').trim()
+  if (!question) return fail('Pertanyaan wajib diisi')
+
+  const settings = normalizeIndustrySettings(store.industrySettings)
+  const apiKey = settings.aiApiKey || secureStorage.getItem(AI_API_KEY_STORAGE_KEY) || ''
+  const localAnswer = buildLocalAssistantResponse(question, input.summary)
+  if (!settings.aiEnabled || settings.aiProvider === 'local' || !apiKey) {
+    return ok({ answer: localAnswer, provider: 'local', online: false })
+  }
+
+  try {
+    const online = await requestMobileAiOnline(store, { question, summary: input.summary })
+    return ok(online)
   } catch (error) {
     return ok({
       answer: `${localAnswer}\n\nAI online belum bisa dipakai: ${error instanceof Error ? error.message : String(error)}`,
@@ -1869,7 +1929,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         ...(args[0] as Partial<IndustrySettings>),
       })
       if (settings.aiApiKey) secureStorage.setItem(AI_API_KEY_STORAGE_KEY, settings.aiApiKey)
-      const result = await askMobileAi(
+      const result = await testMobileAi(
         { ...store, industrySettings: { ...settings, aiApiKey: '' } },
         {
           question: 'Tes koneksi AI',

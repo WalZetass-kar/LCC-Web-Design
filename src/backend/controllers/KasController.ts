@@ -1,6 +1,6 @@
 import { KasModel } from '../models/KasModel.js'
 import type { KasDrawer, KasTransaksi } from '../../shared/types'
-import { validateDemoMode } from '../utils/demoMode.js'
+import { requireAuth } from '../utils/authGuard.js'
 
 export class KasController {
   // Kas Drawer Management
@@ -34,9 +34,9 @@ export class KasController {
     }
   }
 
-  static bukaKas(username: string, modal_awal: number, catatan?: string) {
-    const demoError = validateDemoMode(username)
-    if (demoError) return demoError
+  static async bukaKas(username: string, modal_awal: number, catatan?: string) {
+    const authError = await requireAuth();
+    if (authError) return authError;
 
     try {
       // Check if user already has active kas

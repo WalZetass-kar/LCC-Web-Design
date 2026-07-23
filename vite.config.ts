@@ -24,6 +24,10 @@ export default defineConfig({
     }),
   ],
   base: './',
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./tests/setup.ts'],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src/renderer'),
@@ -43,6 +47,21 @@ export default defineConfig({
           if (id.includes('@capacitor')) return 'vendor-capacitor'
           if (id.includes('i18next')) return 'vendor-i18n'
           if (id.includes('react')) return 'vendor-react'
+          if (id.includes('drizzle-orm')) return 'vendor-database'
+          if (id.includes('better-sqlite3')) return 'vendor-database'
+          if (id.includes('crypto-js') || id.includes('crypto')) return 'vendor-crypto'
+          if (id.includes('axios') || id.includes('node-fetch')) return 'vendor-http'
+          if (id.includes('date-fns') || id.includes('dayjs') || id.includes('moment')) return 'vendor-dates'
+          if (id.includes('dompurify') || id.includes('sanitize')) return 'vendor-security'
+          const parts = id.split('node_modules/')
+          if (parts.length > 1) {
+            const scopeMatch = parts[1].match(/^(@[^/]+\/[^/]+)/)
+            if (scopeMatch) {
+              return `vendor-${scopeMatch[1].replace('/', '-')}`
+            }
+            const pkg = parts[1].split('/')[0]
+            if (pkg && pkg !== '.pnpm') return `vendor-${pkg}`
+          }
           return undefined
         },
       },
@@ -64,5 +83,6 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    strictPort: true,
   },
 })

@@ -7,7 +7,8 @@ import {
 import { useState, useEffect } from 'react'
 import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import Input from './Input'
-import { Search } from 'lucide-react'
+import { Search, Inbox } from 'lucide-react'
+import EmptyState from './EmptyState'
 
 interface DataTableProps<T> {
   data: T[]
@@ -173,9 +174,12 @@ export default function DataTable<T>({
             </div>
           ))
         ) : table.getRowModel().rows.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-400 dark:border-slate-800 dark:bg-slate-900">
-            Tidak ada data
-          </div>
+          <EmptyState
+            icon={<Inbox size={40} strokeWidth={1.5} />}
+            title="Tidak ada data"
+            description="Belum ada data yang tersedia untuk ditampilkan"
+            className="py-10"
+          />
         ) : (
           table.getRowModel().rows.map(row => {
             const cells = row.getVisibleCells()
@@ -229,7 +233,7 @@ export default function DataTable<T>({
               {loading || table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length} className="px-3 sm:px-4 py-10 text-center text-slate-400 text-sm">
-                    {loading ? 'Memuat data...' : 'Tidak ada data'}
+                    {loading ? 'Memuat data...' : <EmptyState icon={<Inbox size={36} strokeWidth={1.5} />} title="Tidak ada data" className="py-4" />}
                   </td>
                 </tr>
               ) : (

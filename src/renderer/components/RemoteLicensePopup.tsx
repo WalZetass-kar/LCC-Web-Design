@@ -240,19 +240,22 @@ export default function RemoteLicensePopup() {
   }
 
   return (
-    <div className="fixed inset-0 z-[12000] flex items-center justify-center overflow-y-auto bg-slate-950/75 p-4 backdrop-blur-md">
-      <div className="relative max-h-[92vh] w-full max-w-[780px] overflow-y-auto rounded-2xl border border-violet-500/20 bg-[#0b1426]/95 px-6 py-6 text-white shadow-2xl shadow-violet-950/50 ring-1 ring-white/5 sm:px-7">
+    <div
+      className="fixed inset-0 z-[12000] flex items-center justify-center overflow-y-auto bg-slate-950/75 p-4 backdrop-blur-md"
+      onClick={close}
+    >
+      <div className="relative max-h-[92vh] w-full max-w-[780px] overflow-y-auto rounded-2xl border border-violet-500/20 bg-[#0b1426]/95 px-6 py-6 text-white shadow-2xl shadow-violet-950/50 ring-1 ring-white/5 sm:px-7"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_50%_0%,rgba(139,92,246,0.20),transparent_42%),radial-gradient(circle_at_0%_100%,rgba(124,58,237,0.18),transparent_36%)]" />
 
-        {!force && popup.dismissible !== false && (
-          <button
-            onClick={close}
-            className="absolute right-4 top-4 z-10 rounded-xl bg-white/5 p-2 text-slate-400 transition hover:bg-white/10 hover:text-white"
-            aria-label="Tutup"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
+        <button
+          onClick={close}
+          className="absolute right-4 top-4 z-10 rounded-xl bg-white/5 p-2 text-slate-400 transition hover:bg-white/10 hover:text-white"
+          aria-label="Tutup"
+        >
+          <X className="h-4 w-4" />
+        </button>
 
         <div className="relative">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/30">
@@ -415,14 +418,12 @@ export default function RemoteLicensePopup() {
                 Keluar
               </button>
             )}
-            {!force && popup.dismissible !== false && (
-              <button
-                onClick={close}
-                className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/10"
-              >
-                Nanti
-              </button>
-            )}
+            <button
+              onClick={close}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/10"
+            >
+              Nanti
+            </button>
             {supportWhatsappUrl && (
               <button
                 onClick={() => openUrl(supportWhatsappUrl)}

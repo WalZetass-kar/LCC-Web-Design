@@ -46,11 +46,11 @@ export class LaporanController {
       const summary = {
         total_transaksi: result.length,
         total_qty: result.reduce((sum, r) => sum + (r.total_qty || 0), 0),
-        total_penjualan: result.reduce((sum, r) => sum + (r.yang_dibayar || 0), 0),
+        total_penjualan: result.reduce((sum, r) => sum + (r.sub_total || 0) - (r.discount_amount || 0), 0),
         total_pajak: result.reduce((sum, r) => sum + (r.pajak || 0), 0),
         total_return: returnSummary?.total ?? 0,
         transaksi_return: returnSummary?.count ?? 0,
-        total_bersih: result.reduce((sum, r) => sum + (r.yang_dibayar || 0), 0) - (returnSummary?.total ?? 0),
+        total_bersih: result.reduce((sum, r) => sum + (r.sub_total || 0) - (r.discount_amount || 0), 0) - (returnSummary?.total ?? 0),
       }
 
       return { success: true, data: { transaksi: result, summary } }

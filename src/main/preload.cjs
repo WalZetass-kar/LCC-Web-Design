@@ -55,6 +55,9 @@ const ALLOWED_CHANNELS = new Set([
   'barang:update',
   'barang:delete',
   'barang:bulkImport',
+  'barang:getByKategori',
+  'barang:batchUpdatePrice',
+  'barang:getByBranch',
 
   // Kategori
   'kategori:getAll',
@@ -175,6 +178,9 @@ const ALLOWED_CHANNELS = new Set([
   'export:penjualanPDF',
   'export:stokExcel',
   'export:stokPDF',
+  'export:cashFlowExcel',
+  'export:priceListPDF',
+  'export:taxReportExcel',
   'export:toExcel',
   'export:toPDF',
 
@@ -223,6 +229,7 @@ const ALLOWED_CHANNELS = new Set([
 
   // Tax
   'tax:getActive',
+  'tax:getActiveRate',
   'tax:getAll',
   'tax:setActive',
   'tax:create',
@@ -335,6 +342,25 @@ const ALLOWED_CHANNELS = new Set([
   'branch:update',
   'branch:delete',
   'branch:transferStock',
+  'stock:transfer',
+
+  // Feature Hub
+  'dailyNotes:getAll',
+  'dailyNotes:create',
+  'dailyNotes:update',
+  'dailyNotes:delete',
+  'pettyCash:getAll',
+  'pettyCash:create',
+  'pettyCash:delete',
+  'notifSettings:get',
+  'notifSettings:save',
+  'priceList:get',
+  'cashFlow:getAll',
+  'taxReport:getSummary',
+  'salesCommission:getAll',
+  'supplierRating:getAll',
+  'membership:getAll',
+  'stockHistory:getAll',
 
   // Loyalty/Points
   'loyalty:getTiers',
@@ -443,6 +469,7 @@ const ALLOWED_CHANNELS = new Set([
   'license:deleteUser',
   'license:changeUserPlan',
   'license:resetUserPassword',
+  'license:resetPassword',
   'license:getPlans',
   'license:createPlan',
   'license:updatePlan',
@@ -480,6 +507,189 @@ const ALLOWED_CHANNELS = new Set([
   // Print
   'print:getPrinters',
   'print:execute',
+
+  // Employee / HR
+  'employee:getAll',
+  'employee:getById',
+  'employee:search',
+  'employee:create',
+  'employee:update',
+  'employee:delete',
+  'employee:getByStatus',
+  // Contracts
+  'contract:getByEmployee',
+  'contract:getById',
+  'contract:create',
+  'contract:update',
+  'contract:terminate',
+  // Attendance
+  'attendance:getAll',
+  'attendance:getByEmployee',
+  'attendance:clockIn',
+  'attendance:clockOut',
+  'attendance:getSummary',
+  // Payroll
+  'payroll:getAll',
+  'payroll:getByEmployee',
+  'payroll:create',
+  'payroll:updateStatus',
+  'payroll:getSlip',
+  'payroll:getSummary',
+  'payroll:getDetails',
+  'payroll:addDetail',
+  'payroll:deleteDetail',
+  // Tip Pooling
+  'tip:getAll',
+  'tip:create',
+  'tip:distribute',
+  'tip:getDistributions',
+  // Shift Schedule
+  'shiftSchedule:getAll',
+  'shiftSchedule:getByEmployee',
+  'shiftSchedule:create',
+  'shiftSchedule:delete',
+
+  // KDS (Kitchen Display)
+  'kds:getOrders',
+  'kds:getOrderById',
+  'kds:createOrder',
+  'kds:updateOrderStatus',
+  'kds:getOrderItems',
+  'kds:addOrderItem',
+  'kds:updateOrderItemStatus',
+  'kds:getSummary',
+  'kds:getPending',
+  'kds:getAvgPrepTime',
+
+  // Floor Layout & Tables
+  'floor:getAll',
+  'floor:getById',
+  'floor:create',
+  'floor:update',
+  'table:getAll',
+  'table:getById',
+  'table:create',
+  'table:update',
+  'table:updateStatus',
+  'table:delete',
+  'table:getSummary',
+
+  // Reservations
+  'reservation:getAll',
+  'reservation:getById',
+  'reservation:create',
+  'reservation:updateStatus',
+  'reservation:cancel',
+  'reservation:getActive',
+  'reservation:getUpcoming',
+
+  // Recipe / BOM
+  'recipe:getAll',
+  'recipe:getById',
+  'recipe:create',
+  'recipe:update',
+  'recipe:delete',
+  'recipe:getIngredients',
+  'recipe:addIngredient',
+  'recipe:updateIngredient',
+  'recipe:deleteIngredient',
+  'recipe:calcCost',
+  'recipe:search',
+  'recipe:getByProduct',
+
+  // Delivery
+  'delivery:getOrders',
+  'delivery:getOrderById',
+  'delivery:createOrder',
+  'delivery:updateOrderStatus',
+  'delivery:assignCourier',
+  'delivery:getVehicles',
+  'delivery:createVehicle',
+  'delivery:updateVehicle',
+  'delivery:deleteVehicle',
+
+  // Bank & Finance
+  'bank:getAccounts',
+  'bank:getAccountById',
+  'bank:createAccount',
+  'bank:updateAccount',
+  'bank:deleteAccount',
+  'bank:getTransactions',
+  'bank:addTransaction',
+  'bank:reconcile',
+  // Fixed Assets
+  'asset:getAll',
+  'asset:getById',
+  'asset:create',
+  'asset:update',
+  'asset:delete',
+  'asset:calcDepreciation',
+  'asset:getDepreciationHistory',
+  // Budgets
+  'budget:getAll',
+  'budget:getById',
+  'budget:create',
+  'budget:update',
+  'budget:delete',
+  'budget:getSummary',
+
+  // Gift Card
+  'giftcard:getAll',
+  'giftcard:getById',
+  'giftcard:getByCode',
+  'giftcard:create',
+  'giftcard:topUp',
+  'giftcard:redeem',
+  'giftcard:getUsage',
+
+  // Customer Feedback
+  'feedback:getAll',
+  'feedback:getById',
+  'feedback:create',
+  'feedback:reply',
+  'feedback:getSummary',
+
+  // Campaigns
+  'campaign:getAll',
+  'campaign:getById',
+  'campaign:create',
+  'campaign:update',
+  'campaign:delete',
+  'campaign:send',
+  'campaign:getLogs',
+
+  // Storefront (Online Store)
+  'storefront:getSettings',
+  'storefront:updateSettings',
+  'storefront:getProducts',
+  'storefront:updateProduct',
+  'storefront:getOrders',
+  'storefront:getOrderById',
+  'storefront:createOrder',
+  'storefront:updateOrderStatus',
+
+  // Vendor Portal
+  'vendor:getSettings',
+  'vendor:updateSettings',
+
+  // Document Management
+  'document:getAll',
+  'document:getById',
+  'document:create',
+  'document:update',
+  'document:delete',
+  'document:search',
+
+  // Forecasting & Dynamic Pricing
+  'forecast:getSettings',
+  'forecast:updateSettings',
+  'forecast:getAll',
+  'forecast:generate',
+  'pricing:getRules',
+  'pricing:createRule',
+  'pricing:updateRule',
+  'pricing:deleteRule',
+  'pricing:getActive',
 ])
 
 // Expose safe IPC bridge to renderer via window.api

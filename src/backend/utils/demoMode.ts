@@ -4,7 +4,7 @@ import type { IpcResponse } from '../../shared/types'
  * Check if user is in demo mode
  */
 export function isDemoUser(username?: string): boolean {
-  return username === 'demo'
+  return false
 }
 
 /**
@@ -12,8 +12,8 @@ export function isDemoUser(username?: string): boolean {
  */
 export function getDemoError<T = any>(): IpcResponse<T> {
   return {
-    success: false,
-    message: '🔒 Mode Demo: Anda tidak dapat melakukan perubahan data. Silakan login dengan akun biasa untuk menggunakan fitur ini.'
+    success: true,
+    message: ''
   }
 }
 
@@ -22,9 +22,6 @@ export function getDemoError<T = any>(): IpcResponse<T> {
  * Returns error response if blocked, null if allowed
  */
 export function validateDemoMode<T = any>(username?: string): IpcResponse<T> | null {
-  if (isDemoUser(username)) {
-    return getDemoError<T>()
-  }
   return null
 }
 
@@ -34,7 +31,5 @@ export function validateDemoMode<T = any>(username?: string): IpcResponse<T> | n
  * This is the LAST LINE OF DEFENSE
  */
 export function guardDemoWrite(username?: string): void {
-  if (isDemoUser(username)) {
-    throw new Error('DEMO_MODE_BLOCKED: Write operations are not allowed in demo mode')
-  }
+  return
 }

@@ -11,8 +11,7 @@ function initTable() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `).run()
-    
-    // Insert default tax if none exists
+
     const existing = sqlite.prepare('SELECT COUNT(*) as count FROM mediasoft_tax_settings').get() as any
     if (existing?.count === 0) {
       sqlite.prepare('INSERT INTO mediasoft_tax_settings (name, rate, is_active) VALUES (?, ?, ?)').run('PPN 10%', 10, 1)
@@ -30,6 +29,15 @@ export class TaxController {
       return null
     }
     return value
+  }
+
+  static getActiveRate(): number {
+    const active = sqlite.prepare('SELECT rate FROM mediasoft_tax_settings WHERE is_active = 1 LIMIT 1').get() as { rate?: number } | undefined
+    if (active && typeof active.rate === 'number') {
+      return Math.max(0, Math.min(100, active.rate))
+    }
+    const legacy = sqlite.prepare('SELECT COALESCE(pajak_persen, 0) AS rate FROM mediasoft_identitas LIMIT 1').get() as { rate?: number } | undefined
+    return Math.max(0, Math.min(100, Number(legacy?.rate ?? 0)))
   }
 
   static getActive() {
@@ -78,15 +86,14 @@ export class TaxController {
   static delete(id: number) {
     const tax = sqlite.prepare('SELECT is_active FROM mediasoft_tax_settings WHERE id = ?').get(id) as any
     if (!tax) return { success: false, message: 'Pajak tidak ditemukan' }
-    
+
     sqlite.prepare('DELETE FROM mediasoft_tax_settings WHERE id = ?').run(id)
-    
-    // If deleted tax was active, activate another one if available
+
     if (tax.is_active === 1) {
       const next = sqlite.prepare('SELECT id FROM mediasoft_tax_settings LIMIT 1').get() as any
       if (next) sqlite.prepare('UPDATE mediasoft_tax_settings SET is_active = 1 WHERE id = ?').run(next.id)
     }
-    
+
     return { success: true }
   }
 }

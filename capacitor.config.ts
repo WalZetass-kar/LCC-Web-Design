@@ -6,11 +6,15 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   bundledWebRuntime: false,
   android: {
-    allowMixedContent: false,
+    allowMixedContent: true,
     loggingBehavior: 'none',
+    backgroundColor: '#0f172a',
   },
   ios: {
     scheme: 'ZetassPos',
+  },
+  server: {
+    androidScheme: 'https',
   },
 }
 

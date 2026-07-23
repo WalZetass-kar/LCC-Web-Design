@@ -7,7 +7,12 @@
  * - Auto refresh access_token + dispatch event saat fitur terkunci
  */
 
-import axios, { AxiosError, AxiosInstance } from 'axios';
+import axios, {
+  AxiosError,
+  AxiosInstance,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from 'axios';
 
 // ============================================================
 // SECURE STORAGE
@@ -160,16 +165,16 @@ export class LicenseClient {
     this.opts = opts;
     this.http = axios.create({ baseURL: opts.baseURL, timeout: 15000 });
 
-    this.http.interceptors.request.use(async (cfg) => {
+    this.http.interceptors.request.use(async (cfg: InternalAxiosRequestConfig) => {
       const token = await secureStorage.getAccess();
-      if (token) cfg.headers.Authorization = `Bearer ${token}`;
-      cfg.headers['X-Device-Id'] = await secureStorage.getDeviceId();
-      if (opts.appVersion) cfg.headers['X-App-Version'] = opts.appVersion;
+      if (token) cfg.headers.set('Authorization', `Bearer ${token}`);
+      cfg.headers.set('X-Device-Id', await secureStorage.getDeviceId());
+      if (opts.appVersion) cfg.headers.set('X-App-Version', opts.appVersion);
       return cfg;
     });
 
     this.http.interceptors.response.use(
-      (r) => r,
+      (r: AxiosResponse) => r,
       async (err: AxiosError<any>) => {
         const original: any = err.config;
         const status = err.response?.status;

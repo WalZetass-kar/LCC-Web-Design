@@ -9,6 +9,7 @@ import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
+import { SkeletonPage } from '../components/Skeleton'
 
 interface Warehouse { id: number; name: string; location?: string; is_active?: number }
 interface StockRow { id: number; warehouse_name: string; kd_barang: string; nama_barang: string; qty: number; global_stock: number }
@@ -223,6 +224,8 @@ export default function AdvancedInventory({ embedded = false }: { embedded?: boo
       load()
     } else toast(r.message as string, 'error')
   }
+
+  if (loading) return <SkeletonPage rows={6} />
 
   return (
     <div className="space-y-4">

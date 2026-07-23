@@ -29,9 +29,12 @@ export default function SatuanPage() {
   const [loadingData, setLoadingData] = useState(true)
 
   const load = async () => {
-    const r = await api<Satuan[]>('satuan:getAll')
-    if (r.success) setData(r.data ?? [])
-    setLoadingData(false)
+    try {
+      const r = await api<Satuan[]>('satuan:getAll')
+      if (r.success) setData(r.data ?? [])
+    } finally {
+      setLoadingData(false)
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -51,20 +54,26 @@ export default function SatuanPage() {
       return
     }
     setLoading(true)
-    const r = modal === 'add'
-      ? await api('satuan:create', form)
-      : await api('satuan:update', selected!.kd_satuan, form)
-    setLoading(false)
-    if (r.success) { toast(r.message as string); closeModal(); load() }
-    else toast(r.message as string, 'error')
+    try {
+      const r = modal === 'add'
+        ? await api('satuan:create', form)
+        : await api('satuan:update', selected?.kd_satuan, form)
+      if (r.success) { toast(r.message as string); closeModal(); load() }
+      else toast(r.message as string, 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleDelete = async () => {
     setLoading(true)
-    const r = await api('satuan:delete', selected!.kd_satuan)
-    setLoading(false)
-    if (r.success) { toast(r.message as string); setConfirmDelete(false); setSelected(null); load() }
-    else toast(r.message as string, 'error')
+    try {
+      const r = await api('satuan:delete', selected?.kd_satuan)
+      if (r.success) { toast(r.message as string); setConfirmDelete(false); setSelected(null); load() }
+      else toast(r.message as string, 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const columns: ColumnDef<Satuan>[] = [

@@ -1,4 +1,0 @@
-project_id = "zetass-pos-license"
-
-[functions.mediasoft-license]
-verify_jwt = false

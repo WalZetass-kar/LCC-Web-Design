@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { AlertTriangle, Check, Pencil, Plus, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
+import { SkeletonPage } from '../../components/Skeleton'
 
 interface PlanRow {
   id: string
@@ -341,6 +342,8 @@ export default function LicensePlansPage() {
     toast('Paket Lifetime berhasil ditambahkan', 'success')
     void load()
   }
+
+  if (loading) return <SkeletonPage rows={6} />
 
   return (
     <div className="space-y-4">

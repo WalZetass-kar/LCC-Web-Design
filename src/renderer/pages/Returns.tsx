@@ -5,8 +5,10 @@ import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Badge from '../components/Badge'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { TableSkeleton } from '../components/Skeleton'
 import { api } from '../utils/api'
+import EmptyState from '../components/EmptyState'
 import { formatRupiah, formatDate } from '../utils/format'
 import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -66,6 +68,8 @@ export default function Returns() {
   const [selectedReturn, setSelectedReturn] = useState<ReturnRow | null>(null)
   const [returnDetails, setReturnDetails] = useState<ReturnDetail[]>([])
   const [deleteReturn, setDeleteReturn] = useState<ReturnRow | null>(null)
+  const [approveReturn, setApproveReturn] = useState<ReturnRow | null>(null)
+  const [rejectReturn, setRejectReturn] = useState<ReturnRow | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
   const [refundMethod, setRefundMethod] = useState<'TUNAI' | 'TRANSFER' | 'STORE_CREDIT'>('TUNAI')
@@ -91,14 +95,20 @@ export default function Returns() {
   const totalReturn = selectedReturnItems.reduce((sum, item) => sum + item.subtotal, 0)
 
   const loadReturns = async () => {
-    const r = await api<ReturnRow[]>('return:getAll')
-    if (r.success) setReturns((r.data ?? []).filter(item => item && item.id))
-    setLoadingData(false)
+    try {
+      const r = await api<ReturnRow[]>('return:getAll')
+      if (r.success) setReturns((r.data ?? []).filter(item => item && item.id))
+    } finally {
+      setLoadingData(false)
+    }
   }
 
   const loadSales = async () => {
-    const r = await api<SaleHeader[]>('penjualan:getAll')
-    if (r.success) setSales((r.data ?? []).slice(0, 100))
+    try {
+      const r = await api<SaleHeader[]>('penjualan:getAll')
+      if (r.success) setSales((r.data ?? []).slice(0, 100))
+    } finally {
+    }
   }
 
   useEffect(() => {
@@ -200,28 +210,46 @@ export default function Returns() {
   }
 
   const handleApprove = async (id: number) => {
-    if (!confirm('Approve return ini? Stok item akan dikembalikan.')) return
+    const ret = returns.find(r => r.id === id)
+    if (ret) setApproveReturn(ret)
+  }
+
+  const confirmApprove = async () => {
+    if (!approveReturn) return
     setLoading(true)
-    const r = await api('return:approve', id, user?.nama_pengguna)
-    setLoading(false)
-    if (r.success) {
-      toast(r.message ?? 'Return berhasil diapprove')
-      loadReturns()
-    } else {
-      toast(r.message || 'Gagal approve return', 'error')
+    try {
+      const r = await api('return:approve', approveReturn.id, user?.nama_pengguna)
+      if (r.success) {
+        toast(r.message ?? 'Return berhasil diapprove')
+        setApproveReturn(null)
+        loadReturns()
+      } else {
+        toast(r.message || 'Gagal approve return', 'error')
+      }
+    } finally {
+      setLoading(false)
     }
   }
-  
+
   const handleReject = async (id: number) => {
-    if (!confirm('Reject return ini?')) return
+    const ret = returns.find(r => r.id === id)
+    if (ret) setRejectReturn(ret)
+  }
+
+  const confirmReject = async () => {
+    if (!rejectReturn) return
     setLoading(true)
-    const r = await api('return:reject', id, user?.nama_pengguna)
-    setLoading(false)
-    if (r.success) {
-      toast(r.message ?? 'Return berhasil direject')
-      loadReturns()
-    } else {
-      toast(r.message || 'Gagal reject return', 'error')
+    try {
+      const r = await api('return:reject', rejectReturn.id, user?.nama_pengguna)
+      if (r.success) {
+        toast(r.message ?? 'Return berhasil direject')
+        setRejectReturn(null)
+        loadReturns()
+      } else {
+        toast(r.message || 'Gagal reject return', 'error')
+      }
+    } finally {
+      setLoading(false)
     }
   }
   
@@ -334,7 +362,7 @@ export default function Returns() {
             </select>
           </div>
 
-          {saleDetails.length > 0 && (
+          {saleDetails.length > 0 ? (
             <div className="rounded-lg border border-slate-200 dark:border-slate-700">
               <div className="border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase text-slate-500 dark:border-slate-700">
                 Item Transaksi
@@ -375,6 +403,12 @@ export default function Returns() {
                 })}
               </div>
             </div>
+          ) : (
+            <EmptyState
+              icon={<Eye size={36} strokeWidth={1.5} />}
+              title="Pilih transaksi"
+              description="Pilih transaksi di atas untuk melihat item yang dapat diretur"
+            />
           )}
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -449,6 +483,27 @@ export default function Returns() {
           Return yang sudah approved tidak bisa dihapus karena stok sudah dikembalikan.
         </p>
       </Modal>
+
+      <ConfirmDialog
+        open={!!approveReturn}
+        onClose={() => setApproveReturn(null)}
+        onConfirm={confirmApprove}
+        title="Approve Return"
+        message="Approve return ini? Stok item akan dikembalikan."
+        confirmText="Approve"
+        loading={loading}
+      />
+
+      <ConfirmDialog
+        open={!!rejectReturn}
+        onClose={() => setRejectReturn(null)}
+        onConfirm={confirmReject}
+        title="Reject Return"
+        message="Reject return ini?"
+        confirmText="Reject"
+        variant="danger"
+        loading={loading}
+      />
     </div>
   )
 }

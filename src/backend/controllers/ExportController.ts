@@ -56,6 +56,49 @@ export class ExportController {
     }
   }
 
+  static async exportCashFlowExcel(data: any[], startDate: string, endDate: string, customPath?: string) {
+    try {
+      const rows = Array.isArray(data) ? data : []
+      const filename = `arus_kas_${startDate}_sampai_${endDate}`
+      return ExportService.exportToExcel(rows, filename, 'Arus Kas', customPath)
+    } catch (error) {
+      return { success: false, message: 'Gagal export: ' + (error as Error).message }
+    }
+  }
+
+  static async exportPriceListPDF(products: any[], categoryName: string, customPath?: string) {
+    try {
+      const rows = Array.isArray(products) ? products : []
+      if (rows.length === 0) {
+        return { success: false, message: 'Tidak ada data produk untuk di-export' }
+      }
+
+      const title = `Price List ${categoryName ? `- ${categoryName}` : ''}`.trim()
+      const headers = ['Kode', 'Nama Produk', 'Kategori', 'Stok', 'Harga']
+      const data = rows.map(item => [
+        item.kd_barang ?? '-',
+        item.nama_barang ?? '-',
+        item.kategori_barang ?? '-',
+        Number(item.stok ?? 0),
+        Number(item.harga_barang ?? 0),
+      ])
+
+      return ExportService.exportToPDF(title, headers, data, 'price_list', 'landscape', customPath)
+    } catch (error) {
+      return { success: false, message: 'Gagal export: ' + (error as Error).message }
+    }
+  }
+
+  static async exportTaxReportExcel(data: any[], startDate: string, endDate: string, customPath?: string) {
+    try {
+      const rows = Array.isArray(data) ? data : []
+      const filename = `laporan_pajak_${startDate}_sampai_${endDate}`
+      return ExportService.exportToExcel(rows, filename, 'Pajak', customPath)
+    } catch (error) {
+      return { success: false, message: 'Gagal export: ' + (error as Error).message }
+    }
+  }
+
   // Generic export
   static async exportToExcel(data: any[], filename: string, sheetName?: string, customPath?: string) {
     try {

@@ -106,7 +106,7 @@ export function UserPanelRoutes() {
       <Route path="print-queue" element={<PrintQueue />} />
       <Route path="ecommerce-api" element={<RequireOperationalAdmin><EcommerceApi /></RequireOperationalAdmin>} />
       <Route path="marketplace" element={<RequireOperationalAdmin><Marketplace /></RequireOperationalAdmin>} />
-      <Route path="payment" element={<PaymentInvoice />} />
+      <Route path="payment" element={<RequireRoles allowedRoles={['admin','super_admin']}><PaymentInvoice /></RequireRoles>} />
       <Route path="payment-automation" element={<RequireOperationalAdmin><PaymentAutomation /></RequireOperationalAdmin>} />
       <Route path="settings" element={<Settings />} />
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Save } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
+import { SkeletonPage } from '../../components/Skeleton'
 
 interface UpdateRule {
   id?: string
@@ -29,6 +30,7 @@ export default function LicenseUpdatesPage() {
   const [rules, setRules] = useState<UpdateRule[]>([])
   const [form, setForm] = useState<UpdateRule>(emptyRule)
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   async function load() {
     const r = await api<UpdateRule[]>('license:getAppUpdates')
@@ -37,6 +39,7 @@ export default function LicenseUpdatesPage() {
       setRules(rows)
       setForm(rows.find(row => row.platform === 'all') ?? emptyRule)
     } else toast(r.message || 'Gagal memuat update rule', 'error')
+    setLoading(false)
   }
 
   useEffect(() => { void load() }, [])
@@ -53,6 +56,8 @@ export default function LicenseUpdatesPage() {
   }
 
   const input = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800'
+
+  if (loading) return <SkeletonPage rows={6} />
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">

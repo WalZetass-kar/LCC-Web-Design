@@ -11,6 +11,7 @@ import DataTable from '../components/DataTable'
 import { SkeletonPage } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
+import { useAuth } from '../contexts/AuthContext'
 import type { Supplier } from '../../shared/types'
 
 interface FormState {
@@ -31,6 +32,7 @@ const EMPTY: FormState = {
 
 export default function SupplierPage() {
   const toast = useToast()
+  const { user } = useAuth()
   const [data, setData] = useState<Supplier[]>([])
   const [modal, setModal] = useState<'add' | 'edit' | 'delete' | null>(null)
   const [form, setForm] = useState<FormState>({ ...EMPTY })
@@ -39,9 +41,12 @@ export default function SupplierPage() {
   const [loadingData, setLoadingData] = useState(true)
 
   const load = async () => {
-    const r = await api<Supplier[]>('supplier:getAll')
-    if (r.success) setData(r.data ?? [])
-    setLoadingData(false)
+    try {
+      const r = await api<Supplier[]>('supplier:getAll')
+      if (r.success) setData(r.data ?? [])
+    } finally {
+      setLoadingData(false)
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -80,31 +85,37 @@ export default function SupplierPage() {
     }
 
     setLoading(true)
-    const r = modal === 'add'
-      ? await api('supplier:create', { ...form, nama_pengguna: 'admin' })
-      : await api('supplier:update', selected!.kd_suplier, { ...form, nama_pengguna: 'admin' })
-    setLoading(false)
+    try {
+      const r = modal === 'add'
+        ? await api('supplier:create', { ...form, nama_pengguna: user?.nama_pengguna ?? 'admin' })
+        : await api('supplier:update', selected?.kd_suplier, { ...form, nama_pengguna: user?.nama_pengguna ?? 'admin' })
 
-    if (r.success) {
-      toast(r.message as string, 'success')
-      closeModal()
-      load()
-    } else {
-      toast(r.message as string, 'error')
+      if (r.success) {
+        toast(r.message as string, 'success')
+        closeModal()
+        load()
+      } else {
+        toast(r.message as string, 'error')
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleDelete = async () => {
     setLoading(true)
-    const r = await api('supplier:delete', selected!.kd_suplier)
-    setLoading(false)
+    try {
+      const r = await api('supplier:delete', selected?.kd_suplier)
 
-    if (r.success) {
-      toast(r.message as string, 'success')
-      closeModal()
-      load()
-    } else {
-      toast(r.message as string, 'error')
+      if (r.success) {
+        toast(r.message as string, 'success')
+        closeModal()
+        load()
+      } else {
+        toast(r.message as string, 'error')
+      }
+    } finally {
+      setLoading(false)
     }
   }
 

@@ -88,7 +88,7 @@ export class DeviceController {
       return { allowed: false, reason: 'revoked', current, max: 0 }
     }
 
-    if (user?.hak_akses === 'developer') {
+    if (user?.hak_akses === 'developer' || user?.hak_akses === 'super_admin') {
       return { allowed: true, current, max: -1 }
     }
 
@@ -109,7 +109,7 @@ export class DeviceController {
       .prepare(`SELECT hak_akses, subscription_plan_id FROM mediasoft_pengguna WHERE nama_pengguna = ?`)
       .get(username) as { hak_akses?: string | null; subscription_plan_id: number | null } | undefined
 
-    if (user?.hak_akses === 'developer') {
+    if (user?.hak_akses === 'developer' || user?.hak_akses === 'super_admin') {
       const current = (sqlite
         .prepare(`SELECT COUNT(*) AS c FROM mediasoft_user_devices WHERE username = ? AND status = 'active'`)
         .get(username) as { c: number }).c
@@ -153,35 +153,40 @@ export class DeviceController {
 
   /** Revoke device (remote logout) */
   static revoke(id: number, revokedBy: string) {
-    const dev = sqlite.prepare(`SELECT username, device_id, device_name FROM mediasoft_user_devices WHERE id = ?`).get(id) as any
-    sqlite.prepare(
-      `UPDATE mediasoft_user_devices SET status = 'revoked', revoked_at = datetime('now'), revoked_by = ? WHERE id = ?`
-    ).run(revokedBy, id)
-
-    // Revoke semua auth_sessions untuk device ini
-    if (dev) {
+    const run = sqlite.transaction(() => {
+      const dev = sqlite.prepare(`SELECT username, device_id, device_name FROM mediasoft_user_devices WHERE id = ?`).get(id) as any
       sqlite.prepare(
-        `UPDATE mediasoft_auth_sessions SET revoked_at = datetime('now'), is_revoked = 1 WHERE username = ? AND device_id = ?`
-      ).run(dev.username, dev.device_id)
-      ActivityLogModel.log(
-        revokedBy,
-        `Revoke device user: ${dev.username}`,
-        'SECURITY',
-        `device_id=${dev.device_id}; device_name=${dev.device_name ?? '-'}`
-      )
-    }
+        `UPDATE mediasoft_user_devices SET status = 'revoked', revoked_at = datetime('now'), revoked_by = ? WHERE id = ?`
+      ).run(revokedBy, id)
+
+      if (dev) {
+        sqlite.prepare(
+          `UPDATE mediasoft_auth_sessions SET revoked_at = datetime('now'), is_revoked = 1 WHERE username = ? AND device_id = ?`
+        ).run(dev.username, dev.device_id)
+        ActivityLogModel.log(
+          revokedBy,
+          `Revoke device user: ${dev.username}`,
+          'SECURITY',
+          `device_id=${dev.device_id}; device_name=${dev.device_name ?? '-'}`
+        )
+      }
+    })
+    run()
     return { success: true }
   }
 
   /** Revoke semua device user */
   static revokeAll(username: string, revokedBy: string) {
-    sqlite.prepare(
-      `UPDATE mediasoft_user_devices SET status = 'revoked', revoked_at = datetime('now'), revoked_by = ? WHERE username = ?`
-    ).run(revokedBy, username)
-    sqlite.prepare(
-      `UPDATE mediasoft_auth_sessions SET revoked_at = datetime('now'), is_revoked = 1 WHERE username = ?`
-    ).run(username)
-    ActivityLogModel.log(revokedBy, `Revoke semua device user: ${username}`, 'SECURITY')
+    const run = sqlite.transaction(() => {
+      sqlite.prepare(
+        `UPDATE mediasoft_user_devices SET status = 'revoked', revoked_at = datetime('now'), revoked_by = ? WHERE username = ?`
+      ).run(revokedBy, username)
+      sqlite.prepare(
+        `UPDATE mediasoft_auth_sessions SET revoked_at = datetime('now'), is_revoked = 1 WHERE username = ?`
+      ).run(username)
+      ActivityLogModel.log(revokedBy, `Revoke semua device user: ${username}`, 'SECURITY')
+    })
+    run()
     return { success: true }
   }
 
@@ -199,23 +204,26 @@ export class DeviceController {
 
   /** Revoke session by id */
   static revokeSession(id: number, revokedBy = 'system') {
-    const session = sqlite
-      .prepare(`SELECT username, device_id, device_name FROM mediasoft_auth_sessions WHERE id = ?`)
-      .get(id) as any
-    sqlite.prepare(
-      `UPDATE mediasoft_auth_sessions SET revoked_at = datetime('now'), is_revoked = 1 WHERE id = ?`
-    ).run(id)
-    if (session?.username && session.device_id) {
+    const run = sqlite.transaction(() => {
+      const session = sqlite
+        .prepare(`SELECT username, device_id, device_name FROM mediasoft_auth_sessions WHERE id = ?`)
+        .get(id) as any
       sqlite.prepare(
-        `UPDATE mediasoft_user_devices SET status = 'revoked', revoked_at = datetime('now'), revoked_by = ? WHERE username = ? AND device_id = ?`
-      ).run(revokedBy, session.username, session.device_id)
-      ActivityLogModel.log(
-        revokedBy,
-        `Remote logout session user: ${session.username}`,
-        'SECURITY',
-        `device_id=${session.device_id}; device_name=${session.device_name ?? '-'}`
-      )
-    }
+        `UPDATE mediasoft_auth_sessions SET revoked_at = datetime('now'), is_revoked = 1 WHERE id = ?`
+      ).run(id)
+      if (session?.username && session.device_id) {
+        sqlite.prepare(
+          `UPDATE mediasoft_user_devices SET status = 'revoked', revoked_at = datetime('now'), revoked_by = ? WHERE username = ? AND device_id = ?`
+        ).run(revokedBy, session.username, session.device_id)
+        ActivityLogModel.log(
+          revokedBy,
+          `Remote logout session user: ${session.username}`,
+          'SECURITY',
+          `device_id=${session.device_id}; device_name=${session.device_name ?? '-'}`
+        )
+      }
+    })
+    run()
     return { success: true }
   }
 }

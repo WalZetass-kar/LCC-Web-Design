@@ -1,0 +1,29 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    container_name: zetass-pos
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./data:/app/data  # Persist SQLite database
+      - ./backups:/app/backups
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/app/data/sistem_pos.db
+    restart: unless-stopped
+
+  license-server:
+    build: ./license-server
+    container_name: zetass-license
+    ports:
+      - "3001:3001"
+    volumes:
+      - license-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    restart: unless-stopped
+
+volumes:
+  license-data:

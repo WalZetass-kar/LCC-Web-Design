@@ -31,17 +31,23 @@ export default function StockOpname() {
   const [stokFisik, setStokFisik] = useState('')
 
   const loadOpnames = async () => {
-    const r = await api<any[]>('opname:getAll')
-    if (r.success) {
-      const validData = (r.data ?? []).filter(item => item && item.id && item.opname_number)
-      setOpnames(validData)
+    try {
+      const r = await api<any[]>('opname:getAll')
+      if (r.success) {
+        const validData = (r.data ?? []).filter(item => item && item.id && item.opname_number)
+        setOpnames(validData)
+      }
+    } finally {
+      setLoadingData(false)
     }
-    setLoadingData(false)
   }
   
   const loadProducts = async () => {
-    const r = await api<any[]>('barang:getAll')
-    if (r.success) setProducts(r.data ?? [])
+    try {
+      const r = await api<any[]>('barang:getAll')
+      if (r.success) setProducts(r.data ?? [])
+    } finally {
+    }
   }
 
   useEffect(() => { 
@@ -87,14 +93,17 @@ export default function StockOpname() {
     if (!selectedProduct || !stokFisik) return toast('Lengkapi data', 'error')
     const product = products.find(p => p.kd_barang === selectedProduct)
     if (!product) return
+
+    const parsedStok = parseInt(stokFisik, 10)
+    if (isNaN(parsedStok) || parsedStok < 0) return toast('Stok fisik harus berupa angka positif', 'error')
     
     setLoading(true)
     const r = await api('opname:addItem', {
       opname_id: selectedOpname.id,
       kd_barang: product.kd_barang,
       stok_sistem: product.stok,
-      stok_fisik: parseInt(stokFisik),
-      selisih: parseInt(stokFisik) - (product.stok || 0)
+      stok_fisik: parsedStok,
+      selisih: parsedStok - (product.stok || 0)
     })
     setLoading(false)
     if (r.success) {
@@ -339,7 +348,7 @@ export default function StockOpname() {
         onClose={() => { setModal(null); setSelectedOpname(null) }}
         onConfirm={handleDelete}
         title="Hapus Stok Opname"
-        message={`Yakin ingin menghapus stok opname tanggal ${selectedOpname?.tanggal_opname}?`}
+        message={`Yakin ingin menghapus stok opname tanggal ${selectedOpname?.opname_date ? new Date(selectedOpname.opname_date).toLocaleDateString('id-ID') : '-'}?`}
         confirmText="Hapus"
         variant="danger"
         loading={loading}

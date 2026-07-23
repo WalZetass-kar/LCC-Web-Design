@@ -3,6 +3,7 @@ import { CheckCircle2, CreditCard, ExternalLink, MessageCircle, RefreshCw } from
 import { api } from '../utils/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
+import { SkeletonSpinner } from '../components/Skeleton'
 
 interface PublicPlan {
   id: string
@@ -72,21 +73,6 @@ export default function PaymentInvoice() {
     [plans, selectedCode],
   )
 
-  async function createInvoice() {
-    if (!selectedPlan) return toast('Paket wajib dipilih', 'error')
-    if (!email.trim()) return toast('Email akun pembeli wajib diisi', 'error')
-    setCreating(true)
-    const r = await api<Invoice>('license:createManualPaymentRequest', {
-      email: email.trim(),
-      plan_code: selectedPlan.code,
-    })
-    setCreating(false)
-    if (!r.success || !r.data) return toast(r.message || 'Gagal membuat request pembayaran', 'error')
-    setInvoice(r.data)
-    toast('Request pembayaran dibuat', 'success')
-    if (r.data.payment_url) void api('app:openExternal', r.data.payment_url)
-  }
-
   useEffect(() => {
     if (!invoice?.external_ref || invoice.status === 'paid') return
     const interval = window.setInterval(async () => {
@@ -101,6 +87,23 @@ export default function PaymentInvoice() {
     }, 15_000)
     return () => window.clearInterval(interval)
   }, [invoice?.external_ref, invoice?.status, toast, user?.nama_pengguna])
+
+  if (loading) return <SkeletonSpinner />
+
+  async function createInvoice() {
+    if (!selectedPlan) return toast('Paket wajib dipilih', 'error')
+    if (!email.trim()) return toast('Email akun pembeli wajib diisi', 'error')
+    setCreating(true)
+    const r = await api<Invoice>('license:createManualPaymentRequest', {
+      email: email.trim(),
+      plan_code: selectedPlan.code,
+    })
+    setCreating(false)
+    if (!r.success || !r.data) return toast(r.message || 'Gagal membuat request pembayaran', 'error')
+    setInvoice(r.data)
+    toast('Request pembayaran dibuat', 'success')
+    if (r.data.payment_url) void api('app:openExternal', r.data.payment_url)
+  }
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">

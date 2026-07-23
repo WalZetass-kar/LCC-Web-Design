@@ -10,7 +10,7 @@ import { sqlite } from '../../database/connection.js'
 import { isLicenseSessionExpiredResult } from '../../shared/licenseSession.js'
 
 const DEFAULT_LICENSE_SERVER_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
-const DEFAULT_CERT_PIN_SHA256 = 'p51goejPCgGH+Oog/MU2k6PObcEfTrrr73jUcuWJ7w0='
+const DEFAULT_CERT_PIN_SHA256 = 'ZcJbApTb7wyllleAjHw2vYAskqdT+DhMY9aPDFwAtf4='
 
 function getConfig(): { url: string; token: string; refreshToken?: string | null } | null {
   try {
@@ -120,7 +120,7 @@ function request<T = unknown>(method: string, path: string, token: string, baseU
       port,
       path: parsed.pathname + parsed.search,
       method,
-      family: isLocalDevHost(parsed.hostname) ? undefined : 4,
+      family: undefined,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),

@@ -30,7 +30,7 @@ function getDbPath(): string {
   return path.join(process.cwd(), 'sistem_pos.db')
 }
 
-const sqlite = new Database(getDbPath())
+let sqlite = new Database(getDbPath())
 sqlite.pragma('journal_mode = WAL')
 sqlite.pragma('foreign_keys = ON')
 
@@ -923,9 +923,674 @@ runMigrations()
     'mediasoft_branches',
     'mediasoft_warehouses',
     'mediasoft_promos',
+    'mediasoft_employees',
+    'mediasoft_employee_contracts',
+    'mediasoft_attendance',
+    'mediasoft_payroll',
+    'mediasoft_payroll_details',
+    'mediasoft_tip_pooling',
+    'mediasoft_tip_distribution',
+    'mediasoft_shift_schedules',
+    'mediasoft_kds_orders',
+    'mediasoft_kds_order_items',
+    'mediasoft_floor_layouts',
+    'mediasoft_tables',
+    'mediasoft_reservations',
+    'mediasoft_recipes',
+    'mediasoft_recipe_ingredients',
+    'mediasoft_delivery_orders',
+    'mediasoft_delivery_vehicles',
+    'mediasoft_bank_accounts',
+    'mediasoft_bank_transactions',
+    'mediasoft_reconciliation',
+    'mediasoft_fixed_assets',
+    'mediasoft_asset_depreciation',
+    'mediasoft_budgets',
+    'mediasoft_gift_cards',
+    'mediasoft_gift_card_usage',
+    'mediasoft_customer_feedback',
+    'mediasoft_campaigns',
+    'mediasoft_campaign_logs',
+    'mediasoft_vendor_portal_settings',
+    'mediasoft_storefront_settings',
+    'mediasoft_storefront_products',
+    'mediasoft_storefront_orders',
+    'mediasoft_documents',
+    'mediasoft_forecast_settings',
+    'mediasoft_forecast_results',
+    'mediasoft_dynamic_pricing_rules',
   ]) {
     ensureSyncMetadata(table)
   }
+})()
+
+// ═══════════════════════════════════════════════════════════════════════
+// NEW FEATURE TABLES MIGRATION
+// ═══════════════════════════════════════════════════════════════════════
+;(function migrateNewFeatureTables() {
+  // ─── HR & EMPLOYEE ──────────────────────────────────────────────
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_employees (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nik TEXT NOT NULL UNIQUE,
+      nama_lengkap TEXT NOT NULL,
+      tempat_lahir TEXT,
+      tgl_lahir TEXT,
+      jenis_kelamin TEXT,
+      alamat TEXT,
+      no_telp TEXT,
+      email TEXT,
+      agama TEXT,
+      status_perkawinan TEXT,
+      pendidikan_terakhir TEXT,
+      jurusan TEXT,
+      nama_ibu TEXT,
+      no_rekening TEXT,
+      bank TEXT,
+      bpjs_kesehatan TEXT,
+      bpjs_ketenagakerjaan TEXT,
+      npwp TEXT,
+      tgl_masuk TEXT NOT NULL,
+      tgl_keluar TEXT,
+      status_karyawan TEXT DEFAULT 'AKTIF',
+      jabatan TEXT,
+      departemen TEXT,
+      gaji_pokok REAL DEFAULT 0,
+      tunjangan REAL DEFAULT 0,
+      jam_kerja_per_hari REAL DEFAULT 8,
+      foto TEXT,
+      catatan TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_employee_contracts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER NOT NULL,
+      nomor_kontrak TEXT NOT NULL UNIQUE,
+      jenis_kontrak TEXT NOT NULL,
+      tgl_mulai TEXT NOT NULL,
+      tgl_berakhir TEXT,
+      durasi_bulan INTEGER,
+      jabatan TEXT NOT NULL,
+      departemen TEXT,
+      gaji_pokok REAL DEFAULT 0,
+      tunjangan REAL DEFAULT 0,
+      uang_makan REAL DEFAULT 0,
+      uang_transport REAL DEFAULT 0,
+      jam_kerja TEXT,
+      hari_kerja TEXT,
+      hak_cuti_tahunan INTEGER DEFAULT 12,
+      masa_percobaan_bulan INTEGER DEFAULT 3,
+      status TEXT DEFAULT 'AKTIF',
+      lampiran TEXT,
+      catatan TEXT,
+      dibuat_oleh TEXT,
+      tgl_dibuat TEXT NOT NULL,
+      diperbarui_oleh TEXT,
+      tgl_diperbarui TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_attendance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER NOT NULL,
+      tgl TEXT NOT NULL,
+      jam_masuk TEXT,
+      jam_keluar TEXT,
+      lokasi_masuk TEXT,
+      lokasi_keluar TEXT,
+      foto_masuk TEXT,
+      foto_keluar TEXT,
+      status TEXT DEFAULT 'HADIR',
+      keterlambatan_menit INTEGER DEFAULT 0,
+      catatan TEXT,
+      approved_by TEXT,
+      created_at TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_payroll (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER NOT NULL,
+      periode_bulan INTEGER NOT NULL,
+      periode_tahun INTEGER NOT NULL,
+      gaji_pokok REAL DEFAULT 0,
+      tunjangan REAL DEFAULT 0,
+      uang_makan REAL DEFAULT 0,
+      uang_transport REAL DEFAULT 0,
+      lembur REAL DEFAULT 0,
+      bonus REAL DEFAULT 0,
+      komisi REAL DEFAULT 0,
+      potongan REAL DEFAULT 0,
+      potongan_bpjs REAL DEFAULT 0,
+      potongan_pph REAL DEFAULT 0,
+      potongan_lain REAL DEFAULT 0,
+      total_gaji REAL DEFAULT 0,
+      tgl_bayar TEXT,
+      metode_bayar TEXT,
+      status TEXT DEFAULT 'DRAFT',
+      catatan TEXT,
+      dibuat_oleh TEXT,
+      tgl_dibuat TEXT NOT NULL,
+      disetujui_oleh TEXT,
+      tgl_disetujui TEXT,
+      dibayar_oleh TEXT,
+      tgl_dibayar TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_payroll_details (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      payroll_id INTEGER NOT NULL,
+      komponen TEXT NOT NULL,
+      tipe TEXT NOT NULL,
+      jumlah REAL DEFAULT 0,
+      keterangan TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_tip_pooling (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tgl TEXT NOT NULL,
+      total_tip REAL DEFAULT 0,
+      jumlah_karyawan INTEGER DEFAULT 0,
+      tip_per_orang REAL DEFAULT 0,
+      status TEXT DEFAULT 'DRAFT',
+      catatan TEXT,
+      dibuat_oleh TEXT,
+      tgl_dibuat TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_tip_distribution (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tip_pooling_id INTEGER NOT NULL,
+      employee_id INTEGER NOT NULL,
+      jumlah REAL DEFAULT 0,
+      persentase REAL DEFAULT 0,
+      catatan TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_shift_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER NOT NULL,
+      tgl TEXT NOT NULL,
+      shift TEXT NOT NULL,
+      jam_masuk TEXT NOT NULL,
+      jam_keluar TEXT NOT NULL,
+      catatan TEXT,
+      dibuat_oleh TEXT,
+      tgl_dibuat TEXT NOT NULL
+    )
+  `)
+
+  // ─── KDS & TABLES ───────────────────────────────────────────────
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_kds_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kd_transaksi TEXT NOT NULL,
+      nomor_meja TEXT,
+      nomor_antrian INTEGER,
+      status TEXT DEFAULT 'BARU',
+      prioritas INTEGER DEFAULT 0,
+      catatan TEXT,
+      nama_pelanggan TEXT,
+      jenis_order TEXT DEFAULT 'DINE_IN',
+      waktu_masuk TEXT NOT NULL,
+      waktu_mulai_masak TEXT,
+      waktu_selesai TEXT,
+      waktu_siap TEXT,
+      waktu_disajikan TEXT,
+      dapur TEXT,
+      dibuat_oleh TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_kds_order_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kds_order_id INTEGER NOT NULL,
+      kd_barang TEXT NOT NULL,
+      nama_item TEXT NOT NULL,
+      qty INTEGER DEFAULT 1,
+      catatan TEXT,
+      status TEXT DEFAULT 'BARU',
+      waktu_mulai_masak TEXT,
+      waktu_selesai TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_floor_layouts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nama TEXT NOT NULL,
+      kapasitas INTEGER DEFAULT 0,
+      width INTEGER DEFAULT 800,
+      height INTEGER DEFAULT 600,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_tables (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      floor_layout_id INTEGER,
+      nomor_meja TEXT NOT NULL,
+      label TEXT,
+      kapasitas INTEGER DEFAULT 4,
+      posisi_x REAL DEFAULT 0,
+      posisi_y REAL DEFAULT 0,
+      bentuk TEXT DEFAULT 'persegi',
+      lebar INTEGER DEFAULT 60,
+      tinggi INTEGER DEFAULT 60,
+      status TEXT DEFAULT 'KOSONG',
+      qr_code TEXT,
+      catatan TEXT,
+      created_at TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_reservations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nomor_reservasi TEXT NOT NULL UNIQUE,
+      nama_pelanggan TEXT NOT NULL,
+      no_telp TEXT,
+      email TEXT,
+      jumlah_tamu INTEGER DEFAULT 1,
+      tgl_reservasi TEXT NOT NULL,
+      jam_reservasi TEXT NOT NULL,
+      jam_berakhir TEXT,
+      table_id INTEGER,
+      catatan TEXT,
+      status TEXT DEFAULT 'MENUNGGU',
+      sumber TEXT DEFAULT 'MANUAL',
+      deposit REAL DEFAULT 0,
+      dibuat_oleh TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )
+  `)
+
+  // ─── RECIPE ─────────────────────────────────────────────────────
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_recipes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kd_barang TEXT NOT NULL,
+      nama_resep TEXT NOT NULL,
+      hasil_produksi INTEGER DEFAULT 1,
+      satuan_hasil TEXT,
+      biaya_produksi REAL DEFAULT 0,
+      harga_jual REAL DEFAULT 0,
+      margin REAL DEFAULT 0,
+      petunjuk TEXT,
+      waktu_produksi_menit INTEGER,
+      kategori TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_recipe_ingredients (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recipe_id INTEGER NOT NULL,
+      kd_barang TEXT NOT NULL,
+      nama_bahan TEXT NOT NULL,
+      qty REAL DEFAULT 0,
+      satuan TEXT,
+      harga_per_unit REAL DEFAULT 0,
+      sub_total REAL DEFAULT 0,
+      persentase_terpakai REAL DEFAULT 100
+    )
+  `)
+
+  // ─── DELIVERY ───────────────────────────────────────────────────
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_delivery_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nomor_delivery TEXT NOT NULL UNIQUE,
+      kd_transaksi TEXT,
+      nama_penerima TEXT NOT NULL,
+      no_telp_penerima TEXT,
+      alamat TEXT NOT NULL,
+      catatan_alamat TEXT,
+      latitude REAL,
+      longitude REAL,
+      jarak_km REAL,
+      biaya_ongkir REAL DEFAULT 0,
+      status TEXT DEFAULT 'MENUNGGU',
+      kurir TEXT,
+      estimasi_sampai TEXT,
+      tgl_diantar TEXT,
+      tgl_sampai TEXT,
+      bukti_foto TEXT,
+      tanda_tangan TEXT,
+      catatan TEXT,
+      dibuat_oleh TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_delivery_vehicles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nama_kendaraan TEXT NOT NULL,
+      plat_nomor TEXT NOT NULL,
+      jenis TEXT,
+      kapasitas_maks REAL,
+      biaya_per_km REAL DEFAULT 0,
+      status TEXT DEFAULT 'TERSEDIA',
+      created_at TEXT NOT NULL
+    )
+  `)
+
+  // ─── FINANCE ────────────────────────────────────────────────────
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_bank_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nama_bank TEXT NOT NULL,
+      nomor_rekening TEXT NOT NULL,
+      atas_nama TEXT,
+      saldo_awal REAL DEFAULT 0,
+      saldo_saat_ini REAL DEFAULT 0,
+      mata_uang TEXT DEFAULT 'IDR',
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_bank_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bank_account_id INTEGER NOT NULL,
+      tgl TEXT NOT NULL,
+      jenis TEXT NOT NULL,
+      jumlah REAL NOT NULL,
+      keterangan TEXT,
+      kategori TEXT,
+      referensi TEXT,
+      is_reconciled INTEGER DEFAULT 0,
+      tgl_rekonsiliasi TEXT,
+      created_at TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_reconciliation (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bank_account_id INTEGER NOT NULL,
+      periode_bulan INTEGER NOT NULL,
+      periode_tahun INTEGER NOT NULL,
+      saldo_buku REAL DEFAULT 0,
+      saldo_bank REAL DEFAULT 0,
+      selisih REAL DEFAULT 0,
+      status TEXT DEFAULT 'DRAFT',
+      catatan TEXT,
+      tgl_rekonsiliasi TEXT,
+      dibuat_oleh TEXT,
+      created_at TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_fixed_assets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kode_aset TEXT NOT NULL UNIQUE,
+      nama_aset TEXT NOT NULL,
+      kategori TEXT,
+      deskripsi TEXT,
+      tgl_perolehan TEXT NOT NULL,
+      harga_perolehan REAL DEFAULT 0,
+      nilai_residu REAL DEFAULT 0,
+      masa_manfaat_tahun INTEGER DEFAULT 5,
+      metode_penyusutan TEXT DEFAULT 'GARIS_LURUS',
+      nilai_buku REAL DEFAULT 0,
+      akumulasi_penyusutan REAL DEFAULT 0,
+      lokasi TEXT,
+      penanggung_jawab TEXT,
+      status TEXT DEFAULT 'AKTIF',
+      foto TEXT,
+      catatan TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_asset_depreciation (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      asset_id INTEGER NOT NULL,
+      periode_bulan INTEGER NOT NULL,
+      periode_tahun INTEGER NOT NULL,
+      nilai_awal REAL DEFAULT 0,
+      beban_penyusutan REAL DEFAULT 0,
+      akumulasi REAL DEFAULT 0,
+      nilai_akhir REAL DEFAULT 0,
+      tgl_dibuat TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_budgets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nama TEXT NOT NULL,
+      kategori TEXT,
+      periode_bulan INTEGER,
+      periode_tahun INTEGER NOT NULL,
+      jumlah_anggaran REAL DEFAULT 0,
+      jumlah_terealisasi REAL DEFAULT 0,
+      selisih REAL DEFAULT 0,
+      catatan TEXT,
+      status TEXT DEFAULT 'AKTIF',
+      dibuat_oleh TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )
+  `)
+
+  // ─── MARKETING ──────────────────────────────────────────────────
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_gift_cards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kode TEXT NOT NULL UNIQUE,
+      nominal REAL DEFAULT 0,
+      saldo REAL DEFAULT 0,
+      pembeli TEXT,
+      penerima TEXT,
+      pesan TEXT,
+      masa_berlaku TEXT,
+      status TEXT DEFAULT 'AKTIF',
+      tgl_dibeli TEXT,
+      tgl_digunakan TEXT,
+      dibuat_oleh TEXT,
+      created_at TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_gift_card_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      gift_card_id INTEGER NOT NULL,
+      kd_transaksi TEXT,
+      jumlah REAL DEFAULT 0,
+      sisa_saldo REAL DEFAULT 0,
+      tgl TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_customer_feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kd_customer TEXT,
+      nama TEXT NOT NULL,
+      kd_transaksi TEXT,
+      rating INTEGER DEFAULT 5,
+      kategori TEXT,
+      pesan TEXT,
+      status TEXT DEFAULT 'BARU',
+      dibalas_oleh TEXT,
+      balasan TEXT,
+      tgl_dibuat TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_campaigns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nama TEXT NOT NULL,
+      tipe TEXT NOT NULL,
+      subjek TEXT,
+      konten TEXT NOT NULL,
+      target TEXT,
+      target_kustom TEXT,
+      status TEXT DEFAULT 'DRAFT',
+      tgl_terjadwal TEXT,
+      tgl_terkirim TEXT,
+      total_target INTEGER DEFAULT 0,
+      total_terkirim INTEGER DEFAULT 0,
+      total_gagal INTEGER DEFAULT 0,
+      total_dibuka INTEGER DEFAULT 0,
+      dibuat_oleh TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_campaign_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      kd_customer TEXT,
+      no_telp TEXT,
+      email TEXT,
+      status TEXT,
+      tgl TEXT NOT NULL,
+      error_message TEXT
+    )
+  `)
+
+  // ─── COMMERCE ───────────────────────────────────────────────────
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_vendor_portal_settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      supplier_id TEXT NOT NULL,
+      portal_enabled INTEGER DEFAULT 1,
+      token TEXT,
+      dapat_melihat_po INTEGER DEFAULT 1,
+      dapat_mengirim_invoice INTEGER DEFAULT 1,
+      dapat_melihat_status INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_storefront_settings (
+      id INTEGER PRIMARY KEY,
+      domain TEXT,
+      nama_toko TEXT,
+      deskripsi TEXT,
+      logo TEXT,
+      warna_utama TEXT DEFAULT '#6366f1',
+      meta_tags TEXT,
+      google_analytics TEXT,
+      is_active INTEGER DEFAULT 0,
+      metode_pengiriman TEXT,
+      metode_pembayaran TEXT,
+      kebijakan_privacy TEXT,
+      syarat_ketentuan TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_storefront_products (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kd_barang TEXT NOT NULL,
+      tampilkan INTEGER DEFAULT 1,
+      harga_online REAL,
+      stok_online INTEGER,
+      foto_tambahan TEXT,
+      deskripsi_online TEXT,
+      seo_title TEXT,
+      seo_description TEXT,
+      created_at TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_storefront_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nomor_order TEXT NOT NULL UNIQUE,
+      nama_pelanggan TEXT NOT NULL,
+      email TEXT,
+      no_telp TEXT,
+      alamat TEXT,
+      catatan TEXT,
+      subtotal REAL DEFAULT 0,
+      ongkir REAL DEFAULT 0,
+      diskon REAL DEFAULT 0,
+      total REAL DEFAULT 0,
+      status TEXT DEFAULT 'BARU',
+      metode_pembayaran TEXT,
+      status_pembayaran TEXT DEFAULT 'BELUM_BAYAR',
+      bukti_bayar TEXT,
+      kurir TEXT,
+      no_resi TEXT,
+      kd_transaksi TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )
+  `)
+
+  // ─── DOCUMENTS ──────────────────────────────────────────────────
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nomor_dokumen TEXT,
+      nama TEXT NOT NULL,
+      tipe TEXT NOT NULL,
+      kategori TEXT,
+      file_path TEXT,
+      file_size INTEGER,
+      file_type TEXT,
+      catatan TEXT,
+      tags TEXT,
+      status TEXT DEFAULT 'AKTIF',
+      dibuat_oleh TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )
+  `)
+
+  // ─── FORECASTING ────────────────────────────────────────────────
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_forecast_settings (
+      id INTEGER PRIMARY KEY,
+      metode TEXT DEFAULT 'MOVING_AVERAGE',
+      periode_hari INTEGER DEFAULT 30,
+      periode_data INTEGER DEFAULT 90,
+      is_active INTEGER DEFAULT 0,
+      updated_at TEXT
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_forecast_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kd_barang TEXT NOT NULL,
+      tgl_forecast TEXT NOT NULL,
+      prediksi_penjualan REAL DEFAULT 0,
+      confidence_lower REAL DEFAULT 0,
+      confidence_upper REAL DEFAULT 0,
+      metode TEXT,
+      tgl_dibuat TEXT NOT NULL
+    )
+  `)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS mediasoft_dynamic_pricing_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nama TEXT NOT NULL,
+      kd_barang TEXT,
+      kategori_id INTEGER,
+      tipe TEXT NOT NULL,
+      nilai REAL DEFAULT 0,
+      kondisi TEXT,
+      prioritas INTEGER DEFAULT 0,
+      is_active INTEGER DEFAULT 1,
+      tgl_mulai TEXT,
+      tgl_berakhir TEXT,
+      created_at TEXT NOT NULL
+    )
+  `)
 })()
 
 ;(function normalizeLocalDeveloperRole() {
@@ -943,3 +1608,10 @@ runMigrations()
 export const db = drizzle(sqlite, { schema })
 export type DB = typeof db
 export { sqlite }
+
+export function reopenDatabase(): void {
+  try { sqlite.close() } catch {}
+  sqlite = new Database(getDbPath())
+  sqlite.pragma('journal_mode = WAL')
+  sqlite.pragma('foreign_keys = ON')
+}

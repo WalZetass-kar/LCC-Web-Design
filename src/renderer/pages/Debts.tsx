@@ -30,12 +30,15 @@ export default function Debts() {
   const [paymentAmount, setPaymentAmount] = useState('')
 
   const loadDebts = async () => {
-    const r = await api<any[]>('debt:getAll', filter === 'ALL' ? undefined : filter)
-    if (r.success) {
-      const validData = (r.data ?? []).filter(item => item && item.id)
-      setDebts(validData)
+    try {
+      const r = await api<any[]>('debt:getAll', filter === 'ALL' ? undefined : filter)
+      if (r.success) {
+        const validData = (r.data ?? []).filter(item => item && item.id)
+        setDebts(validData)
+      }
+    } finally {
+      setLoadingData(false)
     }
-    setLoadingData(false)
   }
 
   useEffect(() => { loadDebts() }, [filter])
@@ -101,8 +104,8 @@ export default function Debts() {
     }
   }
 
-  const totalHutang = debts.filter(d => d.type === 'HUTANG').reduce((sum, d) => sum + d.remaining_amount, 0)
-  const totalPiutang = debts.filter(d => d.type === 'PIUTANG').reduce((sum, d) => sum + d.remaining_amount, 0)
+  const totalHutang = debts.filter(d => d.type === 'HUTANG').reduce((sum, d) => sum + (d.remaining_amount ?? 0), 0)
+  const totalPiutang = debts.filter(d => d.type === 'PIUTANG').reduce((sum, d) => sum + (d.remaining_amount ?? 0), 0)
 
   return (
     <div className="space-y-4">

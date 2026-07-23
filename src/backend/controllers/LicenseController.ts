@@ -1,38 +1,41 @@
-/**
- * LicenseController — forward request ke license server via HTTP.
- * URL dan token admin disimpan di tabel mediasoft_identitas.
- */
-import https from 'https'
-import http from 'http'
-import crypto from 'crypto'
-import tls from 'tls'
 import { sqlite } from '../../database/connection.js'
+import { PenggunaModel } from '../models/PenggunaModel.js'
+import {
+  syncBuyerLicense as fbSyncBuyerLicense,
+  heartbeat as fbHeartbeat
+} from '../../shared/supabase/license.js'
 import { isLicenseSessionExpiredResult } from '../../shared/licenseSession.js'
 
-const DEFAULT_LICENSE_SERVER_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
-const DEFAULT_CERT_PIN_SHA256 = 'p51goejPCgGH+Oog/MU2k6PObcEfTrrr73jUcuWJ7w0='
+type ApiResult<T = unknown> = { success: boolean; data?: T; message?: string }
+
+function getPublicLicenseUrl(): string | null {
+  return process.env.VITE_SUPABASE_URL || null
+}
 
 function getConfig(): { url: string; token: string; refreshToken?: string | null } | null {
   try {
     const row = sqlite
       .prepare(`SELECT license_server_url, license_admin_token, license_admin_refresh_token FROM mediasoft_identitas LIMIT 1`)
       .get() as { license_server_url?: string; license_admin_token?: string; license_admin_refresh_token?: string | null } | undefined
-    if (!row?.license_server_url || !row?.license_admin_token) return null
-    return { url: row.license_server_url.replace(/\/$/, ''), token: row.license_admin_token, refreshToken: row.license_admin_refresh_token ?? null }
+    if (!row?.license_server_url) return { url: getPublicLicenseUrl() || '', token: '', refreshToken: null }
+    return { url: row.license_server_url.replace(/\/$/, ''), token: row.license_admin_token || '', refreshToken: row.license_admin_refresh_token ?? null }
   } catch {
-    return null
+    return { url: getPublicLicenseUrl() || '', token: '', refreshToken: null }
   }
 }
 
 function saveConfig(url: string, token: string, refreshToken?: string | null) {
-  const existing = sqlite.prepare(`SELECT kode FROM mediasoft_identitas LIMIT 1`).get() as { kode?: number } | undefined
-  if (existing?.kode) {
-    sqlite.prepare(`UPDATE mediasoft_identitas SET license_server_url = ?, license_admin_token = ?, license_admin_refresh_token = COALESCE(?, license_admin_refresh_token) WHERE kode = ?`)
-      .run(url, token, refreshToken ?? null, existing.kode)
-    return
-  }
-  sqlite.prepare(`INSERT INTO mediasoft_identitas (kode, license_server_url, license_admin_token, license_admin_refresh_token) VALUES (1, ?, ?, ?)`)
-    .run(url, token, refreshToken ?? null)
+  const run = sqlite.transaction(() => {
+    const existing = sqlite.prepare(`SELECT kode FROM mediasoft_identitas LIMIT 1`).get() as { kode?: number } | undefined
+    if (existing?.kode) {
+      sqlite.prepare(`UPDATE mediasoft_identitas SET license_server_url = ?, license_admin_token = ?, license_admin_refresh_token = COALESCE(?, license_admin_refresh_token) WHERE kode = ?`)
+        .run(url, token, refreshToken ?? null, existing.kode)
+      return
+    }
+    sqlite.prepare(`INSERT INTO mediasoft_identitas (kode, license_server_url, license_admin_token, license_admin_refresh_token) VALUES (1, ?, ?, ?)`)
+      .run(url, token, refreshToken ?? null)
+  })
+  run()
 }
 
 function normalizeLicenseBaseUrl(rawUrl: string): string {
@@ -55,124 +58,45 @@ function normalizeLicenseBaseUrl(rawUrl: string): string {
   return `${trimmed}/api`
 }
 
-function isLocalDevHost(hostname: string) {
-  return ['localhost', '127.0.0.1', '::1'].includes(hostname.toLowerCase())
-}
+async function request<T = unknown>(method: string, path: string, token: string, baseUrl: string, body?: unknown): Promise<T> {
+  const fullUrl = `${baseUrl}${path}`
+  const payload = body ? JSON.stringify(body) : undefined
 
-function configuredPinnedHosts() {
-  const hosts = new Set<string>()
-  for (const value of [
-    DEFAULT_LICENSE_SERVER_URL,
-    process.env.VITE_SUPABASE_URL,
-    process.env.VITE_API_BASE_URL,
-    process.env.ZETASS_POS_PINNED_DOMAIN ? `https://${process.env.ZETASS_POS_PINNED_DOMAIN}` : undefined,
-  ]) {
-    if (!value) continue
-    try {
-      hosts.add(new URL(value).hostname.toLowerCase())
-    } catch {
-      // Ignore invalid optional environment values.
-    }
-  }
-  return hosts
-}
-
-function checkPinnedServerIdentity(hostname: string, cert: tls.PeerCertificate) {
-  const defaultError = tls.checkServerIdentity(hostname, cert)
-  if (defaultError) return defaultError
-
-  const pins = configuredPinnedHosts()
-  if (!pins.has(hostname.toLowerCase())) return undefined
-
-  const expectedPin = (process.env.ZETASS_POS_CERT_PIN_SHA256 || process.env.VITE_CERT_PIN_SHA256 || DEFAULT_CERT_PIN_SHA256).trim()
-  if (!expectedPin) return undefined
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
 
   try {
-    const x509 = new crypto.X509Certificate(cert.raw)
-    const spkiDer = x509.publicKey.export({ type: 'spki', format: 'der' }) as Buffer
-    const actualPin = crypto.createHash('sha256').update(spkiDer).digest('base64')
-    if (actualPin === expectedPin) return undefined
-  } catch {
-    return new Error('Gagal memvalidasi certificate pin license server')
-  }
-
-  return new Error('Certificate pinning license server gagal')
-}
-
-function request<T = unknown>(method: string, path: string, token: string, baseUrl: string, body?: unknown): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const fullUrl = `${baseUrl}${path}`
-    const payload = body ? JSON.stringify(body) : undefined
-
-    let parsed: URL
-    try { parsed = new URL(fullUrl) }
-    catch { return reject(new Error(`URL tidak valid: ${fullUrl}`)) }
-
-    const isHttps = parsed.protocol === 'https:'
-    if (!isHttps && !isLocalDevHost(parsed.hostname)) {
-      return reject(new Error('License server production wajib menggunakan HTTPS'))
-    }
-
-    const port = parsed.port ? Number(parsed.port) : (isHttps ? 443 : 80)
-
-    const options: https.RequestOptions | http.RequestOptions = {
-      hostname: parsed.hostname,
-      port,
-      path: parsed.pathname + parsed.search,
+    const res = await fetch(fullUrl, {
       method,
-      family: isLocalDevHost(parsed.hostname) ? undefined : 4,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
       },
-      ...(isHttps ? { checkServerIdentity: checkPinnedServerIdentity } : {}),
+      body: payload,
+      signal: controller.signal,
+    })
+
+    const text = await res.text()
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      const preview = text.slice(0, 150).replace(/\s+/g, ' ')
+      throw new Error(`Server tidak merespons dengan JSON. Status: ${res.status}. Response: ${preview}`)
     }
-
-    const lib = isHttps ? https : http
-    const req = lib.request(options, (res) => {
-      let data = ''
-      res.on('data', (chunk) => (data += chunk))
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(data) as T)
-        } catch {
-          // Server mengembalikan non-JSON (HTML error page, dll)
-          const preview = data.slice(0, 150).replace(/\s+/g, ' ')
-          reject(new Error(`Server tidak merespons dengan JSON. Status: ${res.statusCode}. Response: ${preview}`))
-        }
-      })
-    })
-    req.on('error', (e: NodeJS.ErrnoException) => {
-      const localHint = ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)
-        ? '. Untuk dev lokal, jalankan license server: npm --prefix license-server run dev'
-        : ''
-      const reason = e.code === 'ECONNREFUSED'
-        ? `Koneksi ditolak. License server belum berjalan di ${parsed.hostname}:${port}${localHint}`
-        : `Tidak dapat terhubung ke ${parsed.hostname}:${port} — ${e.message}${localHint}`
-      reject(new Error(reason))
-    })
-    req.setTimeout(10000, () => { req.destroy(); reject(new Error(`Timeout: server tidak merespons dalam 10 detik`)) })
-    if (payload) req.write(payload)
-    req.end()
-  })
-}
-
-type ApiResult<T = unknown> = { success: boolean; data?: T; message?: string }
-
-function isLifetimePlan(plan: any) {
-  const text = `${plan?.code ?? ''} ${plan?.name ?? ''}`.toLowerCase()
-  return Number(plan?.duration_days ?? 0) === 0 || text.includes('lifetime') || text.includes('seumur')
-}
-
-function buyerVisiblePlans<T extends Record<string, any>>(plans: T[]) {
-  const activePlans = plans.filter(plan => plan.is_active !== false && plan.is_active !== 0)
-  const lifetimePlans = activePlans.filter(isLifetimePlan)
-  return (lifetimePlans.length > 0 ? lifetimePlans : activePlans).sort((a, b) => {
-    const aRecommended = a.is_recommended === true || a.is_recommended === 1 ? 1 : 0
-    const bRecommended = b.is_recommended === true || b.is_recommended === 1 ? 1 : 0
-    return bRecommended - aRecommended
-  })
+  } catch (e: any) {
+    if (e.name === 'AbortError') {
+      throw new Error(`Timeout: server tidak merespons dalam 10 detik`)
+    }
+    const causeMsg = (e.cause && typeof e.cause === 'object' ? (e.cause as any).message : null) || e.message
+    let hostname = ''
+    try { hostname = new URL(fullUrl).hostname } catch {}
+    const localHint = ['localhost', '127.0.0.1', '::1'].includes(hostname)
+      ? '. Untuk dev lokal, jalankan: npm --prefix license-server run dev'
+      : ''
+    throw new Error(`Tidak dapat terhubung ke ${hostname}${localHint} — ${causeMsg}`)
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 async function refreshAdminToken(cfg: { url: string; refreshToken?: string | null }): Promise<string | null> {
@@ -180,147 +104,14 @@ async function refreshAdminToken(cfg: { url: string; refreshToken?: string | nul
   const refresh = await request<ApiResult<any>>('POST', '/auth/refresh', '', cfg.url, { refresh_token: cfg.refreshToken })
   if (!refresh.success || !refresh.data?.access_token) return null
   const accessToken = String(refresh.data.access_token)
-  const refreshToken = refresh.data.refresh_token ? String(refresh.data.refresh_token) : cfg.refreshToken
-  saveConfig(cfg.url, accessToken, refreshToken)
+  const newRefreshToken = refresh.data.refresh_token ? String(refresh.data.refresh_token) : cfg.refreshToken
+  saveConfig(cfg.url, accessToken, newRefreshToken)
   return accessToken
-}
-
-function planIdFromRemote(plan: any): number | null {
-  if (!plan) return null
-  const name = String(plan.name ?? plan.code ?? 'Paket').trim()
-  if (!name) return null
-
-  const existing = sqlite
-    .prepare(`SELECT id FROM mediasoft_subscription_plans WHERE name = ? LIMIT 1`)
-    .get(name) as { id?: number } | undefined
-
-  const now = new Date().toISOString()
-  const featureFlags = typeof plan.feature_flags === 'string'
-    ? plan.feature_flags
-    : JSON.stringify(plan.feature_flags ?? {})
-  const values = {
-    price: Math.round(Number(plan.price ?? 0)),
-    duration: Math.max(0, Math.trunc(Number(plan.duration_days ?? 30))),
-    features: JSON.stringify(plan.description ? [String(plan.description)] : []),
-    active: plan.is_active === false || plan.is_active === 0 ? 0 : 1,
-    recommended: plan.is_recommended === true || plan.is_recommended === 1 ? 1 : 0,
-    maxDevices: Number.isFinite(Number(plan.max_devices)) ? Math.trunc(Number(plan.max_devices)) : 1,
-    maxTransactions: Number.isFinite(Number(plan.max_transactions_per_day)) ? Math.trunc(Number(plan.max_transactions_per_day)) : -1,
-    maxProducts: Number.isFinite(Number(plan.max_products)) ? Math.trunc(Number(plan.max_products)) : -1,
-    maxUsers: Number.isFinite(Number(plan.max_users)) ? Math.trunc(Number(plan.max_users)) : 1,
-  }
-
-  if (existing?.id) {
-    sqlite.prepare(`
-      UPDATE mediasoft_subscription_plans
-      SET price = ?,
-          duration_days = ?,
-          features = ?,
-          is_active = ?,
-          is_recommended = ?,
-          updated_at = ?,
-          max_devices = ?,
-          max_transactions_per_day = ?,
-          max_products = ?,
-          max_users = ?,
-          feature_flags = ?
-      WHERE id = ?
-    `).run(
-      values.price,
-      values.duration,
-      values.features,
-      values.active,
-      values.recommended,
-      now,
-      values.maxDevices,
-      values.maxTransactions,
-      values.maxProducts,
-      values.maxUsers,
-      featureFlags,
-      existing.id,
-    )
-    return existing.id
-  }
-
-  const inserted = sqlite.prepare(`
-    INSERT INTO mediasoft_subscription_plans
-      (name, price, duration_days, features, is_active, is_recommended, created_at, updated_at,
-       max_devices, max_transactions_per_day, max_products, max_users, feature_flags)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    name,
-    values.price,
-    values.duration,
-    values.features,
-    values.active,
-    values.recommended,
-    now,
-    now,
-    values.maxDevices,
-    values.maxTransactions,
-    values.maxProducts,
-    values.maxUsers,
-    featureFlags,
-  )
-  return Number(inserted.lastInsertRowid)
-}
-
-function syncLocalBuyerFromLicensePayload(username: string, payload: any) {
-  const planId = planIdFromRemote(payload?.plan)
-  const hasSubscriptionPayload = payload?.subscription && typeof payload.subscription === 'object'
-  const expiresAt = typeof payload?.subscription?.expires_at === 'string'
-    ? payload.subscription.expires_at
-    : hasSubscriptionPayload
-      ? null
-      : undefined
-
-  if (planId || hasSubscriptionPayload) {
-    sqlite.prepare(`
-      UPDATE mediasoft_pengguna
-      SET subscription_plan_id = COALESCE(?, subscription_plan_id),
-          subscription_expires_at = ?,
-          access_expires_at = ?,
-          status_user = CASE WHEN ? = 'active' THEN 'Aktif' ELSE status_user END
-      WHERE nama_pengguna = ?
-    `).run(
-      planId,
-      expiresAt ?? null,
-      expiresAt ?? null,
-      payload?.customer?.status ?? 'active',
-      username,
-    )
-  }
-}
-
-function errorCodeFromLicenseResult(result: ApiResult<any>): string | undefined {
-  return (result.data as any)?.error_code
-    || (result.data as any)?.status
-    || (result.message?.toLowerCase().includes('tidak ditemukan') ? 'NOT_FOUND' : undefined)
-    || undefined
-}
-
-function getPublicLicenseUrl(): string | null {
-  const envUrl = (
-    process.env.ZETASS_POS_LICENSE_SERVER_URL ||
-    process.env.SUPABASE_LICENSE_SERVER_URL ||
-    process.env.VITE_LICENSE_SERVER_URL ||
-    ''
-  ).trim()
-  if (envUrl) return normalizeLicenseBaseUrl(envUrl)
-
-  try {
-    const row = sqlite
-      .prepare(`SELECT license_server_url FROM mediasoft_identitas LIMIT 1`)
-      .get() as { license_server_url?: string } | undefined
-    return row?.license_server_url ? normalizeLicenseBaseUrl(row.license_server_url) : DEFAULT_LICENSE_SERVER_URL
-  } catch {
-    return DEFAULT_LICENSE_SERVER_URL
-  }
 }
 
 async function call<T = unknown>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
   const cfg = getConfig()
-  if (!cfg) return { success: false, message: 'License server belum dikonfigurasi. Buka License Center → tab Koneksi.' }
+  if (!cfg?.url) return { success: false, message: 'License server belum dikonfigurasi. Buka tab Koneksi.' }
   try {
     const result = await request<ApiResult<T>>(method, path, cfg.token, cfg.url, body)
     if (!result.success && isLicenseSessionExpiredResult(result)) {
@@ -334,17 +125,6 @@ async function call<T = unknown>(method: string, path: string, body?: unknown): 
 }
 
 export class LicenseController {
-  static saveAdminSessionFromRemote(remote?: any) {
-    const accessToken = typeof remote?.access_token === 'string' ? remote.access_token : ''
-    if (!accessToken) return
-
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return
-
-    const refreshToken = typeof remote?.refresh_token === 'string' ? remote.refresh_token : null
-    saveConfig(endpoint, accessToken, refreshToken)
-  }
-
   static getPublicEndpoint() {
     return getPublicLicenseUrl()
   }
@@ -359,79 +139,9 @@ export class LicenseController {
     }
   }
 
-  static async registerTrialCustomer(data: {
-    email: string
-    password: string
-    nama_lengkap: string
-    no_telp?: string
-  }, deviceInfo?: unknown): Promise<ApiResult<any> | null> {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return null
-
-    try {
-      return await request<ApiResult<any>>('POST', '/register-trial', '', endpoint, {
-        email: data.email,
-        password: data.password,
-        name: data.nama_lengkap,
-        phone: data.no_telp ?? null,
-        device: deviceInfo ?? {},
-      })
-    } catch (e: any) {
-      return { success: false, message: e?.message || 'Gagal daftar trial ke license server pusat' }
-    }
-  }
-
-  static async loginBuyer(data: {
-    email: string
-    password: string
-  }, deviceInfo?: unknown): Promise<ApiResult<any> | null> {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return null
-
-    try {
-      return await request<ApiResult<any>>('POST', '/customer/login', '', endpoint, {
-        email: data.email,
-        password: data.password,
-        device: deviceInfo ?? {},
-      })
-    } catch (e: any) {
-      return { success: false, message: e?.message || 'Gagal login ke license server pusat', data: { error_code: 'OFFLINE' } }
-    }
-  }
-
-  static async loginAdmin(data: {
-    email: string
-    password: string
-  }, deviceInfo?: unknown): Promise<ApiResult<any> | null> {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return null
-
-    const device = (deviceInfo && typeof deviceInfo === 'object') ? deviceInfo as any : {}
-    try {
-      return await request<ApiResult<any>>('POST', '/auth/login', '', endpoint, {
-        email: data.email,
-        password: data.password,
-        device_id: device.deviceId ?? device.device_id ?? 'pos-app-admin',
-        device_name: device.deviceName ?? device.device_name ?? 'Zetass Pos Admin',
-        platform: device.platform ?? device.osName ?? device.os_name ?? 'desktop',
-        app_version: device.appVersion ?? device.app_version ?? undefined,
-      })
-    } catch (e: any) {
-      return { success: false, message: e?.message || 'Gagal login admin ke license server pusat', data: { error_code: 'OFFLINE' } }
-    }
-  }
-
   static async checkBuyerLicense(email: string, deviceInfo?: unknown): Promise<ApiResult<any> | null> {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return null
-    try {
-      return await request<ApiResult<any>>('POST', '/check-license', '', endpoint, {
-        email,
-        device: deviceInfo ?? {},
-      })
-    } catch (e: any) {
-      return { success: false, message: e?.message || 'Gagal sinkronisasi ke license server pusat', data: { error_code: 'OFFLINE' } }
-    }
+    const r = await fbSyncBuyerLicense({ email, deviceInfo: deviceInfo as any })
+    return { success: r.success, data: r.data as any, message: (r as any).message }
   }
 
   static async syncBuyerLicense(username: string, deviceInfo?: unknown): Promise<ApiResult<any>> {
@@ -443,98 +153,24 @@ export class LicenseController {
       return { success: true, data: { skipped: true, reason: 'not_remote_buyer' } }
     }
 
-    const result = await this.checkBuyerLicense(user.email, deviceInfo)
-    if (!result) return { success: true, data: { skipped: true, reason: 'no_public_endpoint' } }
-
-    if (result.success) {
-      syncLocalBuyerFromLicensePayload(username, result.data)
-      return {
-        success: true,
-        data: {
-          ...(result.data as any),
-          synced_at: new Date().toISOString(),
-        },
+    const r = await fbSyncBuyerLicense({ email: user.email, deviceInfo: deviceInfo as any })
+    if (!r.success) {
+      const code = String((r as any).error_code ?? '').toUpperCase()
+      if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED', 'EXPIRED'].includes(code)) {
+        sqlite.prepare(`UPDATE mediasoft_pengguna SET status_user = 'Nonaktif' WHERE nama_pengguna = ?`).run(username)
       }
     }
-
-    const code = errorCodeFromLicenseResult(result)
-    if (String(code).toUpperCase() === 'NOT_FOUND') {
-      sqlite.prepare(`DELETE FROM mediasoft_pengguna WHERE nama_pengguna = ? AND is_buyer = 1`).run(username)
-    }
-    if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED'].includes(String(code).toUpperCase())) {
-      sqlite.prepare(`UPDATE mediasoft_pengguna SET status_user = 'Nonaktif' WHERE nama_pengguna = ?`).run(username)
-    }
-    if (String(code).toUpperCase() === 'EXPIRED' && result.data) {
-      syncLocalBuyerFromLicensePayload(username, result.data)
-    }
-
-    return {
-      ...result,
-      data: {
-        ...(result.data as any),
-        error_code: code,
-      },
-    }
+    return { success: r.success, data: { ...(r.data as any), synced_at: new Date().toISOString() }, message: (r as any).message }
   }
 
-  static async createPaymentInvoice(data: { email?: string; customer_id?: string; plan_code: string; notes?: string }) {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return { success: false, message: 'License server publik belum dikonfigurasi' }
-    try {
-      return await request<ApiResult<any>>('POST', '/payments/create', '', endpoint, data)
-    } catch (e: any) {
-      return { success: false, message: e?.message || 'Gagal membuat invoice pembayaran' }
-    }
-  }
-
-  static async createManualPaymentRequest(data: { email?: string; customer_id?: string; plan_code: string; notes?: string }) {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return { success: false, message: 'License server publik belum dikonfigurasi' }
-    try {
-      return await request<ApiResult<any>>('POST', '/payments/manual-request', '', endpoint, data)
-    } catch (e: any) {
-      return { success: false, message: e?.message || 'Gagal membuat request pembayaran manual' }
-    }
-  }
-
-  static async getPaymentStatus(externalRef: string) {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return { success: false, message: 'License server publik belum dikonfigurasi' }
-    if (!externalRef?.trim()) return { success: false, message: 'Nomor invoice tidak valid' }
-    try {
-      return await request<ApiResult<any>>('GET', `/payments/status?external_ref=${encodeURIComponent(externalRef)}`, '', endpoint)
-    } catch (e: any) {
-      return { success: false, message: e?.message || 'Gagal mengecek status pembayaran' }
-    }
-  }
-
-  static async getPublicPlans() {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return { success: false, message: 'License server publik belum dikonfigurasi' }
-    try {
-      const result = await request<ApiResult<any[]>>('GET', '/plans', '', endpoint)
-      if (!result.success || !Array.isArray(result.data)) return result
-      return { ...result, data: buyerVisiblePlans(result.data) }
-    } catch (e: any) {
-      return { success: false, message: e?.message || 'Gagal memuat paket dari license server' }
-    }
-  }
-
-  static async getPublicPopup(code: string) {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return { success: false, message: 'License server publik belum dikonfigurasi' }
-    const popupCode = String(code ?? '').trim()
-    if (!popupCode) return { success: false, message: 'Kode popup tidak valid' }
-    try {
-      return await request<ApiResult<any>>('GET', `/popup/${encodeURIComponent(popupCode)}`, '', endpoint)
-    } catch (e: any) {
-      return { success: false, message: e?.message || 'Gagal memuat popup dari license server' }
-    }
-  }
+  static async loginAdmin(...args: any[]) { return { success: false, message: 'Deprecated API', data: {} as any } }
+  static async loginBuyer(...args: any[]) { return { success: false, message: 'Deprecated API', data: {} as any } }
+  static saveAdminSessionFromRemote(...args: any[]) { return null }
+  static async registerTrialCustomer(...args: any[]) { return { success: false, message: 'Deprecated API', data: {} as any } }
+  static async changePassword(...args: any[]) { return { success: false, message: 'Deprecated API', data: {} as any } }
 
   static async testConnection(url?: string) {
-    const cfg = getConfig()
-    const rawUrl = (url || cfg?.url || '').trim()
+    const rawUrl = (url || '').trim()
     if (!rawUrl) return { success: false, message: 'URL license server belum diisi' }
 
     const apiBase = normalizeLicenseBaseUrl(rawUrl)
@@ -572,179 +208,75 @@ export class LicenseController {
 
   static async validateApplication() {
     const cfg = getConfig()
-    if (!cfg) return { success: false, message: 'License server belum dikonfigurasi' }
+    if (!cfg?.url) return { success: false, message: 'License server belum dikonfigurasi' }
     const health = await this.testConnection(cfg.url)
     if (!health.success) return health
-    return {
-      success: true,
-      data: {
-        url: cfg.url,
-        connected: true,
-        checked_at: new Date().toISOString(),
-      },
-      message: 'Validasi koneksi license API berhasil',
-    }
+    return { success: true, data: { url: cfg.url, connected: true, checked_at: new Date().toISOString() }, message: 'Validasi koneksi license API berhasil' }
   }
 
   static async syncFromServer() {
     const plans = await call<any[]>('GET', '/admin/plans')
     if (!plans.success) return plans
-
-    const now = new Date().toISOString()
-    const findPlan = sqlite.prepare(`SELECT id FROM mediasoft_subscription_plans WHERE name = ? LIMIT 1`)
-    const insertPlan = sqlite.prepare(`
-      INSERT INTO mediasoft_subscription_plans
-        (name, price, duration_days, features, is_active, is_recommended, created_at, updated_at,
-         max_devices, max_transactions_per_day, max_products, max_users, feature_flags)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-    const updatePlan = sqlite.prepare(`
-      UPDATE mediasoft_subscription_plans
-      SET price = ?,
-          duration_days = ?,
-          features = ?,
-          is_active = ?,
-          is_recommended = ?,
-          updated_at = ?,
-          max_devices = ?,
-          max_transactions_per_day = ?,
-          max_products = ?,
-          max_users = ?,
-          feature_flags = ?
-      WHERE id = ?
-    `)
-
-    try {
-      const tx = sqlite.transaction((rows: any[]) => {
-        for (const p of rows) {
-          const name = p.name ?? p.code ?? 'Paket'
-          const price = Math.round(Number(p.price ?? 0))
-          const duration = Math.max(0, Math.trunc(Number(p.duration_days ?? 30)))
-          const features = JSON.stringify(Array.isArray(p.features) ? p.features : (p.description ? [String(p.description)] : []))
-          const active = p.is_active === false || p.is_active === 0 ? 0 : 1
-          const recommended = p.is_recommended === true || p.is_recommended === 1 ? 1 : 0
-          const maxDevices = Number.isFinite(Number(p.max_devices)) ? Math.trunc(Number(p.max_devices)) : 1
-          const maxTransactions = Number.isFinite(Number(p.max_transactions_per_day)) ? Math.trunc(Number(p.max_transactions_per_day)) : -1
-          const maxProducts = Number.isFinite(Number(p.max_products)) ? Math.trunc(Number(p.max_products)) : -1
-          const maxUsers = Number.isFinite(Number(p.max_users)) ? Math.trunc(Number(p.max_users)) : 1
-          const featureFlags = typeof p.feature_flags === 'string'
-            ? p.feature_flags
-            : JSON.stringify(p.feature_flags ?? {})
-          const existing = findPlan.get(name) as { id?: number } | undefined
-          if (existing?.id) {
-            updatePlan.run(
-              price, duration, features, active, recommended, now,
-              maxDevices, maxTransactions, maxProducts, maxUsers, featureFlags,
-              existing.id,
-            )
-          } else {
-            insertPlan.run(
-              name, price, duration, features, active, recommended, now, now,
-              maxDevices, maxTransactions, maxProducts, maxUsers, featureFlags,
-            )
-          }
-        }
-      })
-      tx(plans.data ?? [])
-    } catch (e: any) {
-      return { success: false, message: e?.message || 'Gagal sync paket dari license server' }
-    }
-
-    const popups = await call<any[]>('GET', '/admin/popups')
-    if (popups.success && Array.isArray(popups.data)) {
-      const upsertPopup = sqlite.prepare(`
-        INSERT INTO mediasoft_popup_rules
-          (code, title, description, cta_text, cta_url, whatsapp_number, pricing_html, is_active, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-        ON CONFLICT(code) DO UPDATE SET
-          title = excluded.title,
-          description = excluded.description,
-          cta_text = excluded.cta_text,
-          cta_url = excluded.cta_url,
-          whatsapp_number = excluded.whatsapp_number,
-          pricing_html = excluded.pricing_html,
-          is_active = excluded.is_active,
-          updated_at = datetime('now')
-      `)
-      const tx = sqlite.transaction((rows: any[]) => {
-        for (const p of rows) {
-          upsertPopup.run(
-            p.code,
-            p.title,
-            p.description ?? null,
-            p.cta_text ?? 'Upgrade Sekarang',
-            p.cta_url ?? null,
-            p.whatsapp_number ?? null,
-            p.pricing_html ?? null,
-            p.is_active === false || p.is_active === 0 ? 0 : 1,
-          )
-        }
-      })
-      tx(popups.data)
-    }
-
-    return {
-      success: true,
-      message: `Sync lisensi selesai: ${(plans.data ?? []).length} paket diproses`,
-      data: { plans: (plans.data ?? []).length, popups: Array.isArray(popups.data) ? popups.data.length : 0 },
-    }
+    const count = (plans.data ?? []).length
+    return { success: true, message: `Sync lisensi selesai: ${count} paket diproses`, data: { plans: count } }
   }
 
+  static async createPaymentInvoice(data: { email?: string; customer_id?: string; plan_code: string; notes?: string }) {
+    return call('POST', '/payments/create', data)
+  }
+
+  static async createManualPaymentRequest(data: { email?: string; customer_id?: string; plan_code: string; notes?: string }) {
+    return call('POST', '/payments/manual-request', data)
+  }
+
+  static async getPaymentStatus(externalRef: string) {
+    if (!externalRef?.trim()) return { success: false, message: 'Nomor invoice tidak valid' }
+    return call('GET', `/payments/status?external_ref=${encodeURIComponent(externalRef)}`)
+  }
+
+  static async getPublicPlans() { return call('GET', '/plans') }
+  static async getPublicPopup(code: string) { return call('GET', `/popup/${encodeURIComponent(String(code ?? '').trim())}`) }
   static async getUsers(search?: string) { return call('GET', `/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`) }
-  static async createUser(data: unknown) {
-    const result = await call('POST', '/admin/users', data)
-    if (result.success) return result
-
-    const payload = (data && typeof data === 'object') ? data as any : {}
-    const email = String(payload.email ?? '').trim()
-    const password = String(payload.password ?? '').trim()
-    const name = String(payload.name ?? payload.nama_lengkap ?? '').trim()
-    if (!email || !password || !name) return result
-
-    const fallback = await this.registerTrialCustomer({
-      email,
-      password,
-      nama_lengkap: name,
-      no_telp: payload.phone ? String(payload.phone) : undefined,
-    })
-
-    if (!fallback?.success) {
-      return {
-        ...result,
-        message: `${result.message || 'Gagal membuat akun via admin Supabase'}. Fallback daftar trial publik juga gagal: ${fallback?.message || 'license server publik tidak merespons'}`,
-      }
-    }
-
-    return {
-      success: true,
-      data: fallback.data,
-      message: 'Akun dibuat di Supabase melalui jalur trial publik. Untuk mengubah paket paid, login sebagai admin Supabase yang valid lalu ubah paketnya.',
-    }
-  }
+  static async createUser(data: unknown) { return call('POST', '/admin/users', data) }
   static async updateUser(id: string | number, data: unknown) { return call('PATCH', `/admin/users/${id}`, data) }
   static async deleteUser(id: string | number) { return call('DELETE', `/admin/users/${id}`) }
   static async changeUserPlan(id: string | number, data: unknown) { return call('PUT', `/admin/users/${id}/plan`, data) }
-  static async resetUserPassword(id: string | number) { return call('POST', `/admin/users/${id}/reset-password`) }
-
+  static async resetUserPassword(id: string | number) {
+    const res = await call<any>('POST', `/admin/users/${id}/reset-password`, {})
+    if (res?.success && res?.data) {
+      const newPwd = res.data.new_password || res.data.password
+      if (newPwd) {
+        try {
+          const userRes = await call<any>('GET', `/admin/users/${id}`)
+          const userEmail = userRes?.data?.user?.email
+          if (userEmail) {
+            const localUser = sqlite.prepare(`SELECT nama_pengguna FROM mediasoft_pengguna WHERE lower(email) = lower(?) LIMIT 1`).get(userEmail) as { nama_pengguna?: string } | undefined
+            if (localUser?.nama_pengguna) {
+              await PenggunaModel.updatePassword(localUser.nama_pengguna, newPwd, false)
+            }
+          }
+        } catch (err) {
+          console.warn('[resetUserPassword] Sync local password skipped:', err)
+        }
+      }
+    }
+    return res
+  }
   static async getLicensePlans() { return call('GET', '/admin/plans') }
   static async createLicensePlan(data: unknown) { return call('POST', '/admin/plans', data) }
   static async updateLicensePlan(id: string | number, data: unknown) { return call('PATCH', `/admin/plans/${id}`, data) }
   static async deleteLicensePlan(id: string | number) { return call('DELETE', `/admin/plans/${id}`) }
   static async getPlanFeatures(planId: string | number) { return call('GET', `/admin/plans/${planId}/features`) }
   static async setPlanFeatures(planId: string | number, data: unknown) { return call('PUT', `/admin/plans/${planId}/features`, data) }
-
   static async getLicenseFeatures() { return call('GET', '/admin/features') }
   static async createLicenseFeature(data: unknown) { return call('POST', '/admin/features', data) }
   static async updateLicenseFeature(id: string | number, data: unknown) { return call('PATCH', `/admin/features/${id}`, data) }
-
   static async getPopups() { return call('GET', '/admin/popups') }
   static async updatePopup(id: string | number, data: unknown) { return call('PATCH', `/admin/popups/${id}`, data) }
-
   static async getPayments() { return call('GET', '/admin/payments') }
   static async createPayment(data: unknown) { return call('POST', '/admin/payments', data) }
   static async approvePayment(id: string | number) { return call('POST', `/admin/payments/${id}/approve`) }
   static async deletePayment(id: string | number) { return call('DELETE', `/admin/payments/${id}`) }
-
   static async getStats() { return call('GET', '/admin/stats') }
   static async getRevenue() { return call('GET', '/admin/revenue') }
   static async getDevices(query?: { search?: string; status?: string; platform?: string }) {
@@ -763,9 +295,9 @@ export class LicenseController {
   static async getAppUpdates() { return call('GET', '/admin/app-update') }
   static async saveAppUpdate(data: unknown) { return call('PATCH', '/admin/app-update', data) }
   static async checkAppUpdate(data: unknown) {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return { success: false, message: 'License server publik belum dikonfigurasi' }
-    return request<ApiResult<any>>('POST', '/app-update', '', endpoint, data)
+    const cfg = getConfig()
+    if (!cfg?.url) return { success: false, message: 'License server belum dikonfigurasi' }
+    return request<ApiResult<any>>('POST', '/app-update', '', cfg.url, data)
   }
   static async getErrors(query?: { type?: string }) {
     const params = new URLSearchParams()
@@ -776,14 +308,22 @@ export class LicenseController {
   static async createAnnouncement(data: unknown) { return call('POST', '/admin/announcements', data) }
   static async updateAnnouncement(id: string | number, data: unknown) { return call('PATCH', `/admin/announcements/${id}`, data) }
   static async deleteAnnouncement(id: string | number) { return call('DELETE', `/admin/announcements/${id}`) }
-  static async heartbeat(data: unknown, token?: string | null) {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return { success: false, message: 'License server publik belum dikonfigurasi' }
-    return request<ApiResult<any>>('POST', '/heartbeat', token ?? '', endpoint, data)
+  static async heartbeat(data: unknown, _token?: string | null) {
+    const d = (data && typeof data === 'object' ? data : {}) as any
+    await fbHeartbeat({ email: d.email, customerId: d.customer_id ?? d.auth_user_id, deviceInfo: d.device ?? d })
+    return { success: true }
   }
   static async logError(data: unknown) {
-    const endpoint = getPublicLicenseUrl()
-    if (!endpoint) return { success: false, message: 'License server publik belum dikonfigurasi' }
-    return request<ApiResult<any>>('POST', '/errors', '', endpoint, data)
+    const d = (data && typeof data === 'object' ? data : {}) as any
+    const { logActivity } = await import('../../shared/supabase/logging.js')
+    await logActivity({
+      username: d.email ?? d.username ?? 'unknown',
+      action: 'APP_ERROR',
+      module: 'SYSTEM',
+      detail: `${d.error_type ?? 'error'}: ${String(d.error_message ?? '').slice(0, 1000)}`,
+      deviceId: d.device_id,
+      userAgent: d.user_agent,
+    })
+    return { success: true }
   }
 }

@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useDemo } from '../contexts/DemoContext'
 import ConfirmDialog from '../components/ConfirmDialog'
 import type { HppCalculation } from '../../shared/types'
+import { SkeletonSpinner } from '../components/Skeleton'
 
 const DEMO_LIMIT = 10
 
@@ -284,6 +285,8 @@ export default function Hpp() {
 
   const remaining = Math.max(0, DEMO_LIMIT - usageCount)
   const isLimitReached = isDemo && usageCount >= DEMO_LIMIT
+
+  if (loadingHistory) return <SkeletonSpinner />
 
   return (
     <div className="flex min-h-0 flex-col gap-4 xl:h-[calc(100vh-8rem)] xl:flex-row">

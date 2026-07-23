@@ -1,6 +1,7 @@
 import { sqlite } from '../../database/connection.js'
 import { WhatsAppService, type WhatsAppSendResult } from '../services/whatsappService.js'
 import { decryptData, encryptData } from '../services/crypto.js'
+import { sanitizeText } from '../../shared/sanitize.js'
 
 const TABLE = 'mediasoft_whatsapp_settings'
 const TEMPLATE_TABLE = 'mediasoft_whatsapp_templates'
@@ -317,9 +318,9 @@ export class WhatsAppController {
     if (!data.phone) return { attempted: false, success: false, message: 'Customer belum memiliki nomor WhatsApp' }
 
     const message = renderTemplate(normalizeTemplate(row.message_template), {
-      customer: data.customerName || 'Customer',
+      customer: sanitizeText(data.customerName || 'Customer'),
       total: `Rp ${data.total.toLocaleString('id-ID')}`,
-      invoice: data.invoice,
+      invoice: sanitizeText(data.invoice),
     })
 
     WhatsAppService.init(row.api_key)

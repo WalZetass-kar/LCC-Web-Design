@@ -1,70 +1,36 @@
-# Zetass Pos Workspace
+# Zetass Pos
 
-Workspace monorepo untuk Zetass Pos yang terdiri dari 2 aplikasi terpisah:
+Desktop & Mobile Point of Sale Application built with Electron, React, and Capacitor.
 
-## 📦 Aplikasi
+**Platform:** Windows, Linux, macOS, Android, iOS
 
-### 1. Zetass Pos User (`packages/zetass-pos-user/`)
-Aplikasi Point of Sale untuk kasir, admin toko, dan pemilik usaha.
+## Download
 
-**Platform:** Desktop (Windows, Linux, macOS) + Mobile (Android, iOS)
+Download the latest release from [GitHub Releases](https://github.com/WalZetass-kar/LCC-Web-Design/releases/latest).
 
-**Port:** `5173`
+## Screenshots
 
-**Fitur:**
-- Dashboard & Statistik
-- POS/Kasir
-- Manajemen Produk & Kategori
-- Stok Barang
-- Supplier & Pelanggan
-- Pembelian & Penjualan
-- Retur & Pengeluaran
-- Laporan & Export
-- WhatsApp Integration
-- Print Queue
-- Backup Data
+| Dashboard | POS | Products |
+|-----------|-----|----------|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![POS](docs/screenshots/pos.png) | ![Products](docs/screenshots/products.png) |
 
-### 2. Zetass Pos Developer Panel (`packages/zetass-pos-developer-panel/`)
-Aplikasi khusus untuk developer dan super admin sistem.
+## Tech Stack
 
-**Platform:** Desktop only (Windows, Linux, macOS)
+- **Frontend:** React 18, TypeScript, TailwindCSS
+- **Desktop:** Electron 31, Vite 5
+- **Mobile:** Capacitor 8
+- **Database:** SQLite (better-sqlite3), Drizzle ORM
+- **Build:** Vite, electron-builder
+- **CI/CD:** GitHub Actions
 
-**Port:** `5174`
+## Quick Start
 
-**Fitur:**
-- **License Management** - Aktivasi, suspend, revoke license
-- **User Management** - Suspend/activate user accounts
-- **Plan Management** - Change subscription plans
-- Database Management
-- API Management
-- E-Commerce API Integration
-- Security Management
-- System Monitoring
-- Activity Logs
-- Backup & Restore
-- Developer Tools
+### Prerequisites
 
-## 🔗 Komunikasi Antar Aplikasi
-
-Developer Panel dapat **mengontrol** User Panel melalui:
-
-1. **License Control**
-   - Aktivasi/suspend/revoke license
-   - User Panel akan ter-block jika license invalid
-   - Auto-check license setiap 5 menit
-
-2. **User Control**
-   - Suspend/activate user accounts
-   - User yang di-suspend tidak bisa login
-
-3. **Plan Management**
-   - Change plan (free, basic, pro, enterprise)
-   - Set limits (max users, max products)
-   - Enable/disable features
-
-Lihat dokumentasi lengkap di [`docs/CROSS_APP_COMMUNICATION.md`](docs/CROSS_APP_COMMUNICATION.md)
-
-## 🚀 Quick Start
+- Node.js 20+
+- pnpm 9+
+- JDK 17+ (for Android)
+- Android SDK (for Android)
 
 ### Install Dependencies
 
@@ -72,106 +38,213 @@ Lihat dokumentasi lengkap di [`docs/CROSS_APP_COMMUNICATION.md`](docs/CROSS_APP_
 pnpm install
 ```
 
-### Development
+### Development (Desktop)
 
 ```bash
-# Run User Panel
-pnpm dev:user
-
-# Run Developer Panel
-pnpm dev:developer
+npm run dev
 ```
 
-### Build
+### Development (Mobile/Android)
 
 ```bash
-# Build User Panel
-pnpm build:user
-
-# Build Developer Panel
-pnpm build:developer
+npm run dev:mobile
+# In another terminal:
+npm run android:open
 ```
 
-### Build Desktop
+## Build
+
+### Build All (Desktop)
 
 ```bash
-# User Panel - Windows
-pnpm build:user:windows
-
-# User Panel - Linux
-pnpm build:user:linux
-
-# User Panel - macOS
-pnpm build:user:mac
-
-# Developer Panel - Windows
-pnpm build:developer:windows
-
-# Developer Panel - Linux
-pnpm build:developer:linux
-
-# Developer Panel - macOS
-pnpm build:developer:mac
+npm run build:desktop
 ```
 
-## 📁 Struktur Project
+### Build Windows
 
-```
-zetass-pos-workspace/
-├── packages/
-│   ├── shared-lib/              # Shared code (database, types, utils)
-│   ├── zetass-pos-user/      # User Panel application
-│   └── zetass-pos-developer-panel/ # Developer Panel application
-├── docs/
-│   ├── REFACTOR_ANALYSIS.md     # Analisis refactor
-│   ├── REFACTOR_GUIDE.md        # Panduan refactor
-│   └── CROSS_APP_COMMUNICATION.md # Komunikasi antar aplikasi
-├── pnpm-workspace.yaml
-└── package.json
+```bash
+# Full build (NSIS Installer + Portable + ZIP)
+npm run build:desktop:windows
+# or
+npx electron-builder --win nsis portable zip --publish never
 ```
 
-## 🔐 Security
+**Output:** `release/` directory
 
-- Developer Panel hanya bisa diakses oleh role `developer` dan `super_admin`
-- User Panel ter-block otomatis jika license invalid/expired/suspended
-- Shared database dengan access control di level aplikasi
-- Semua perubahan dari Developer Panel langsung affect User Panel
+- `Zetass Pos-2.0.0-x64.exe` - NSIS Installer
+- `Zetass Pos-2.0.0-x64.exe` (portable) - Portable Executable
+- `Zetass Pos-2.0.0-x64.zip` - ZIP Archive
 
-## 📚 Dokumentasi
+### Build Linux
 
-- [Analisis Refactor](docs/REFACTOR_ANALYSIS.md)
-- [Panduan Refactor](docs/REFACTOR_GUIDE.md)
-- [Komunikasi Antar Aplikasi](docs/CROSS_APP_COMMUNICATION.md)
-- [User Panel README](packages/zetass-pos-user/README.md)
-- [Developer Panel README](packages/zetass-pos-developer-panel/README.md)
+```bash
+# Full build (AppImage + deb + rpm + tar.gz)
+npm run build:desktop:linux
+# or
+npx electron-builder --linux AppImage deb rpm tar.gz --publish never
+```
 
-## 🎯 Use Cases
+**Output:** `release/` directory
 
-### Developer/Super Admin
-1. Install & run **Developer Panel**
-2. Manage licenses untuk semua user
-3. Suspend/activate user accounts
-4. Change subscription plans
-5. Monitor system & activity logs
+- `Zetass Pos-2.0.0-x64.AppImage` - AppImage
+- `zetass-pos_2.0.0_amd64.deb` - Debian Package
+- `zetass-pos-2.0.0-1.x86_64.rpm` - RPM Package
+- `zetass-pos-2.0.0-x64.tar.gz` - Tarball
 
-### Kasir/Admin Toko
-1. Install & run **User Panel**
-2. Login dengan akun yang diberikan admin
-3. Gunakan fitur POS, produk, laporan, dll
-4. License akan di-check otomatis
+### Build Android
 
-## 🛠️ Tech Stack
+```bash
+# Debug APK
+npm run android:debug
 
-- **Frontend:** React 18, TypeScript, TailwindCSS
-- **Backend:** Electron 31, SQLite, Drizzle ORM
-- **Build:** Vite, Electron Builder
-- **Mobile:** Capacitor (User Panel only)
-- **Workspace:** pnpm workspaces
+# Release APK
+npm run android:release
 
-## 📄 License
+# AAB (Google Play)
+npm run android:aab
+```
+
+**Output:** `release/` directory
+
+- `ZetassPOS.apk` - Debug/Release APK
+- `ZetassPOS.aab` - Android App Bundle
+
+## Installation
+
+### Windows
+
+1. Download `Zetass Pos-2.0.0-x64.exe` (NSIS Installer)
+2. Run the installer
+3. Choose installation directory
+4. Launch from Desktop or Start Menu
+
+### Linux
+
+**AppImage (Universal):**
+```bash
+chmod +x Zetass*.AppImage
+./Zetass*.AppImage
+```
+
+**Debian/Ubuntu:**
+```bash
+sudo dpkg -i zetass-pos_*.deb
+sudo apt-get install -f
+```
+
+**Fedora/RHEL:**
+```bash
+sudo rpm -i zetass-pos-*.rpm
+```
+
+### Android
+
+1. Enable "Install from Unknown Sources"
+2. Download and open the `.apk` file
+3. Follow installation prompts
+
+## Release Process
+
+### Automated Release (Recommended)
+
+1. Update version:
+```bash
+npm run release:patch   # v2.0.0 -> v2.0.1
+npm run release:minor   # v2.0.0 -> v2.1.0
+npm run release:major   # v2.0.0 -> v3.0.0
+```
+
+This will:
+- Update `package.json` version
+- Sync Android `versionCode` and `versionName`
+- Create a git commit and tag
+- Push to GitHub
+- Trigger the Release workflow automatically
+
+### Manual Release
+
+```bash
+# Create and push tag
+git tag v2.0.0
+git push origin v2.0.0
+```
+
+The GitHub Actions workflow will automatically:
+1. Validate (lint, typecheck, test)
+2. Build Windows (NSIS + Portable + ZIP)
+3. Build Linux (AppImage + deb + rpm + tar.gz)
+4. Build Android (Debug APK + Release APK + AAB)
+5. Generate CHANGELOG
+6. Create GitHub Release
+7. Upload all artifacts
+
+### Release Artifacts
+
+| Platform | File | Description |
+|----------|------|-------------|
+| Windows | `*.exe` | NSIS Installer |
+| Windows | `*.exe` (portable) | Portable Executable |
+| Windows | `*.zip` | ZIP Archive |
+| Linux | `*.AppImage` | Universal Linux Binary |
+| Linux | `*.deb` | Debian/Ubuntu Package |
+| Linux | `*.rpm` | Fedora/RHEL Package |
+| Linux | `*.tar.gz` | Tarball |
+| Android | `*.apk` | Android Package |
+| Android | `*.aab` | Android App Bundle |
+
+## Project Structure
+
+```
+LCC-Web-Design/
+├── src/
+│   ├── main/              # Electron main process
+│   ├── renderer/          # React frontend
+│   ├── backend/           # Backend services
+│   └── shared/            # Shared code
+├── android/               # Capacitor Android
+├── ios/                   # Capacitor iOS
+├── build/                 # Build resources (icons)
+├── scripts/               # Build & release scripts
+├── .github/workflows/     # CI/CD workflows
+├── package.json           # Electron config
+├── capacitor.config.ts    # Capacitor config
+├── vite.config.ts         # Vite config
+├── tsconfig.json          # TypeScript config
+└── tsconfig.electron.json # Electron TypeScript config
+```
+
+## Development Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start desktop development |
+| `npm run dev:mobile` | Start mobile dev server |
+| `npm run build:desktop` | Build desktop (all platforms) |
+| `npm run build:desktop:windows` | Build for Windows |
+| `npm run build:desktop:linux` | Build for Linux |
+| `npm run android:debug` | Build Android debug APK |
+| `npm run android:release` | Build Android release APK |
+| `npm run android:aab` | Build Android AAB |
+| `npm run typecheck` | Run TypeScript checks |
+| `npm run lint` | Run ESLint |
+| `npm test` | Run tests |
+| `npm run release:patch` | Release patch version |
+| `npm run release:minor` | Release minor version |
+| `npm run release:major` | Release major version |
+
+## Security
+
+- `.env` files are gitignored
+- `.keys/` directory is gitignored
+- Keystores and certificates are never committed
+- API keys stored in environment variables
+- Context isolation enabled in Electron
+- Certificate pinning for Android network requests
+
+## License
 
 MIT License
 
-## 👨‍💻 Author
+## Author
 
 Zetass Pos

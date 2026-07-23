@@ -7,7 +7,7 @@ import dotenv from 'dotenv'
 const DEEP_LINK_SCHEME = 'zetasspos'
 const DEFAULT_SUPABASE_URL = 'https://azhkvmkmimepmflzqqty.supabase.co'
 const DEFAULT_API_BASE_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
-const DEFAULT_CERT_PIN_SHA256 = 'p51goejPCgGH+Oog/MU2k6PObcEfTrrr73jUcuWJ7w0='
+const DEFAULT_CERT_PIN_SHA256 = 'ZcJbApTb7wyllleAjHw2vYAskqdT+DhMY9aPDFwAtf4='
 const TRUSTED_DEV_ORIGINS = new Set(['http://localhost:5173', 'http://127.0.0.1:5173'])
 
 let pendingDeepLink: string | null = null

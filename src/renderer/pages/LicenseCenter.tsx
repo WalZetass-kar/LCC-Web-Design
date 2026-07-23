@@ -39,6 +39,7 @@ import SecurityPage from './Security'
 import LocalUsersPage from './Users'
 import { api } from '../utils/api'
 import developerPanelIcon from '../assets/developer-panel-icon.png'
+import { SkeletonPage } from '../components/Skeleton'
 
 type LicenseTab = 'dashboard' | 'connection' | 'users' | 'devices' | 'updates' | 'errors' | 'announcements' | 'revenue' | 'plans' | 'features' | 'popups' | 'payments' | 'localUsers' | 'backup' | 'security' | 'activityLog' | 'ecommerceApi'
 
@@ -81,6 +82,7 @@ export default function LicenseCenter() {
   const { user } = useAuth()
   const [tab, setTab] = useState<LicenseTab>('connection')
   const [panelNavOpen, setPanelNavOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
   const activeTab = useMemo(() => TAB_BY_ID[tab] ?? TABS[0], [tab])
 
   const selectTab = (nextTab: LicenseTab) => {
@@ -95,6 +97,7 @@ export default function LicenseCenter() {
       if (result.success && result.data?.connected && result.data.hasRefreshToken) {
         setTab('dashboard')
       }
+      setLoading(false)
     })
     return () => { cancelled = true }
   }, [])
@@ -110,6 +113,8 @@ export default function LicenseCenter() {
       </div>
     )
   }
+
+  if (loading) return <SkeletonPage rows={6} />
 
   const ActiveIcon = activeTab.icon
 

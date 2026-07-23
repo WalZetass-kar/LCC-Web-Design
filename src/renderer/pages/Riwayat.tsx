@@ -20,15 +20,22 @@ export default function Riwayat() {
   const strukRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    api<Penjualan[]>('penjualan:getAll').then(r => {
-      if (r.success) setData(r.data ?? [])
-      setLoadingData(false)
-    })
+    ;(async () => {
+      try {
+        const r = await api<Penjualan[]>('penjualan:getAll')
+        if (r.success) setData(r.data ?? [])
+      } finally {
+        setLoadingData(false)
+      }
+    })()
   }, [])
 
   const openDetail = async (kd: string) => {
-    const r = await api<{ header: Penjualan; details: PenjualanDetailItem[] }>('penjualan:getDetail', kd)
-    if (r.success && r.data) setDetail(r.data)
+    try {
+      const r = await api<{ header: Penjualan; details: PenjualanDetailItem[] }>('penjualan:getDetail', kd)
+      if (r.success && r.data) setDetail(r.data)
+    } finally {
+    }
   }
 
   const handlePrint = useReactToPrint({ content: () => strukRef.current })

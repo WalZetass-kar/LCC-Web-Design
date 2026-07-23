@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useLayoutEffect, useState, useRef, useCallback, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShoppingCart, TrendingUp, Package, AlertTriangle, Calendar, BarChart2, RefreshCw, Table2 } from 'lucide-react'
 import {
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart
+  XAxis, YAxis, CartesianGrid, Tooltip, Area, AreaChart
 } from 'recharts'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -45,6 +45,62 @@ function ChartTooltip({ active, payload, label }: any) {
     <div className="glass-card px-3 py-2 text-xs shadow-lg">
       <p className="font-semibold text-slate-700 dark:text-slate-200 mb-1">{label}</p>
       <p className="text-primary-500">{formatRupiah(payload[0].value)}</p>
+    </div>
+  )
+}
+
+function useMeasuredWidth<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null)
+  const [width, setWidth] = useState(0)
+
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (!element) return
+
+    const update = () => {
+      const nextWidth = Math.floor(element.getBoundingClientRect().width)
+      setWidth(prev => (prev === nextWidth ? prev : nextWidth))
+    }
+
+    update()
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => update())
+      observer.observe(element)
+      return () => observer.disconnect()
+    }
+
+    const raf = requestAnimationFrame(update)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  return { ref, width }
+}
+
+function ChartSurface({
+  height,
+  children,
+  fallback,
+}: {
+  children: (width: number) => ReactNode
+  fallback?: ReactNode
+  height: number
+}) {
+  const { ref, width } = useMeasuredWidth<HTMLDivElement>()
+  return (
+    <div ref={ref} className="w-full" style={{ minHeight: height }}>
+      {width > 0 ? children(width) : fallback ?? (
+        <div className="flex h-full min-h-[inherit] items-center justify-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/50 px-4 text-center" />
+      )}
+    </div>
+  )
+}
+
+function CompactStat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/70 px-3 py-2">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">{label}</p>
+      <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{value}</p>
     </div>
   )
 }
@@ -243,40 +299,52 @@ export default function Dashboard() {
                   </div>
                 }
               >
-                <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart data={summary!.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" vertical={false} />
-                    <XAxis 
-                      dataKey="label" 
-                      tick={{ fontSize: 11, fill: '#94a3b8' }} 
-                      axisLine={false} 
-                      tickLine={false}
-                      dy={8}
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 10, fill: '#94a3b8' }} 
-                      axisLine={false} 
-                      tickLine={false}
-                      dx={-8}
-                      tickFormatter={v => v >= 1000000 ? `${(v / 1000000).toFixed(1)}jt` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} 
-                    />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Area 
-                      type="monotone" 
-                      dataKey="total" 
-                      stroke="#ec4899" 
-                      strokeWidth={3}
-                      fill="url(#colorTotal)" 
-                      animationDuration={800}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <ChartSurface
+                  height={240}
+                  fallback={
+                    <div className="flex h-[240px] items-center justify-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/50 px-4 text-center">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Grafik belum siap</p>
+                        <p className="mt-1 text-xs text-slate-400">Menunggu ukuran area dashboard selesai dihitung</p>
+                      </div>
+                    </div>
+                  }
+                >
+                  {width => (
+                    <AreaChart width={width} height={240} data={summary!.chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 11, fill: '#94a3b8' }}
+                        axisLine={false}
+                        tickLine={false}
+                        dy={8}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: '#94a3b8' }}
+                        axisLine={false}
+                        tickLine={false}
+                        dx={-8}
+                        tickFormatter={v => v >= 1000000 ? `${(v / 1000000).toFixed(1)}jt` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                      />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Area
+                        type="monotone"
+                        dataKey="total"
+                        stroke="#ec4899"
+                        strokeWidth={3}
+                        fill="url(#colorTotal)"
+                        animationDuration={800}
+                      />
+                    </AreaChart>
+                  )}
+                </ChartSurface>
               </Card>
             )}
 
@@ -304,7 +372,7 @@ export default function Dashboard() {
                 </div>
               </Card>
             )}
-          </div>
+              </div>
 
           {/* Produk Terlaris & Stok Menipis */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
@@ -348,9 +416,23 @@ export default function Dashboard() {
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-8 text-slate-400">
-                    <Package size={32} className="mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">Belum ada data penjualan</p>
+                  <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/50 px-4 py-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800">
+                        <Package size={22} className="text-slate-300 dark:text-slate-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Belum ada data penjualan</p>
+                        <p className="mt-1 text-xs text-slate-400">Area ini diisi indikator operasional supaya tidak kosong.</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <CompactStat label="Produk" value={String(summary!.totalBarang)} />
+                      <CompactStat label="Minggu Ini" value={String(summary!.week.count)} />
+                      <CompactStat label="Bulan Ini" value={formatRupiah(summary!.month.total)} />
+                      <CompactStat label="Besok" value={formatRupiah(summary!.predictedTomorrow || 0)} />
+                    </div>
                   </div>
                 )}
               </div>
@@ -392,9 +474,23 @@ export default function Dashboard() {
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-8 text-slate-400">
-                    <Package size={32} className="mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">Semua stok aman</p>
+                  <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/50 px-4 py-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800">
+                        <Package size={22} className="text-slate-300 dark:text-slate-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Semua stok aman</p>
+                        <p className="mt-1 text-xs text-slate-400">Ringkasan cepat tetap tampil agar panel terasa terisi.</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <CompactStat label="Produk" value={String(summary!.totalBarang)} />
+                      <CompactStat label="Stok" value={String(summary!.lowStockCount)} />
+                      <CompactStat label="Minggu Ini" value={String(summary!.week.count)} />
+                      <CompactStat label="Bulan Ini" value={formatRupiah(summary!.month.total)} />
+                    </div>
                   </div>
                 )}
               </div>

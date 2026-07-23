@@ -3,6 +3,7 @@ import { Bell, CheckCircle, Copy, KeyRound, Plus, RotateCcw, Trash2, UserX } fro
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { SkeletonPage } from '../../components/Skeleton'
 
 interface UserRow {
   id: string
@@ -72,44 +73,60 @@ export default function LicenseUsersPage() {
 
   useEffect(() => { void load() }, [load])
 
-  const visibleUsers = users.filter(u => !statusFilter || u.status === statusFilter || u.sub_status === statusFilter)
-
-  async function runConfirmAction() {
-    if (!confirmAction) return
-    setConfirmLoading(true)
-    const { type, user } = confirmAction
-    const r = type === 'delete'
-      ? await api('license:deleteUser', user.id)
-      : await api('license:updateUser', user.id, { status: type })
-    setConfirmLoading(false)
-    if (!r.success) return toast(r.message || 'Aksi gagal diproses', 'error')
-    toast(type === 'delete' ? 'User berhasil dihapus' : 'Status user berhasil diperbarui', 'success')
-    setConfirmAction(null)
-    void load()
+  const resetPassword = async (u: UserRow) => {
+    setResetLoadingId(u.id)
+    const r = await api<{ password?: string; new_password?: string }>('license:resetUserPassword', u.id)
+    setResetLoadingId(null)
+    if (r.success && r.data) {
+      const generatedPassword = r.data.new_password || r.data.password || ''
+      setResetPasswordResult({ user: u, password: generatedPassword })
+    } else {
+      toast(r.message || 'Gagal reset password', 'error')
+    }
   }
 
-  async function resetPassword(user: UserRow) {
-    setResetLoadingId(user.id)
-    const r = await api<{ new_password: string }>('license:resetUserPassword', user.id)
-    setResetLoadingId(null)
-    if (!r.success || !r.data?.new_password) {
-      toast(r.message || 'Gagal reset password', 'error')
-      return
+  const runConfirmAction = async () => {
+    if (!confirmAction) return
+    setConfirmLoading(true)
+    const { type, user: u } = confirmAction
+    let status = u.status
+    if (type === 'inactive') status = 'inactive'
+    else if (type === 'blocked') status = 'blocked'
+
+    if (type === 'delete') {
+      const r = await api('license:deleteUser', u.id)
+      if (r.success) {
+        toast('Pengguna berhasil dihapus', 'success')
+        load()
+      } else {
+        toast(r.message || 'Gagal menghapus pengguna', 'error')
+      }
+    } else {
+      const r = await api('license:updateUser', u.id, { status })
+      if (r.success) {
+        toast('Status pengguna diperbarui', 'success')
+        load()
+      } else {
+        toast(r.message || 'Gagal memperbarui status', 'error')
+      }
     }
-    setResetPasswordResult({ user, password: r.data.new_password })
-    toast('Password pembeli berhasil di-reset', 'success')
+    setConfirmLoading(false)
+    setConfirmAction(null)
   }
 
   const confirmTitle = confirmAction?.type === 'delete'
-    ? 'Hapus User'
+    ? 'Hapus Pengguna'
     : confirmAction?.type === 'blocked'
-      ? 'Block User'
-      : 'Nonaktifkan Lisensi'
+    ? 'Blokir Pengguna'
+    : 'Nonaktifkan Pengguna'
+
   const confirmMessage = confirmAction?.type === 'delete'
-    ? `Akun ${confirmAction.user.email} akan dihapus dari pusat lisensi.`
-    : confirmAction?.type === 'blocked'
-      ? `Akun ${confirmAction.user.email} akan diblokir dan semua device aktif ikut terkunci.`
-      : `Lisensi ${confirmAction?.user.email ?? ''} akan dinonaktifkan.`
+    ? `Apakah Anda yakin ingin menghapus akun ${confirmAction?.user?.name || ''}? Action ini tidak dapat dibatalkan.`
+    : `Apakah Anda yakin ingin mengubah status akun ${confirmAction?.user?.name || ''}?`
+
+  if (loading) return <SkeletonPage rows={8} />
+
+  const visibleUsers = users.filter(u => !statusFilter || u.status === statusFilter || u.sub_status === statusFilter)
 
   return (
     <div className="space-y-4">

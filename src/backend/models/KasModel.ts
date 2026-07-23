@@ -1,6 +1,6 @@
 import { db } from '../../database/connection.js'
 import { kasDrawer, kasTransaksi } from '../../database/schema.js'
-import { eq, and, desc, gte, lte } from 'drizzle-orm'
+import { eq, and, desc, gte, lte, sql } from 'drizzle-orm'
 
 export class KasModel {
   static generateKode(): string {
@@ -102,26 +102,20 @@ export class KasModel {
   }
 
   static updateTotalPenjualan(kd: string, jumlah: number) {
-    const kas = this.getById(kd)
-    if (!kas) return
     return db.update(kasDrawer).set({
-      total_penjualan: (kas.total_penjualan ?? 0) + jumlah,
+      total_penjualan: sql`${kasDrawer.total_penjualan} + ${jumlah}`,
     }).where(eq(kasDrawer.kd_kas, kd)).run()
   }
 
   static updateTotalPengeluaran(kd: string, jumlah: number) {
-    const kas = this.getById(kd)
-    if (!kas) return
     return db.update(kasDrawer).set({
-      total_pengeluaran: (kas.total_pengeluaran ?? 0) + jumlah,
+      total_pengeluaran: sql`${kasDrawer.total_pengeluaran} + ${jumlah}`,
     }).where(eq(kasDrawer.kd_kas, kd)).run()
   }
 
   static updateTotalPemasukan(kd: string, jumlah: number) {
-    const kas = this.getById(kd)
-    if (!kas) return
     return db.update(kasDrawer).set({
-      total_pemasukan: (kas.total_pemasukan ?? 0) + jumlah,
+      total_pemasukan: sql`${kasDrawer.total_pemasukan} + ${jumlah}`,
     }).where(eq(kasDrawer.kd_kas, kd)).run()
   }
 

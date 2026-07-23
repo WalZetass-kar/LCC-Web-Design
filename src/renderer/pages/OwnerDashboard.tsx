@@ -6,6 +6,7 @@ import Button from '../components/Button'
 import Badge from '../components/Badge'
 import { api } from '../utils/api'
 import { formatRupiah } from '../utils/format'
+import { SkeletonStatGrid } from '../components/Skeleton'
 
 interface InsightData {
   kpis: {
@@ -58,6 +59,8 @@ export default function OwnerDashboard() {
   }
 
   useEffect(() => { load() }, [])
+
+  if (loading) return <SkeletonStatGrid />
 
   return (
     <div className="space-y-4">
