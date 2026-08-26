@@ -1583,55 +1583,86 @@ Terima kasih atas kunjungan Anda! 🙏`
         open={showStruk}
         onClose={resetTransaksi}
         title="Transaksi Berhasil Disimpan"
-        size="sm"
+        size="md"
         footer={
-          <div className="flex flex-wrap gap-2 w-full justify-end">
+          <div className="flex flex-wrap gap-2.5 w-full justify-end">
             <Button
               variant="secondary"
               icon={<MessageCircle size={16} className="text-emerald-500" />}
               onClick={sendWhatsAppReceipt}
-              className="w-full sm:w-auto font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800"
+              className="flex-1 sm:flex-initial font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800"
             >
               Kirim WA
             </Button>
-            <Button variant="secondary" icon={<Printer size={16} />} onClick={handlePrint} className="w-full sm:w-auto font-bold">
+            <Button
+              variant="secondary"
+              icon={<Printer size={16} />}
+              onClick={handlePrint}
+              className="flex-1 sm:flex-initial font-bold"
+            >
               Cetak Struk
             </Button>
-            <Button onClick={resetTransaksi} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0">
-              Transaksi Baru
+            <Button
+              onClick={resetTransaksi}
+              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20 px-5"
+            >
+              Transaksi Baru (Enter)
             </Button>
           </div>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-3.5">
+          {/* Total & Kembalian Quick Highlight Card */}
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800/60 shadow-sm">
+            <div>
+              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider block">
+                Total Belanja
+              </span>
+              <span className="text-xl sm:text-2xl font-black text-emerald-900 dark:text-emerald-100">
+                {formatRupiah(totalBayar)}
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider block">
+                Kembalian
+              </span>
+              <span className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                {formatRupiah(kembalian)}
+              </span>
+            </div>
+          </div>
+
           {/* Quick WhatsApp Recipient Input */}
-          <div className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-            <MessageCircle size={16} className="text-emerald-500 shrink-0" />
+          <div className="flex items-center gap-2.5 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+            <MessageCircle size={18} className="text-emerald-500 shrink-0" />
             <input
               type="tel"
               value={manualWaPhone || selectedCustomer?.no_telp || ''}
               onChange={e => setManualWaPhone(e.target.value)}
               placeholder="No. WhatsApp Pembeli (cth: 08123456789)..."
-              className="w-full text-xs bg-transparent text-slate-900 dark:text-white outline-none placeholder:text-slate-400 font-medium"
+              className="w-full text-xs bg-transparent text-slate-900 dark:text-white outline-none placeholder:text-slate-400 font-semibold"
             />
           </div>
 
-          <div ref={strukRef}>
-            <Struk
-              cart={cart}
-              subTotal={subTotal}
-              pajak={pajakAmount}
-              pajakPersen={pajakPersen}
-              totalBayar={totalBayar}
-              promoDiskon={promoDiskon}
-              bayar={paidAmount}
-              kembalian={kembalian}
-              kdTransaksi={lastKd ?? ''}
-              jenisBayar={jenisBayar}
-              customerName={selectedCustomer?.nama_customer}
-              poinEarned={poinEarned}
-              kasirName={user?.nama_pengguna}
-            />
+          {/* Struk Paper Preview Container */}
+          <div className="max-h-[52vh] overflow-y-auto flex justify-center bg-slate-100 dark:bg-slate-950/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-inner scrollbar-thin">
+            <div ref={strukRef} className="shadow-lg rounded-lg overflow-hidden">
+              <Struk
+                cart={cart}
+                subTotal={subTotal}
+                pajak={pajakAmount}
+                pajakPersen={pajakPersen}
+                totalBayar={totalBayar}
+                promoDiskon={promoDiskon}
+                bayar={paidAmount}
+                kembalian={kembalian}
+                kdTransaksi={lastKd ?? ''}
+                jenisBayar={jenisBayar}
+                customerName={selectedCustomer?.nama_customer}
+                poinEarned={poinEarned}
+                kasirName={user?.nama_pengguna}
+              />
+            </div>
           </div>
         </div>
       </Modal>
