@@ -8,6 +8,7 @@ import {
 import { supabase, isSupabaseConfigured } from '../../shared/supabase/config.js'
 import { tryCloudSignIn } from '../../shared/supabase/auth.js'
 import { isLicenseSessionExpiredResult } from '../../shared/licenseSession.js'
+import { verifyPassword, encryptPassword } from '../services/crypto.js'
 
 type ApiResult<T = unknown> = { success: boolean; data?: T; message?: string }
 
@@ -199,15 +200,15 @@ async function call<T = unknown>(method: string, path: string, body?: unknown): 
       }
       // Fallback from local mediasoft_pengguna
       const localUsers = sqlite.prepare(`
-        SELECT p.id, p.nama_lengkap AS name, p.email, p.no_hp AS phone, p.status_user,
+        SELECT p.nama_pengguna, p.nama_lengkap AS name, p.email, p.no_telp AS phone, p.status_user,
                s.code AS plan_code, p.subscription_expires_at AS expired_at
         FROM mediasoft_pengguna p
         LEFT JOIN mediasoft_subscription_plans s ON s.id = p.subscription_plan_id
       `).all() as any[]
       const mapped = localUsers.map(u => ({
-        id: String(u.id),
-        name: u.name || 'Pengguna',
-        email: u.email || '-',
+        id: u.nama_pengguna,
+        name: u.name || u.nama_pengguna || 'Pengguna',
+        email: u.email || u.nama_pengguna || '-',
         phone: u.phone || null,
         status: u.status_user === 'Aktif' ? 'active' : 'inactive',
         plan_code: u.plan_code || 'STANDARD',
@@ -311,8 +312,8 @@ export class LicenseController {
 
   static async syncBuyerLicense(username: string, deviceInfo?: unknown): Promise<ApiResult<any>> {
     const user = sqlite
-      .prepare(`SELECT id, nama_pengguna, email, is_buyer, hak_akses, subscription_plan_id, subscription_expires_at FROM mediasoft_pengguna WHERE nama_pengguna = ? LIMIT 1`)
-      .get(username) as { id?: number; nama_pengguna?: string; email?: string | null; is_buyer?: number | null; hak_akses?: string; subscription_plan_id?: number | null; subscription_expires_at?: string | null } | undefined
+      .prepare(`SELECT nama_pengguna, email, is_buyer, hak_akses, subscription_plan_id, subscription_expires_at FROM mediasoft_pengguna WHERE nama_pengguna = ? LIMIT 1`)
+      .get(username) as { nama_pengguna?: string; email?: string | null; is_buyer?: number | null; hak_akses?: string; subscription_plan_id?: number | null; subscription_expires_at?: string | null } | undefined
 
     if (!user?.nama_pengguna) {
       return { success: false, message: 'User tidak ditemukan' }
@@ -382,7 +383,7 @@ export class LicenseController {
     // Local fallback from SQLite
     try {
       const localUser = sqlite.prepare(`
-        SELECT p.id, p.nama_pengguna, p.nama_lengkap, p.email, p.hak_akses, p.subscription_plan_id, p.subscription_expires_at, p.status_user,
+        SELECT p.nama_pengguna, p.nama_lengkap, p.email, p.hak_akses, p.subscription_plan_id, p.subscription_expires_at, p.status_user,
                s.code AS plan_code, s.name AS plan_name, s.duration_days, s.features, s.max_devices, s.max_transactions_per_day, s.max_products, s.max_users, s.feature_flags
         FROM mediasoft_pengguna p
         LEFT JOIN mediasoft_subscription_plans s ON s.id = p.subscription_plan_id
@@ -503,7 +504,7 @@ export class LicenseController {
           saveConfig(apiBase, access, refresh ?? null)
           return {
             success: true,
-            message: 'Berhasil terhubung dan login ke Supabase License Server',
+            message: 'Berhasil terhubung dan login ke Supabase Cloud License Server',
             data: { user: cloudRes.user },
           }
         }
@@ -525,17 +526,35 @@ export class LicenseController {
         saveConfig(apiBase, loginRes.data.access_token, loginRes.data.refresh_token ?? null)
         return { success: true, message: 'Berhasil terhubung ke license server' }
       }
-    } catch (e: any) {
-      // 3. If email/password matches local admin or developer account
-      try {
-        const localAdmin = sqlite.prepare("SELECT * FROM mediasoft_pengguna WHERE lower(email) = lower(?) OR lower(nama_pengguna) = lower(?) LIMIT 1").get(email, email) as any
-        if (localAdmin && ['admin', 'developer'].includes(localAdmin.hak_akses)) {
-          const sessionDummy = 'local_admin_session_' + Date.now()
-          saveConfig(apiBase, sessionDummy, sessionDummy)
-          return { success: true, message: 'Berhasil terhubung dengan akun pengelola lokal' }
+    } catch {}
+
+    // 3. Local Admin / Developer Account verification
+    try {
+      const cleanInput = (email || '').trim()
+      const localAdmin = sqlite.prepare(`
+        SELECT * FROM mediasoft_pengguna 
+        WHERE (lower(email) = lower(?) OR lower(nama_pengguna) = lower(?)) 
+          AND status_user = 'Aktif' 
+        LIMIT 1
+      `).get(cleanInput, cleanInput) as any
+
+      if (localAdmin && ['admin', 'developer'].includes(localAdmin.hak_akses)) {
+        let passwordValid = false
+        if (localAdmin.kata_sandi) {
+          if (localAdmin.kata_sandi.startsWith('$2a$') || localAdmin.kata_sandi.startsWith('$2b$')) {
+            passwordValid = await verifyPassword(password, localAdmin.kata_sandi)
+          } else {
+            passwordValid = encryptPassword(password) === localAdmin.kata_sandi || password === localAdmin.kata_sandi
+          }
         }
-      } catch {}
-      return { success: false, message: e?.message || 'Tidak dapat terhubung ke license server' }
+        if (passwordValid) {
+          const sessionDummy = 'local_session_' + Buffer.from(`${localAdmin.nama_pengguna}:${Date.now()}`).toString('base64')
+          saveConfig(apiBase, sessionDummy, sessionDummy)
+          return { success: true, message: `Berhasil login sebagai ${localAdmin.nama_lengkap || localAdmin.nama_pengguna} (${localAdmin.hak_akses})` }
+        }
+      }
+    } catch (localErr) {
+      console.warn('[testAndSave] Local credentials check error:', localErr)
     }
 
     return { success: false, message: 'Login gagal — periksa email dan password' }
@@ -805,8 +824,8 @@ export class LicenseController {
           subscription_expires_at = ?,
           status_user = 'Aktif',
           hak_akses = CASE WHEN hak_akses = 'demo' THEN 'admin' ELSE hak_akses END
-        WHERE id = ? OR email = ? OR nama_pengguna = ?
-      `).run(targetPlan?.id ?? null, expiresAt, id, String(id), String(id))
+        WHERE nama_pengguna = ? OR email = ?
+      `).run(targetPlan?.id ?? null, expiresAt, String(id), String(id))
     } catch (err) {
       console.warn('[changeUserPlan] Local SQLite update warning:', err)
     }

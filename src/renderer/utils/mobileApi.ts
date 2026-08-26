@@ -116,7 +116,7 @@ interface MobileStore {
 const STORAGE_KEY = 'zetass-pos-android-store-v3'
 const AI_API_KEY_STORAGE_KEY = 'integrations.ai_api_key'
 const STORE_VERSION = 3
-const DEFAULT_LICENSE_SERVER_URL = 'https://PROJECT_ID.supabaseapp.com'
+const DEFAULT_LICENSE_SERVER_URL = 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license'
 const LICENSE_LAST_SUCCESS_KEY = 'license_last_success_at'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const REMOTE_READ_FALLBACK_CHANNELS = new Set([
