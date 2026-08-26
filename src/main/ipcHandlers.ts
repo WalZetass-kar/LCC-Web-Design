@@ -961,6 +961,8 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'license:syncBuyerLicense', (username: string, deviceInfo?: any) => LicenseController.syncBuyerLicense(username, deviceInfo))
   handle(ipcMain, 'license:createPaymentInvoice', (data: any) => LicenseController.createPaymentInvoice(data))
   handle(ipcMain, 'license:createManualPaymentRequest', (data: any) => LicenseController.createManualPaymentRequest(data))
+  handle(ipcMain, 'license:createMidtransPayment', (data: any) => LicenseController.createMidtransPayment(data))
+  handle(ipcMain, 'license:checkMidtransPayment', (orderId: string, email: string, planCode: string) => LicenseController.checkAndActivateMidtransPayment(orderId, email, planCode))
   handle(ipcMain, 'license:getPaymentStatus', (externalRef: string) => LicenseController.getPaymentStatus(externalRef))
   handle(ipcMain, 'license:getPublicPlans', () => LicenseController.getPublicPlans())
   handle(ipcMain, 'license:getPublicPopup', (code: string) => LicenseController.getPublicPopup(code))

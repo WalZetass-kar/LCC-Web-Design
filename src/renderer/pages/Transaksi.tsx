@@ -537,6 +537,36 @@ export default function Transaksi() {
     nomor_meja: tipePesanan === 'DINE_IN' ? (nomorMeja.trim() || undefined) : undefined,
   })
 
+  // Broadcast realtime updates to Customer Display
+  const broadcastCustomerDisplay = useCallback((extra?: Record<string, any>) => {
+    try {
+      const payload = {
+        items: cart.map(item => ({
+          nama_barang: item.nama_barang,
+          qty: item.qty,
+          harga_jual: item.harga_jual,
+          disc: item.disc ?? 0,
+        })),
+        subtotal: subTotal,
+        total: totalBayar,
+        storeName: 'Zetass Pos',
+        status: cart.length > 0 ? 'scanning' : 'idle',
+        ...extra,
+      }
+      localStorage.setItem('customer_display_data', JSON.stringify(payload))
+      window.postMessage({ type: 'customer-display-update', payload }, '*')
+      try {
+        const bc = new BroadcastChannel('customer_display_channel')
+        bc.postMessage(payload)
+        bc.close()
+      } catch {}
+    } catch {}
+  }, [cart, subTotal, totalBayar])
+
+  useEffect(() => {
+    broadcastCustomerDisplay()
+  }, [cart, subTotal, totalBayar, broadcastCustomerDisplay])
+
   const sendWhatsAppReceipt = () => {
     const rawPhone = (manualWaPhone || selectedCustomer?.no_telp || '').replace(/\D/g, '')
     const targetPhone = rawPhone.startsWith('0') ? '62' + rawPhone.slice(1) : rawPhone
@@ -577,6 +607,11 @@ Terima kasih atas kunjungan Anda! 🙏`
       toast(r.message as string)
       setMobileCartDrawerOpen(false)
       setShowStruk(true)
+      broadcastCustomerDisplay({
+        status: 'success',
+        paidAmount: payload.yang_dibayar,
+        kembalian: Math.max(0, payload.yang_dibayar - totalBayar),
+      })
       try { trackUsage() } catch { /* ignore */ }
       if (isDemo && remainingUsage <= 3 && remainingUsage > 0) {
         toast(`Sisa ${remainingUsage - 1} transaksi demo`, 'error')
@@ -643,6 +678,12 @@ Terima kasih atas kunjungan Anda! 🙏`
           ? 'Scan QRIS, lalu tekan Konfirmasi Dibayar setelah pembayaran diterima.'
           : 'Menunggu pembayaran dari pelanggan...'
       )
+      broadcastCustomerDisplay({
+        status: 'paying_qris',
+        qrisImage: r.data.qrImageUrl || null,
+        qrisString: r.data.qrString || null,
+        paymentMethod: 'QRIS',
+      })
     } else {
       pendingQrisPayloadRef.current = null
       setShowQris(false)
@@ -804,6 +845,15 @@ Terima kasih atas kunjungan Anda! 🙏`
     setPromoCode('')
     setPromoDiskon(0)
     setPromoMsg('')
+    broadcastCustomerDisplay({
+      items: [],
+      subtotal: 0,
+      total: 0,
+      status: 'idle',
+      qrisImage: null,
+      qrisString: null,
+      paymentMethod: null,
+    })
     loadProducts()
     searchRef.current?.focus()
   }

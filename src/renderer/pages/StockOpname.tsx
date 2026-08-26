@@ -295,49 +295,116 @@ export default function StockOpname() {
       {/* Modal Input Stok Fisik */}
       <Modal open={modal === 'input'} onClose={() => setModal(null)} title="Input Stok Fisik" size="md"
         footer={
-          <>
-            <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto">Tutup</Button>
-            <Button loading={loading} onClick={handleAddItem} className="w-full sm:w-auto">Tambah Item</Button>
-          </>
+          <div className="flex gap-2 justify-end w-full">
+            <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto font-bold">Tutup</Button>
+            <Button loading={loading} onClick={handleAddItem} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20">
+              Simpan Item
+            </Button>
+          </div>
         }
       >
         <div className="space-y-4">
-          <div className="p-3 rounded-xl bg-pink-50 dark:bg-pink-900/20 text-sm text-pink-700 dark:text-pink-300">
-            <strong>Opname:</strong> {selectedOpname?.opname_number}
+          <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 flex justify-between items-center">
+            <span>No. Opname: <strong className="text-red-600">{selectedOpname?.opname_number}</strong></span>
+            <span>{new Date(selectedOpname?.opname_date || '').toLocaleDateString('id-ID')}</span>
           </div>
           
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Pilih Produk *</label>
-            <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white/80 dark:bg-slate-700/80 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-400">
-              <option value="">-- Pilih Produk --</option>
+          {/* Quick Barcode / Product Search */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Pilih / Scan Produk *</label>
+            <select
+              value={selectedProduct}
+              onChange={e => {
+                setSelectedProduct(e.target.value)
+                const prod = products.find(p => p.kd_barang === e.target.value)
+                if (prod && !stokFisik) setStokFisik(String(prod.stok || 0))
+              }}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-xs font-bold text-slate-800 dark:text-white focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30"
+            >
+              <option value="">-- Pilih Produk yang Dihitung --</option>
               {products.map(p => (
                 <option key={p.kd_barang} value={p.kd_barang}>
-                  {p.nama_barang} (Stok Sistem: {p.stok || 0})
+                  {p.nama_barang} (Kode: {p.kd_barang} | Stok Sistem: {p.stok || 0})
                 </option>
               ))}
             </select>
           </div>
           
-          <Input 
-            label="Stok Fisik (Hasil Hitung) *" 
-            type="number" 
-            value={stokFisik} 
-            onChange={e => setStokFisik(e.target.value)}
-            placeholder="Masukkan jumlah stok fisik"
-          />
+          <div className="space-y-2">
+            <Input 
+              label="Stok Fisik Nyata (Hasil Hitung di Toko) *" 
+              type="number" 
+              value={stokFisik} 
+              onChange={e => setStokFisik(e.target.value)}
+              placeholder="Masukkan jumlah stok fisik..."
+            />
+
+            {/* Quick Adjustment Pills */}
+            {selectedProduct && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const prod = products.find(p => p.kd_barang === selectedProduct)
+                    if (prod) setStokFisik(String(prod.stok || 0))
+                  }}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100"
+                >
+                  Sama dg Sistem
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStokFisik(v => String(Math.max(0, (parseInt(v) || 0) + 1)))}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50"
+                >
+                  +1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStokFisik(v => String(Math.max(0, (parseInt(v) || 0) + 5)))}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50"
+                >
+                  +5
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStokFisik(v => String(Math.max(0, (parseInt(v) || 0) - 1)))}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-red-600 hover:bg-red-50"
+                >
+                  -1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStokFisik('0')}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-slate-500 hover:bg-slate-100"
+                >
+                  0 (Habis)
+                </button>
+              </div>
+            )}
+          </div>
           
-          {selectedProduct && stokFisik && (
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
-              <p className="text-xs text-slate-500 mb-1">Preview Selisih:</p>
-              <p className={`text-lg font-bold ${
-                (parseInt(stokFisik) - (products.find(p => p.kd_barang === selectedProduct)?.stok || 0)) < 0 
-                  ? 'text-red-600' 
-                  : 'text-green-600'
-              }`}>
-                {(parseInt(stokFisik) - (products.find(p => p.kd_barang === selectedProduct)?.stok || 0)) > 0 ? '+' : ''}
-                {parseInt(stokFisik) - (products.find(p => p.kd_barang === selectedProduct)?.stok || 0)}
-              </p>
+          {selectedProduct && stokFisik !== '' && (
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Stok Sistem vs Fisik</p>
+                <p className="text-xs font-bold text-slate-800 dark:text-white">
+                  Sistem: {products.find(p => p.kd_barang === selectedProduct)?.stok || 0} → Fisik: {stokFisik}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-slate-500 font-medium">Selisih Audit</p>
+                <p className={`text-base font-black ${
+                  (parseInt(stokFisik) - (products.find(p => p.kd_barang === selectedProduct)?.stok || 0)) < 0 
+                    ? 'text-red-600' 
+                    : (parseInt(stokFisik) - (products.find(p => p.kd_barang === selectedProduct)?.stok || 0)) > 0
+                      ? 'text-emerald-600'
+                      : 'text-slate-400'
+                }`}>
+                  {(parseInt(stokFisik) - (products.find(p => p.kd_barang === selectedProduct)?.stok || 0)) > 0 ? '+' : ''}
+                  {parseInt(stokFisik) - (products.find(p => p.kd_barang === selectedProduct)?.stok || 0)}
+                </p>
+              </div>
             </div>
           )}
         </div>

@@ -104,6 +104,20 @@ export default function PaymentInvoice() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [creating, setCreating] = useState(false)
+  
+  // Midtrans Payment State
+  const [paymentMethod, setPaymentMethod] = useState<'midtrans' | 'whatsapp'>('midtrans')
+  const [midtransOrder, setMidtransOrder] = useState<{
+    orderId: string
+    token: string
+    redirectUrl: string
+    plan: PublicPlan
+    amount: number
+  } | null>(null)
+  const [midtransModalOpen, setMidtransModalOpen] = useState(false)
+  const [checkingMidtrans, setCheckingMidtrans] = useState(false)
+  const [midtransStatusText, setMidtransStatusText] = useState('Menunggu pembayaran dari Anda...')
+  const [midtransSuccess, setMidtransSuccess] = useState(false)
 
   // Load plans from server / local database
   const loadPlans = async () => {
@@ -148,7 +162,6 @@ export default function PaymentInvoice() {
     setSyncing(true)
     try {
       const res = await api<any>('license:syncBuyerLicense', user.nama_pengguna)
-      // Trigger global event for AuthContext to refresh local session
       window.dispatchEvent(new Event('license:sync-now'))
       if (res.success) {
         toast('Lisensi berhasil disinkronkan secara realtime!', 'success')
@@ -178,7 +191,82 @@ export default function PaymentInvoice() {
     return () => window.clearInterval(interval)
   }, [invoice?.external_ref, invoice?.status, toast])
 
+  // Automatic Polling for Active Midtrans Order
+  useEffect(() => {
+    if (!midtransModalOpen || !midtransOrder?.orderId || midtransSuccess) return
+
+    const checkStatus = async () => {
+      if (checkingMidtrans || midtransSuccess) return
+      setCheckingMidtrans(true)
+      try {
+        const buyerEmail = email.trim() || user?.email || user?.nama_pengguna || ''
+        const r = await api<any>('license:checkMidtransPayment', midtransOrder.orderId, buyerEmail, midtransOrder.plan.code)
+        if (r.success && r.data?.status === 'ACTIVE') {
+          setMidtransSuccess(true)
+          setMidtransStatusText('Pembayaran Berhasil! Lisensi Anda telah aktif.')
+          toast('Selamat! Paket lisensi telah aktif secara otomatis.', 'success')
+          window.dispatchEvent(new Event('license:sync-now'))
+          void handleSyncNow()
+        } else if (r.data?.status === 'FAILED') {
+          setMidtransStatusText('Pembayaran kedaluwarsa atau dibatalkan.')
+        }
+      } catch {} finally {
+        setCheckingMidtrans(false)
+      }
+    }
+
+    const timer = setInterval(checkStatus, 3000)
+    return () => clearInterval(timer)
+  }, [midtransModalOpen, midtransOrder, midtransSuccess, email, user, checkingMidtrans])
+
+  const handleMidtransPayment = async () => {
+    if (!selectedPlan) return toast('Pilih salah satu paket terlebih dahulu', 'error')
+    const buyerEmail = email.trim() || user?.email || user?.nama_pengguna || ''
+
+    if (!buyerEmail) {
+      return toast('Masukkan email / username pembeli terlebih dahulu', 'error')
+    }
+
+    setCreating(true)
+    try {
+      const r = await api<any>('license:createMidtransPayment', {
+        email: buyerEmail,
+        plan_code: selectedPlan.code,
+        buyer_name: user?.nama_lengkap || user?.nama_pengguna || 'Pembeli Lisensi',
+      })
+
+      if (r.success && r.data) {
+        setMidtransOrder({
+          orderId: r.data.orderId,
+          token: r.data.token,
+          redirectUrl: r.data.redirectUrl,
+          plan: selectedPlan,
+          amount: r.data.amount,
+        })
+        setMidtransModalOpen(true)
+        setMidtransSuccess(false)
+        setMidtransStatusText('Menunggu pembayaran diselesaikan...')
+
+        // Open payment window
+        if (r.data.redirectUrl) {
+          void api('app:openExternal', r.data.redirectUrl)
+        }
+        toast('Sesi pembayaran Midtrans berhasil dibuat!', 'success')
+      } else {
+        toast(r.message || 'Gagal membuat sesi pembayaran Midtrans', 'error')
+      }
+    } catch (e: any) {
+      toast(e?.message || 'Koneksi ke gateway pembayaran gagal', 'error')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   const handleRequestPayment = async () => {
+    if (paymentMethod === 'midtrans') {
+      return handleMidtransPayment()
+    }
+
     if (!selectedPlan) return toast('Pilih salah satu paket terlebih dahulu', 'error')
     const buyerEmail = email.trim() || user?.email || user?.nama_pengguna || ''
 
@@ -538,7 +626,6 @@ export default function PaymentInvoice() {
                       onClick={(e) => {
                         e.stopPropagation()
                         setSelectedCode(plan.code)
-                        void handleRequestPayment()
                       }}
                       className={`w-full rounded-xl py-2.5 text-xs font-bold transition ${
                         active
@@ -546,7 +633,7 @@ export default function PaymentInvoice() {
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
                       }`}
                     >
-                      Pilih & Beli via WhatsApp
+                      {active ? '✓ Paket Terpilih' : 'Pilih Paket'}
                     </button>
                   </div>
                 </div>
@@ -558,19 +645,59 @@ export default function PaymentInvoice() {
 
       {/* ─── Checkout & Request Status Panel ───────────────────────── */}
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-        {/* Buyer Info & WhatsApp Action */}
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        {/* Buyer Info & Payment Action */}
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900 shadow-sm">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-            Informasi Akun Pembeli
+            Informasi Checkout & Aktivasi Lisensi
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Email ini digunakan untuk mengidentifikasi akun toko Anda saat aktivasi lisensi.
+            Pilih metode pembayaran dan masukkan akun Anda untuk aktivasi lisensi otomatis.
           </p>
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-4">
+            {/* Payment Method Selector */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
+                Metode Pembayaran
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('midtrans')}
+                  className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-xs font-bold transition ${
+                    paymentMethod === 'midtrans'
+                      ? 'border-violet-500 bg-violet-50/70 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-2 ring-violet-500/20'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Zap size={15} className="text-amber-500 fill-amber-500" />
+                    <span>Otomatis (Midtrans)</span>
+                  </div>
+                  <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">QRIS, VA, E-Wallet</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('whatsapp')}
+                  className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-xs font-bold transition ${
+                    paymentMethod === 'whatsapp'
+                      ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <MessageCircle size={15} className="text-emerald-500" />
+                    <span>Manual (WhatsApp)</span>
+                  </div>
+                  <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">Chat Admin / Transfer</span>
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Email / Username Pembeli
+                Email / Username Akun Toko *
               </label>
               <input
                 type="email"
@@ -582,40 +709,52 @@ export default function PaymentInvoice() {
             </div>
 
             {selectedPlan && (
-              <div className="flex items-center justify-between rounded-2xl bg-violet-50 p-4 dark:bg-violet-950/20">
+              <div className="flex items-center justify-between rounded-2xl bg-violet-50 p-4 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/30">
                 <div>
                   <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Paket Terpilih</p>
                   <p className="text-sm font-bold text-violet-900 dark:text-violet-200">{selectedPlan.name}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-extrabold text-violet-900 dark:text-violet-200">
+                  <p className="text-base font-extrabold text-violet-900 dark:text-violet-200">
                     {formatPlanPrice(selectedPlan)}
                   </p>
-                  <p className="text-[11px] text-slate-500">{getPlanDurationLabel(selectedPlan.duration_days)}</p>
+                  <p className="text-[11px] text-slate-500 font-medium">{getPlanDurationLabel(selectedPlan.duration_days)}</p>
                 </div>
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={handleRequestPayment}
-              disabled={creating || !selectedPlan}
-              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/25 transition hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-              Chat & Beli via WhatsApp Developer
-            </button>
+            {paymentMethod === 'midtrans' ? (
+              <button
+                type="button"
+                onClick={handleRequestPayment}
+                disabled={creating || !selectedPlan}
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-violet-600/25 transition hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50"
+              >
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4 fill-white" />}
+                Bayar Otomatis Sekarang (Midtrans)
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleRequestPayment}
+                disabled={creating || !selectedPlan}
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/25 transition hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                Chat & Beli via WhatsApp Developer
+              </button>
+            )}
           </div>
         </div>
 
         {/* Invoice / Request Tracker */}
-        <div className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900 shadow-sm">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-              Status Permintaan Terakhir
+              Status Permintaan Lisensi
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Pantau status konfirmasi invoice Anda.
+              Pantau status transaksi invoice Anda.
             </p>
 
             {invoice ? (
@@ -651,17 +790,97 @@ export default function PaymentInvoice() {
             ) : (
               <div className="mt-6 flex flex-col items-center justify-center py-6 text-center text-slate-400">
                 <CreditCard className="h-8 w-8 opacity-30 mb-2" />
-                <p className="text-xs">Belum ada request pembayaran yang aktif.</p>
+                <p className="text-xs font-medium">Belum ada request pembayaran yang aktif.</p>
               </div>
             )}
           </div>
 
-          <div className="mt-6 rounded-2xl bg-slate-50 p-3.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-            <p className="font-semibold text-slate-700 dark:text-slate-200">Butuh Bantuan Lisensi?</p>
-            <p className="mt-0.5">Hubungi Developer POS kapan saja untuk panduan migrasi, custom paket, atau setup multi-cabang.</p>
+          <div className="mt-6 rounded-2xl bg-slate-50 p-3.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-100 dark:border-slate-700/50">
+            <p className="font-bold text-slate-700 dark:text-slate-200">Aktivasi Instan & Real-time</p>
+            <p className="mt-0.5">Pembayaran via Midtrans otomatis mengaktifkan lisensi toko dalam hitungan detik.</p>
           </div>
         </div>
       </div>
+
+      {/* ─── Midtrans Active Payment Modal ───────────────────────── */}
+      {midtransModalOpen && midtransOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-violet-600 text-white flex items-center justify-center shadow-md">
+                  <CreditCard size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white">Pembayaran Lisensi</h3>
+                  <p className="text-xs text-slate-400">Midtrans Payment Gateway</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMidtransModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            {/* Order Details */}
+            <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="flex justify-between text-xs text-slate-500">
+                <span>Order ID</span>
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{midtransOrder.orderId}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-500">
+                <span>Paket</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{midtransOrder.plan.name}</span>
+              </div>
+              <div className="flex justify-between text-xs pt-2 border-t border-slate-200 dark:border-slate-800 font-bold">
+                <span className="text-slate-800 dark:text-white">Total Tagihan</span>
+                <span className="text-base text-violet-600 dark:text-violet-400 font-black">
+                  {formatPlanPrice(midtransOrder.plan)}
+                </span>
+              </div>
+            </div>
+
+            {/* Status Alert */}
+            <div className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center gap-2.5 ${
+              midtransSuccess
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+            }`}>
+              {midtransSuccess ? (
+                <CheckCircle2 size={20} className="shrink-0 text-emerald-500" />
+              ) : (
+                <Clock size={20} className="shrink-0 text-amber-500 animate-pulse" />
+              )}
+              <span>{midtransStatusText}</span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-2">
+              {!midtransSuccess && midtransOrder.redirectUrl && (
+                <button
+                  type="button"
+                  onClick={() => void api('app:openExternal', midtransOrder.redirectUrl)}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold shadow-md shadow-violet-600/20 transition"
+                >
+                  <ExternalLink size={15} />
+                  Buka Jendela Pembayaran Midtrans
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setMidtransModalOpen(false)}
+                className="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              >
+                {midtransSuccess ? 'Selesai' : 'Tutup'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

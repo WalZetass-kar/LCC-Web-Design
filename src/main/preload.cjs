@@ -448,6 +448,8 @@ const ALLOWED_CHANNELS = new Set([
   'license:syncBuyerLicense',
   'license:createPaymentInvoice',
   'license:createManualPaymentRequest',
+  'license:createMidtransPayment',
+  'license:checkMidtransPayment',
   'license:getPaymentStatus',
   'license:getPublicPlans',
   'license:getPublicPopup',

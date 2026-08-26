@@ -1,6 +1,8 @@
 import { sqlite } from '../../database/connection.js'
 import { PenggunaModel } from '../models/PenggunaModel.js'
 import { PlanModel } from '../models/PlanModel.js'
+import { MidtransService } from '../services/midtransService.js'
+import { PaymentMethodController } from './PaymentMethodController.js'
 import {
   syncBuyerLicense as fbSyncBuyerLicense,
   heartbeat as fbHeartbeat
@@ -702,6 +704,175 @@ export class LicenseController {
 
   static async createManualPaymentRequest(data: { email?: string; customer_id?: string; plan_code: string; notes?: string }) {
     return call('POST', '/payments/manual-request', data)
+  }
+
+  static async createMidtransPayment(data: { email: string; plan_code: string; buyer_name?: string }) {
+    try {
+      const email = String(data.email || '').trim().toLowerCase()
+      const planCode = String(data.plan_code || '').trim()
+      if (!email || !planCode) {
+        return { success: false, message: 'Email dan kode paket harus diisi' }
+      }
+
+      // 1. Fetch public plan details
+      const plansRes = await this.getPublicPlans()
+      const plan = plansRes.success && Array.isArray(plansRes.data)
+        ? plansRes.data.find(p => p.code === planCode || String(p.id) === planCode)
+        : null
+
+      if (!plan) {
+        return { success: false, message: `Paket lisensi "${planCode}" tidak ditemukan` }
+      }
+
+      if (plan.price <= 0) {
+        return { success: false, message: 'Paket gratis tidak memerlukan pembayaran Midtrans' }
+      }
+
+      const orderId = `LIC-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+
+      // 2. Initialize Midtrans
+      const config = PaymentMethodController.getMidtransConfig()
+      if (!config.success) {
+        const serverKey = process.env.MIDTRANS_SERVER_KEY || 'SB-Mid-server-demo'
+        const clientKey = process.env.MIDTRANS_CLIENT_KEY || 'SB-Mid-client-demo'
+        MidtransService.init(serverKey, clientKey, false)
+      } else {
+        MidtransService.init(config.data.serverKey, config.data.clientKey, config.data.isProduction)
+      }
+
+      // 3. Create Midtrans Snap Transaction
+      const transactionRes = await MidtransService.createTransaction({
+        orderId,
+        amount: Math.round(plan.price),
+        customerName: data.buyer_name || email.split('@')[0] || 'Pembeli Lisensi',
+        customerEmail: email,
+        items: [
+          {
+            id: plan.code,
+            name: `Lisensi POS - ${plan.name}`,
+            price: Math.round(plan.price),
+            quantity: 1,
+          },
+        ],
+      })
+
+      if (!transactionRes.success || !transactionRes.data) {
+        return {
+          success: false,
+          message: transactionRes.message || 'Gagal membuat sesi pembayaran Midtrans',
+        }
+      }
+
+      // Record invoice request in background
+      try {
+        await this.createManualPaymentRequest({
+          email,
+          plan_code: plan.code,
+          notes: `Midtrans Snap Order ID: ${orderId} | Token: ${transactionRes.data.token}`,
+        })
+      } catch {}
+
+      return {
+        success: true,
+        data: {
+          orderId,
+          token: transactionRes.data.token,
+          redirectUrl: transactionRes.data.redirectUrl,
+          plan,
+          amount: Math.round(plan.price),
+        },
+      }
+    } catch (error: any) {
+      return { success: false, message: error?.message || String(error) }
+    }
+  }
+
+  static async checkAndActivateMidtransPayment(orderId: string, email: string, planCode: string) {
+    try {
+      const cleanOrderId = String(orderId || '').trim()
+      const cleanEmail = String(email || '').trim().toLowerCase()
+      const cleanPlan = String(planCode || '').trim()
+
+      if (!cleanOrderId) {
+        return { success: false, message: 'Order ID tidak valid' }
+      }
+
+      // 1. Initialize Midtrans
+      const config = PaymentMethodController.getMidtransConfig()
+      if (config.success) {
+        MidtransService.init(config.data.serverKey, config.data.clientKey, config.data.isProduction)
+      }
+
+      // 2. Check status from Midtrans
+      const statusRes = await MidtransService.checkStatus(cleanOrderId)
+      if (!statusRes.success || !statusRes.data) {
+        return {
+          success: false,
+          message: statusRes.message || 'Gagal mengecek status transaksi ke Midtrans',
+        }
+      }
+
+      const txStatus = String(statusRes.data.transactionStatus || '').toLowerCase()
+      const fraudStatus = String(statusRes.data.fraudStatus || '').toLowerCase()
+
+      const isPaid = (txStatus === 'settlement' || txStatus === 'capture') && fraudStatus !== 'deny'
+
+      if (isPaid) {
+        // Automatically activate plan for user
+        const plansRes = await this.getPublicPlans()
+        const plan = plansRes.success && Array.isArray(plansRes.data)
+          ? plansRes.data.find(p => p.code === cleanPlan || String(p.id) === cleanPlan)
+          : null
+
+        const duration = plan?.duration_days ?? 30
+        const durationType = duration === 0 ? 'LIFETIME' : duration >= 360 ? '1_YEAR' : '1_MONTH'
+
+        // Activate in cloud/Supabase and local DB
+        try {
+          await this.changeUserPlan(cleanEmail, { plan_code: cleanPlan, duration_days: duration, duration_type: durationType })
+        } catch {}
+
+        // Sync buyer license to make active immediately
+        try {
+          await this.syncBuyerLicense(cleanEmail)
+        } catch {}
+
+        return {
+          success: true,
+          message: 'Pembayaran berhasil dikonfirmasi! Paket lisensi telah aktif.',
+          data: {
+            status: 'ACTIVE',
+            orderId: cleanOrderId,
+            transactionStatus: txStatus,
+            planName: plan?.name,
+          },
+        }
+      }
+
+      if (txStatus === 'pending') {
+        return {
+          success: true,
+          message: 'Menunggu pembayaran diselesaikan...',
+          data: {
+            status: 'PENDING',
+            orderId: cleanOrderId,
+            transactionStatus: txStatus,
+          },
+        }
+      }
+
+      return {
+        success: false,
+        message: `Status pembayaran: ${txStatus}`,
+        data: {
+          status: 'FAILED',
+          orderId: cleanOrderId,
+          transactionStatus: txStatus,
+        },
+      }
+    } catch (error: any) {
+      return { success: false, message: error?.message || String(error) }
+    }
   }
 
   static async getPaymentStatus(externalRef: string) {

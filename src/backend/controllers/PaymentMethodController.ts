@@ -63,7 +63,7 @@ export class PaymentMethodController {
     `)
   }
 
-  private static getMidtransConfig() {
+  static getMidtransConfig() {
     this.ensureGatewayTable()
     const row = sqlite
       .prepare('SELECT server_key, client_key, is_production, enabled FROM mediasoft_payment_gateway_settings WHERE id = 1')
