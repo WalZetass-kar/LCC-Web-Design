@@ -428,36 +428,41 @@ export default function Dashboard() {
     <div className="space-y-5 sm:space-y-6 select-none">
 
       {/* ── Top Header & Action Launcher ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-        <div>
+      <div className="flex flex-row items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3 sm:pb-4">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <Calculator size={24} className="text-red-500" />
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-              Selamat Datang, {user?.nama_lengkap ?? 'Kasir'}
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-red-500/10 text-red-600 flex items-center justify-center shrink-0">
+              <Calculator size={18} className="sm:w-5 sm:h-5" />
+            </div>
+            <h1 className="text-base sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight truncate">
+              Hai, {user?.nama_lengkap ?? user?.nama_pengguna ?? 'Kasir'}
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
+          <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium truncate">
             {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button
-            variant="secondary"
-            icon={<RefreshCw size={15} />}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <button
+            type="button"
             onClick={() => { fetchData(true); if (isAdmin) fetchInsights() }}
-            className="w-full sm:w-auto font-bold border-slate-200 dark:border-slate-800"
-            loading={loading || (isAdmin && insightsLoading)}
+            disabled={loading || (isAdmin && insightsLoading)}
+            className="p-2 sm:px-3 sm:py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            title="Refresh data dashboard"
           >
-            Refresh
-          </Button>
-          <Button
-            icon={<ShoppingCart size={18} />}
+            <RefreshCw size={15} className={loading || (isAdmin && insightsLoading) ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+          
+          <button
+            type="button"
             onClick={() => navigate('/transaksi')}
-            className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold shadow-md shadow-red-600/20 border-0"
+            className="px-3 py-2 sm:px-4 sm:py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-red-600/30 active:scale-95 transition-all"
           >
-            Mulai Transaksi
-          </Button>
+            <ShoppingCart size={15} />
+            <span>Transaksi</span>
+          </button>
         </div>
       </div>
 
