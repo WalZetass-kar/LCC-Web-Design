@@ -203,6 +203,7 @@
       "target": [
         "AppImage",
         "deb",
+        "rpm",
         "tar.gz"
       ],
       "category": "Office",
@@ -224,7 +225,7 @@
           ]
         },
         {
-          "target": "nsis-portable",
+          "target": "portable",
           "arch": [
             "x64"
           ]
