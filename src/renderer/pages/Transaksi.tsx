@@ -31,6 +31,8 @@ import {
   UtensilsCrossed,
   ShoppingBag,
   Bike,
+  ArrowRight,
+  ChevronUp,
 } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -104,6 +106,7 @@ export default function Transaksi() {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [showHeldCarts, setShowHeldCarts] = useState(false)
   const [showClearCart, setShowClearCart] = useState(false)
+  const [mobileCartDrawerOpen, setMobileCartDrawerOpen] = useState(false)
   const { heldCarts, holdCart, resumeCart, deleteHeld } = useHoldCart()
   const [showQris, setShowQris] = useState(false)
   const [qrisPayment, setQrisPayment] = useState<QrisPayment | null>(null)
@@ -231,6 +234,7 @@ export default function Transaksi() {
 
       if (e.key === 'F2') {
         e.preventDefault()
+        setMobileCartDrawerOpen(true)
         bayarInputRef.current?.focus()
         return
       }
@@ -468,6 +472,8 @@ export default function Transaksi() {
     return sum + (c.harga_jual - disc) * c.qty
   }, 0), [cart])
 
+  const totalCartQty = useMemo(() => cart.reduce((a, b) => a + b.qty, 0), [cart])
+
   const pajakAmount = useMemo(() => Math.round(subTotal * pajakPersen / 100), [subTotal, pajakPersen])
   const totalBayar = useMemo(() => Math.max(0, subTotal + pajakAmount - promoDiskon), [subTotal, pajakAmount, promoDiskon])
   const paidAmount = useMemo(() => jenisBayar === 'QRIS' ? totalBayar : (parseFloat(bayar) || 0), [jenisBayar, totalBayar, bayar])
@@ -569,6 +575,7 @@ Terima kasih atas kunjungan Anda! 🙏`
       cashierSound.playSuccessChime()
       setLastKd(r.data?.kd_transaksi ?? null)
       toast(r.message as string)
+      setMobileCartDrawerOpen(false)
       setShowStruk(true)
       try { trackUsage() } catch { /* ignore */ }
       if (isDemo && remainingUsage <= 3 && remainingUsage > 0) {
@@ -780,6 +787,7 @@ Terima kasih atas kunjungan Anda! 🙏`
   const resetTransaksi = () => {
     setCart([])
     setBayar('')
+    setMobileCartDrawerOpen(false)
     setShowStruk(false)
     setShowQris(false)
     setQrisPayment(null)
@@ -799,6 +807,371 @@ Terima kasih atas kunjungan Anda! 🙏`
     loadProducts()
     searchRef.current?.focus()
   }
+
+  const renderCartAndPayment = (isMobileSheet = false) => (
+    <div className="flex flex-col gap-3">
+      {/* Customer Selector Bar */}
+      <div ref={customerRef} className="relative">
+        <div
+          onClick={() => setShowCustomerDrop(v => !v)}
+          className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 transition-colors hover:border-red-600/40"
+        >
+          <UserCircle size={20} className={selectedCustomer ? 'text-red-600' : 'text-slate-400'} />
+          <span className={`flex-1 text-xs truncate ${selectedCustomer ? 'text-slate-900 dark:text-white font-bold' : 'text-slate-500'}`}>
+            {selectedCustomer ? `${selectedCustomer.nama_customer} · ${selectedCustomer.poin ?? 0} Poin` : 'Pilih Pelanggan / Member (Opsional)'}
+          </span>
+          {selectedCustomer && (
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); setSelectedCustomer(null); setCustomerSearch('') }}
+              className="p-1 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        {/* Customer Dropdown */}
+        {showCustomerDrop && (
+          <div className="absolute left-0 right-0 top-full z-30 mt-1.5 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
+            <div className="p-2 border-b border-slate-100 dark:border-slate-800">
+              <input
+                autoFocus
+                placeholder="Cari nama / no. telepon..."
+                value={customerSearch}
+                onChange={e => setCustomerSearch(e.target.value)}
+                className="w-full rounded-xl border-0 bg-slate-50 dark:bg-slate-950 px-3 py-2 text-xs text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-red-600/30"
+              />
+            </div>
+            <div className="max-h-48 overflow-y-auto scrollbar-thin">
+              {filteredCustomers.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4">Tidak ada customer cocok</p>
+              ) : filteredCustomers.map(c => (
+                <button
+                  key={c.kd_customer}
+                  type="button"
+                  onClick={() => { setSelectedCustomer(c); setShowCustomerDrop(false); setCustomerSearch('') }}
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left border-b border-slate-100 dark:border-slate-800/50 last:border-0"
+                >
+                  <div>
+                    <p className="text-xs font-bold text-slate-900 dark:text-white">{c.nama_customer}</p>
+                    <p className="text-[11px] text-slate-400">{c.no_telp ?? '-'}</p>
+                  </div>
+                  <span className="text-xs text-amber-600 font-bold">{c.poin ?? 0} Poin</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Order Type & Table Selector */}
+      <div className="flex flex-col gap-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-1">
+          {(['DINE_IN', 'TAKEAWAY', 'DELIVERY'] as const).map(type => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => setTipePesanan(type)}
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                tipePesanan === type
+                  ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+              }`}
+            >
+              {type === 'DINE_IN' ? <UtensilsCrossed size={13} /> : type === 'TAKEAWAY' ? <ShoppingBag size={13} /> : <Bike size={13} />}
+              <span>{type === 'DINE_IN' ? 'Dine In' : type === 'TAKEAWAY' ? 'Takeaway' : 'Delivery'}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Table Selector (If Dine In) */}
+        {tipePesanan === 'DINE_IN' && (
+          <div className="flex items-center gap-2 pt-0.5">
+            <select
+              value={nomorMeja}
+              onChange={e => setNomorMeja(e.target.value)}
+              className="w-full text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-slate-900 dark:text-white outline-none focus:border-red-600"
+            >
+              <option value="">-- Pilih Nomor Meja (Opsional) --</option>
+              {availableTables.map(t => (
+                <option key={t.id} value={t.nomor_meja}>
+                  {t.nomor_meja} {t.label ? `(${t.label})` : ''} - {t.status}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Cart Container Card */}
+      <div className={`flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-3.5 ${
+        isMobileSheet ? 'max-h-60 overflow-hidden' : 'flex-1 overflow-hidden'
+      }`}>
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-2">
+          <div className="flex items-center gap-2">
+            <ShoppingCart size={16} className="text-red-600" />
+            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">Keranjang Belanja</span>
+            <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold">
+              {totalCartQty} Item
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (cart.length > 0) {
+                  const ok = holdCart(cart, selectedCustomer)
+                  if (ok) {
+                    setCart([])
+                    setBayar('')
+                    setSelectedCustomer(null)
+                    setMobileCartDrawerOpen(false)
+                    toast('Transaksi di-hold', 'success')
+                  } else {
+                    toast('Batas hold tercapai (maks 10)', 'error')
+                  }
+                }
+              }}
+              disabled={cart.length === 0}
+              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-amber-600 transition-colors disabled:opacity-30"
+              title="Hold Transaksi (Ctrl+H)"
+            >
+              <Pause size={16} />
+            </button>
+
+            {heldCarts.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowHeldCarts(true)}
+                className="relative p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-emerald-600 transition-colors"
+                title="Lihat Transaksi Hold"
+              >
+                <Play size={16} />
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-amber-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center px-0.5">
+                  {heldCarts.length}
+                </span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowSettings(true)}
+              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-red-600 transition-colors"
+              title="Pengaturan Struk"
+            >
+              <Settings size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Cart Items Scroll Area */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin space-y-2 pr-1">
+          {cart.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 space-y-1.5">
+              <ShoppingCart size={28} className="mx-auto opacity-30" />
+              <p className="text-xs font-semibold">Keranjang Belanja Kosong</p>
+              <p className="text-[11px]">Klik produk untuk menambahkan item</p>
+            </div>
+          ) : (
+            <AnimatePresence>
+              {cart.map(item => {
+                const disc = (item.harga_jual * item.disc) / 100
+                const total = (item.harga_jual - disc) * item.qty
+                return (
+                  <motion.div
+                    key={item.kd_barang}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 shadow-sm"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{item.nama_barang}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {formatRupiah(item.harga_jual)} {item.disc > 0 && <span className="text-red-600">(-{item.disc}%)</span>}
+                      </p>
+                      <p className="text-xs font-extrabold text-red-600 dark:text-red-400 mt-0.5">{formatRupiah(total)}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => updateQty(item.kd_barang, -1)}
+                        className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors"
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <span className="w-7 text-center text-xs font-extrabold text-slate-900 dark:text-white">{item.qty}</span>
+                      <button
+                        type="button"
+                        onClick={() => updateQty(item.kd_barang, 1)}
+                        className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors"
+                      >
+                        <Plus size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(item.kd_barang)}
+                        className="ml-1 w-6 h-6 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 flex items-center justify-center transition-colors"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </AnimatePresence>
+          )}
+        </div>
+      </div>
+
+      {/* Payment Summary Panel */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3 shadow-sm">
+        
+        {/* Subtotal */}
+        <div className="flex justify-between text-xs font-semibold">
+          <span className="text-slate-500">Subtotal Belanja</span>
+          <span className="text-slate-900 dark:text-white font-bold">{formatRupiah(subTotal)}</span>
+        </div>
+
+        {/* Promo Code Input */}
+        <div className="flex gap-1.5">
+          <div className="relative flex-1">
+            <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={promoCode}
+              onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoDiskon(0); setPromoMsg('') }}
+              onKeyDown={e => e.key === 'Enter' && applyPromo()}
+              placeholder="Kode Promo"
+              disabled={promoDiskon > 0}
+              className="w-full h-9 pl-8 pr-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:border-red-600"
+            />
+          </div>
+          {promoDiskon > 0 ? (
+            <button
+              type="button"
+              onClick={removePromo}
+              className="px-3 h-9 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors"
+            >
+              <X size={14} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={applyPromo}
+              disabled={promoLoading || !promoCode.trim()}
+              className="px-3.5 h-9 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-50 transition-colors shadow-sm"
+            >
+              {promoLoading ? '...' : 'Gunakan'}
+            </button>
+          )}
+        </div>
+
+        {promoMsg && (
+          <p className={`text-[11px] font-medium ${promoDiskon > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>{promoMsg}</p>
+        )}
+
+        {promoDiskon > 0 && (
+          <div className="flex justify-between text-xs text-emerald-600 font-bold">
+            <span>Diskon Promo</span>
+            <span>-{formatRupiah(promoDiskon)}</span>
+          </div>
+        )}
+
+        {pajakPersen > 0 && (
+          <div className="flex justify-between text-xs text-amber-600 font-bold">
+            <span>PPN ({pajakPersen}%)</span>
+            <span>+{formatRupiah(pajakAmount)}</span>
+          </div>
+        )}
+
+        {/* Grand Total */}
+        <div className="flex justify-between text-base font-black border-t border-slate-100 dark:border-slate-800 pt-2.5">
+          <span className="text-slate-900 dark:text-white">TOTAL BAYAR</span>
+          <span className="text-red-600 dark:text-red-400">{formatRupiah(totalBayar)}</span>
+        </div>
+
+        {/* Payment Method Selector Buttons */}
+        <div className="grid grid-cols-3 gap-1.5 pt-1">
+          {(['TUNAI', 'TRANSFER', 'QRIS'] as const).map(j => (
+            <button
+              key={j}
+              type="button"
+              onClick={() => setJenisBayar(j)}
+              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                jenisBayar === j
+                  ? 'bg-red-600 text-white border-red-600 shadow-sm shadow-red-600/20'
+                  : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+              }`}
+            >
+              {j === 'TUNAI' ? <Banknote size={14} /> : j === 'TRANSFER' ? <CreditCard size={14} /> : <QrCode size={14} />} {j}
+            </button>
+          ))}
+        </div>
+
+        {/* Quick Cash Amounts */}
+        {jenisBayar === 'TUNAI' && (
+          <QuickAmountButtons total={totalBayar} onAmount={amount => setBayar(String(amount))} />
+        )}
+
+        {/* Cash Paid Amount Input */}
+        <Input
+          ref={bayarInputRef}
+          label="Jumlah Diterima (Rp)"
+          type="number"
+          value={jenisBayar === 'QRIS' ? String(totalBayar) : bayar}
+          onChange={e => {
+            if (jenisBayar !== 'QRIS') setBayar(e.target.value)
+          }}
+          placeholder="0"
+          disabled={jenisBayar === 'QRIS'}
+          helperText={jenisBayar === 'QRIS' ? 'Nominal QRIS otomatis mengikuti total transaksi.' : undefined}
+        />
+
+        {/* Dynamic Kembalian / Uang Kurang Feedback */}
+        {jenisBayar === 'TUNAI' && bayar.trim() !== '' && (
+          kembalian < 0 ? (
+            <div className="flex items-center justify-between text-xs font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-xl px-3.5 py-2.5">
+              <div className="flex items-center gap-1.5">
+                <AlertCircle size={15} className="shrink-0 text-red-500" />
+                <span>Uang Pembayaran Kurang:</span>
+              </div>
+              <span className="text-sm font-black">{formatRupiah(Math.abs(kembalian))}</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-xl px-3.5 py-2.5">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />
+                <span>Kembalian:</span>
+              </div>
+              <span className="text-sm font-black">{formatRupiah(kembalian)}</span>
+            </div>
+          )
+        )}
+
+        {jenisBayar !== 'TUNAI' && paidAmount > 0 && (
+          <div className="flex justify-between text-xs font-bold pt-1 text-emerald-600 dark:text-emerald-400">
+            <span>Status Pembayaran</span>
+            <span>Sesuai Tagihan</span>
+          </div>
+        )}
+
+        {/* Submit Pay Button */}
+        <Button
+          className="w-full h-13 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-md shadow-red-600/20 border-0 active:scale-[0.98] transition-all disabled:opacity-50"
+          loading={loading}
+          disabled={loading || (jenisBayar === 'QRIS' ? !qrisCanPay : (!cart.length || !bayar || (jenisBayar === 'TUNAI' && kembalian < 0)))}
+          onClick={handleBayar}
+          icon={jenisBayar === 'QRIS' ? <QrCode size={18} /> : <ShoppingCart size={18} />}
+        >
+          {jenisBayar === 'QRIS' ? 'BAYAR DENGAN QRIS' : 'PROSES PEMBAYARAN'}
+        </Button>
+
+      </div>
+    </div>
+  )
 
   return (
     <div className="flex flex-col gap-3 lg:h-[calc(100vh-7rem)] lg:flex-row select-none">
@@ -834,11 +1207,26 @@ Terima kasih atas kunjungan Anda! 🙏`
             <p className="text-xs text-slate-500 dark:text-slate-400">Pilih produk atau scan barcode untuk menambahkan ke keranjang</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 font-medium">
-            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F1 Cari</span>
-            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F2 Bayar</span>
-            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F5 Proses</span>
-            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">Esc Reset</span>
+          <div className="flex items-center justify-between sm:justify-end gap-2">
+            {/* Mobile Header Cart Shortcut */}
+            {cart.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setMobileCartDrawerOpen(true)}
+                className="lg:hidden px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-red-600/30 active:scale-95 transition-transform"
+              >
+                <ShoppingCart size={14} />
+                <span>{totalCartQty} Item</span>
+                <span className="bg-white/20 px-1.5 py-0.5 rounded-md text-[10px]">{formatRupiah(totalBayar)}</span>
+              </button>
+            )}
+
+            <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 font-medium">
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F1 Cari</span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F2 Bayar</span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F5 Proses</span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">Esc Reset</span>
+            </div>
           </div>
         </div>
 
@@ -962,368 +1350,103 @@ Terima kasih atas kunjungan Anda! 🙏`
 
       </div>
 
-      <div className="flex flex-none w-full shrink-0 flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm lg:w-[26rem] xl:w-[28rem] lg:shrink">
-        
-        {/* Customer Selector Bar */}
-        <div ref={customerRef} className="relative">
-          <div
-            onClick={() => setShowCustomerDrop(v => !v)}
-            className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 transition-colors hover:border-red-600/40"
+      {/* Desktop Side-by-Side Cart & Payment Panel */}
+      <div className="hidden lg:flex flex-none w-full shrink-0 flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm lg:w-[26rem] xl:w-[28rem] lg:shrink">
+        {renderCartAndPayment(false)}
+      </div>
+
+      {/* Mobile Sticky Floating Summary Bar (Appears when cart has items and drawer is closed) */}
+      <AnimatePresence>
+        {cart.length > 0 && !mobileCartDrawerOpen && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ type: 'spring', damping: 22, stiffness: 260 }}
+            className="fixed bottom-[4.5rem] left-3 right-3 z-40 lg:hidden"
           >
-            <UserCircle size={20} className={selectedCustomer ? 'text-red-600' : 'text-slate-400'} />
-            <span className={`flex-1 text-xs truncate ${selectedCustomer ? 'text-slate-900 dark:text-white font-bold' : 'text-slate-500'}`}>
-              {selectedCustomer ? `${selectedCustomer.nama_customer} · ${selectedCustomer.poin ?? 0} Poin` : 'Pilih Pelanggan / Member (Opsional)'}
-            </span>
-            {selectedCustomer && (
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); setSelectedCustomer(null); setCustomerSearch('') }}
-                className="p-1 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-              >
-                <X size={16} />
-              </button>
-            )}
-          </div>
-
-          {/* Customer Dropdown */}
-          {showCustomerDrop && (
-            <div className="absolute left-0 right-0 top-full z-30 mt-1.5 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
-              <div className="p-2 border-b border-slate-100 dark:border-slate-800">
-                <input
-                  autoFocus
-                  placeholder="Cari nama / no. telepon..."
-                  value={customerSearch}
-                  onChange={e => setCustomerSearch(e.target.value)}
-                  className="w-full rounded-xl border-0 bg-slate-50 dark:bg-slate-950 px-3 py-2 text-xs text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-red-600/30"
-                />
+            <div
+              onClick={() => setMobileCartDrawerOpen(true)}
+              className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/95 dark:bg-slate-900/95 text-white shadow-2xl shadow-red-600/30 border border-red-500/30 backdrop-blur-xl cursor-pointer active:scale-[0.99] transition-transform"
+            >
+              <div className="flex items-center gap-3">
+                <div className="relative p-2.5 rounded-xl bg-gradient-to-tr from-red-600 to-rose-600 text-white font-bold shadow-md">
+                  <ShoppingCart size={20} />
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center shadow">
+                    {totalCartQty}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Tagihan ({totalCartQty} item)</p>
+                  <p className="text-base font-black text-white">{formatRupiah(totalBayar)}</p>
+                </div>
               </div>
-              <div className="max-h-48 overflow-y-auto scrollbar-thin">
-                {filteredCustomers.length === 0 ? (
-                  <p className="text-xs text-slate-400 text-center py-4">Tidak ada customer cocok</p>
-                ) : filteredCustomers.map(c => (
-                  <button
-                    key={c.kd_customer}
-                    type="button"
-                    onClick={() => { setSelectedCustomer(c); setShowCustomerDrop(false); setCustomerSearch('') }}
-                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left border-b border-slate-100 dark:border-slate-800/50 last:border-0"
-                  >
-                    <div>
-                      <p className="text-xs font-bold text-slate-900 dark:text-white">{c.nama_customer}</p>
-                      <p className="text-[11px] text-slate-400">{c.no_telp ?? '-'}</p>
-                    </div>
-                    <span className="text-xs text-amber-600 font-bold">{c.poin ?? 0} Poin</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
 
-        {/* Order Type & Table Selector */}
-        <div className="flex flex-col gap-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
-          <div className="flex items-center gap-1">
-            {(['DINE_IN', 'TAKEAWAY', 'DELIVERY'] as const).map(type => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setTipePesanan(type)}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  tipePesanan === type
-                    ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
-                }`}
-              >
-                {type === 'DINE_IN' ? <UtensilsCrossed size={13} /> : type === 'TAKEAWAY' ? <ShoppingBag size={13} /> : <Bike size={13} />}
-                <span>{type === 'DINE_IN' ? 'Dine In' : type === 'TAKEAWAY' ? 'Takeaway' : 'Delivery'}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Table Selector (If Dine In) */}
-          {tipePesanan === 'DINE_IN' && (
-            <div className="flex items-center gap-2 pt-0.5">
-              <select
-                value={nomorMeja}
-                onChange={e => setNomorMeja(e.target.value)}
-                className="w-full text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-slate-900 dark:text-white outline-none focus:border-red-600"
-              >
-                <option value="">-- Pilih Nomor Meja (Opsional) --</option>
-                {availableTables.map(t => (
-                  <option key={t.id} value={t.nomor_meja}>
-                    {t.nomor_meja} {t.label ? `(${t.label})` : ''} - {t.status}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        {/* Cart Container Card */}
-        <div className="flex-1 flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-3.5 overflow-hidden">
-          
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-2">
-            <div className="flex items-center gap-2">
-              <ShoppingCart size={16} className="text-red-600" />
-              <span className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">Keranjang Belanja</span>
-              <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold">
-                {cart.reduce((a, b) => a + b.qty, 0)} Item
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => {
-                  if (cart.length > 0) {
-                    const ok = holdCart(cart, selectedCustomer)
-                    if (ok) {
-                      setCart([])
-                      setBayar('')
-                      setSelectedCustomer(null)
-                      toast('Transaksi di-hold', 'success')
-                    } else {
-                      toast('Batas hold tercapai (maks 10)', 'error')
-                    }
-                  }
-                }}
-                disabled={cart.length === 0}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-amber-600 transition-colors disabled:opacity-30"
-                title="Hold Transaksi (Ctrl+H)"
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs font-black flex items-center gap-1.5 shadow-lg shadow-red-600/40 active:scale-95 transition-transform"
               >
-                <Pause size={16} />
+                <span>Bayar</span>
+                <ArrowRight size={14} />
               </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-              {heldCarts.length > 0 && (
+      {/* Mobile Checkout Bottom Sheet Drawer */}
+      <AnimatePresence>
+        {mobileCartDrawerOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileCartDrawerOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            {/* Drawer Sheet */}
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="relative z-10 w-full max-h-[88vh] rounded-t-3xl border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 flex flex-col shadow-2xl overflow-hidden"
+            >
+              {/* Handle bar & Header */}
+              <div
+                className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 mx-auto mb-2 shrink-0 cursor-pointer"
+                onClick={() => setMobileCartDrawerOpen(false)}
+              />
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-950/50 text-red-600">
+                    <ShoppingCart size={16} />
+                  </div>
+                  <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">Keranjang & Pembayaran</h3>
+                  <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400 text-[11px] font-bold">
+                    {totalCartQty} Item
+                  </span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowHeldCarts(true)}
-                  className="relative p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-emerald-600 transition-colors"
-                  title="Lihat Transaksi Hold"
+                  onClick={() => setMobileCartDrawerOpen(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 >
-                  <Play size={16} />
-                  <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-amber-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center px-0.5">
-                    {heldCarts.length}
-                  </span>
+                  <X size={20} />
                 </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setShowSettings(true)}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-red-600 transition-colors"
-                title="Pengaturan Struk"
-              >
-                <Settings size={16} />
-              </button>
-            </div>
-          </div>
-
-          {/* Cart Items Scroll Area */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin space-y-2 pr-1">
-            {cart.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 space-y-2">
-                <ShoppingCart size={32} className="mx-auto opacity-30" />
-                <p className="text-xs font-semibold">Keranjang Belanja Kosong</p>
-                <p className="text-[11px]">Klik produk untuk menambahkan item</p>
               </div>
-            ) : (
-              <AnimatePresence>
-                {cart.map(item => {
-                  const disc = (item.harga_jual * item.disc) / 100
-                  const total = (item.harga_jual - disc) * item.qty
-                  return (
-                    <motion.div
-                      key={item.kd_barang}
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 shadow-sm"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{item.nama_barang}</p>
-                        <p className="text-[11px] text-slate-400">
-                          {formatRupiah(item.harga_jual)} {item.disc > 0 && <span className="text-red-600">(-{item.disc}%)</span>}
-                        </p>
-                        <p className="text-xs font-extrabold text-red-600 dark:text-red-400 mt-0.5">{formatRupiah(total)}</p>
-                      </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => updateQty(item.kd_barang, -1)}
-                          className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors"
-                        >
-                          <Minus size={12} />
-                        </button>
-                        <span className="w-7 text-center text-xs font-extrabold text-slate-900 dark:text-white">{item.qty}</span>
-                        <button
-                          type="button"
-                          onClick={() => updateQty(item.kd_barang, 1)}
-                          className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-600 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors"
-                        >
-                          <Plus size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeItem(item.kd_barang)}
-                          className="ml-1 w-6 h-6 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 flex items-center justify-center transition-colors"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </motion.div>
-                  )
-                })}
-              </AnimatePresence>
-            )}
-          </div>
-        </div>
-
-        {/* Payment Summary Panel */}
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3 shadow-sm">
-          
-          {/* Subtotal */}
-          <div className="flex justify-between text-xs font-semibold">
-            <span className="text-slate-500">Subtotal Belanja</span>
-            <span className="text-slate-900 dark:text-white font-bold">{formatRupiah(subTotal)}</span>
-          </div>
-
-          {/* Promo Code Input */}
-          <div className="flex gap-1.5">
-            <div className="relative flex-1">
-              <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={promoCode}
-                onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoDiskon(0); setPromoMsg('') }}
-                onKeyDown={e => e.key === 'Enter' && applyPromo()}
-                placeholder="Kode Promo"
-                disabled={promoDiskon > 0}
-                className="w-full h-9 pl-8 pr-2 text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:border-red-600"
-              />
-            </div>
-            {promoDiskon > 0 ? (
-              <button
-                type="button"
-                onClick={removePromo}
-                className="px-3 h-9 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors"
-              >
-                <X size={14} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={applyPromo}
-                disabled={promoLoading || !promoCode.trim()}
-                className="px-3.5 h-9 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-50 transition-colors shadow-sm"
-              >
-                {promoLoading ? '...' : 'Gunakan'}
-              </button>
-            )}
-          </div>
-
-          {promoMsg && (
-            <p className={`text-[11px] font-medium ${promoDiskon > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>{promoMsg}</p>
-          )}
-
-          {promoDiskon > 0 && (
-            <div className="flex justify-between text-xs text-emerald-600 font-bold">
-              <span>Diskon Promo</span>
-              <span>-{formatRupiah(promoDiskon)}</span>
-            </div>
-          )}
-
-          {pajakPersen > 0 && (
-            <div className="flex justify-between text-xs text-amber-600 font-bold">
-              <span>PPN ({pajakPersen}%)</span>
-              <span>+{formatRupiah(pajakAmount)}</span>
-            </div>
-          )}
-
-          {/* Grand Total */}
-          <div className="flex justify-between text-base font-black border-t border-slate-100 dark:border-slate-800 pt-2.5">
-            <span className="text-slate-900 dark:text-white">TOTAL BAYAR</span>
-            <span className="text-red-600 dark:text-red-400">{formatRupiah(totalBayar)}</span>
-          </div>
-
-          {/* Payment Method Selector Buttons */}
-          <div className="grid grid-cols-3 gap-1.5 pt-1">
-            {(['TUNAI', 'TRANSFER', 'QRIS'] as const).map(j => (
-              <button
-                key={j}
-                type="button"
-                onClick={() => setJenisBayar(j)}
-                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold border transition-all ${
-                  jenisBayar === j
-                    ? 'bg-red-600 text-white border-red-600 shadow-sm shadow-red-600/20'
-                    : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
-                }`}
-              >
-                {j === 'TUNAI' ? <Banknote size={14} /> : j === 'TRANSFER' ? <CreditCard size={14} /> : <QrCode size={14} />} {j}
-              </button>
-            ))}
-          </div>
-
-          {/* Quick Cash Amounts */}
-          {jenisBayar === 'TUNAI' && (
-            <QuickAmountButtons total={totalBayar} onAmount={amount => setBayar(String(amount))} />
-          )}
-
-          {/* Cash Paid Amount Input */}
-          <Input
-            ref={bayarInputRef}
-            label="Jumlah Diterima (Rp)"
-            type="number"
-            value={jenisBayar === 'QRIS' ? String(totalBayar) : bayar}
-            onChange={e => {
-              if (jenisBayar !== 'QRIS') setBayar(e.target.value)
-            }}
-            placeholder="0"
-            disabled={jenisBayar === 'QRIS'}
-            helperText={jenisBayar === 'QRIS' ? 'Nominal QRIS otomatis mengikuti total transaksi.' : undefined}
-          />
-
-          {/* Dynamic Kembalian / Uang Kurang Feedback */}
-          {jenisBayar === 'TUNAI' && bayar.trim() !== '' && (
-            kembalian < 0 ? (
-              <div className="flex items-center justify-between text-xs font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-xl px-3.5 py-2.5">
-                <div className="flex items-center gap-1.5">
-                  <AlertCircle size={15} className="shrink-0 text-red-500" />
-                  <span>Uang Pembayaran Kurang:</span>
-                </div>
-                <span className="text-sm font-black">{formatRupiah(Math.abs(kembalian))}</span>
+              {/* Scrollable Content inside Drawer */}
+              <div className="flex-1 overflow-y-auto pr-1 pb-4 scrollbar-thin">
+                {renderCartAndPayment(true)}
               </div>
-            ) : (
-              <div className="flex items-center justify-between text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-xl px-3.5 py-2.5">
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />
-                  <span>Kembalian:</span>
-                </div>
-                <span className="text-sm font-black">{formatRupiah(kembalian)}</span>
-              </div>
-            )
-          )}
-
-          {jenisBayar !== 'TUNAI' && paidAmount > 0 && (
-            <div className="flex justify-between text-xs font-bold pt-1 text-emerald-600 dark:text-emerald-400">
-              <span>Status Pembayaran</span>
-              <span>Sesuai Tagihan</span>
-            </div>
-          )}
-
-          {/* Submit Pay Button */}
-          <Button
-            className="w-full h-13 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-md shadow-red-600/20 border-0 active:scale-[0.98] transition-all disabled:opacity-50"
-            loading={loading}
-            disabled={loading || (jenisBayar === 'QRIS' ? !qrisCanPay : (!cart.length || !bayar || (jenisBayar === 'TUNAI' && kembalian < 0)))}
-            onClick={handleBayar}
-            icon={jenisBayar === 'QRIS' ? <QrCode size={18} /> : <ShoppingCart size={18} />}
-          >
-            {jenisBayar === 'QRIS' ? 'BAYAR DENGAN QRIS' : 'PROSES PEMBAYARAN'}
-          </Button>
-
-        </div>
-
-      </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* QRIS Modal */}
       <Modal
