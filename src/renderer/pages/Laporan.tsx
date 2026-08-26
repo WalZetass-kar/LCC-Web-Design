@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { TrendingUp, Package, Users, DollarSign, Search, BarChart2, FileSpreadsheet, FileText, Calendar, Filter, Download, ArrowUpRight } from 'lucide-react'
 import {
@@ -93,6 +93,7 @@ export default function Laporan() {
   const { guardPremiumFeature } = useDemoGuard()
   const [tab, setTab] = useState<TabType>('penjualan')
   const [dateRange, setDateRange] = useState({ start: firstDay, end: today })
+  const [filterPreset, setFilterPreset] = useState<'thisMonth' | 'today' | 'yesterday' | 'last7days' | 'lastMonth' | 'thisYear' | 'custom'>('thisMonth')
   const [loading, setLoading] = useState(false)
   const [exportLoading, setExportLoading] = useState<string | null>(null)
 
@@ -102,6 +103,34 @@ export default function Laporan() {
   const [produkData, setProdukData] = useState<ProdukTerlaris[]>([])
   const [stokData, setStokData] = useState<{ all: StokItem[]; stok_menipis: StokItem[] } | null>(null)
   const [customerData, setCustomerData] = useState<{ customers: CustomerLaporan[]; summary: any } | null>(null)
+
+  const handlePresetChange = (preset: string) => {
+    setFilterPreset(preset as any)
+    const now = new Date()
+    const todayStr = now.toISOString().split('T')[0]
+    
+    if (preset === 'today') {
+      setDateRange({ start: todayStr, end: todayStr })
+    } else if (preset === 'yesterday') {
+      const y = new Date()
+      y.setDate(y.getDate() - 1)
+      const yStr = y.toISOString().split('T')[0]
+      setDateRange({ start: yStr, end: yStr })
+    } else if (preset === 'last7days') {
+      const d7 = new Date()
+      d7.setDate(d7.getDate() - 6)
+      setDateRange({ start: d7.toISOString().split('T')[0], end: todayStr })
+    } else if (preset === 'thisMonth') {
+      setDateRange({ start: firstDay, end: todayStr })
+    } else if (preset === 'lastMonth') {
+      const prevFirst = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0]
+      const prevLast = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0]
+      setDateRange({ start: prevFirst, end: prevLast })
+    } else if (preset === 'thisYear') {
+      const yrFirst = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0]
+      setDateRange({ start: yrFirst, end: todayStr })
+    }
+  }
 
   const load = async () => {
     if ((tab !== 'stok' && tab !== 'customer') && (!dateRange.start || !dateRange.end)) {
@@ -134,6 +163,10 @@ export default function Laporan() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    load()
+  }, [tab, dateRange.start, dateRange.end])
 
   const handleExport = async (format: 'excel' | 'pdf') => {
     const featureKey = format === 'excel' ? 'export_excel' : 'export_pdf'
@@ -300,34 +333,46 @@ export default function Laporan() {
         <div className="flex flex-wrap items-end gap-3">
           {needsDate && (
             <>
-              <Input
-                label="Tanggal Mulai"
-                type="date"
-                value={dateRange.start}
-                onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))}
-                className="w-full sm:w-40"
-              />
-              <Input
-                label="Tanggal Selesai"
-                type="date"
-                value={dateRange.end}
-                onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))}
-                className="w-full sm:w-40"
-              />
-              <Button
-                variant="secondary"
-                onClick={() => setDateRange({ start: today, end: today })}
-                className="text-xs font-bold border-slate-200 dark:border-slate-800"
-              >
-                Hari Ini
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => setDateRange({ start: firstDay, end: today })}
-                className="text-xs font-bold border-slate-200 dark:border-slate-800"
-              >
-                Bulan Ini
-              </Button>
+              {/* Preset Period Dropdown */}
+              <div className="flex flex-col gap-1.5 min-w-[190px]">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Calendar size={14} className="text-red-600" />
+                  <span>Periode Laporan</span>
+                </label>
+                <select
+                  value={filterPreset}
+                  onChange={e => handlePresetChange(e.target.value)}
+                  className="w-full h-10 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2 text-xs font-bold text-slate-800 dark:text-white outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/20 transition-all cursor-pointer shadow-sm"
+                >
+                  <option value="thisMonth">Bulan Ini (Default)</option>
+                  <option value="today">Hari Ini</option>
+                  <option value="yesterday">Kemarin</option>
+                  <option value="last7days">7 Hari Terakhir</option>
+                  <option value="lastMonth">Bulan Lalu</option>
+                  <option value="thisYear">Tahun Ini</option>
+                  <option value="custom">Kustom Rentang Tanggal...</option>
+                </select>
+              </div>
+
+              {/* Custom Date Inputs (Only displayed when custom is selected) */}
+              {filterPreset === 'custom' && (
+                <>
+                  <Input
+                    label="Tanggal Mulai"
+                    type="date"
+                    value={dateRange.start}
+                    onChange={e => setDateRange(p => ({ ...p, start: e.target.value }))}
+                    className="w-full sm:w-40"
+                  />
+                  <Input
+                    label="Tanggal Selesai"
+                    type="date"
+                    value={dateRange.end}
+                    onChange={e => setDateRange(p => ({ ...p, end: e.target.value }))}
+                    className="w-full sm:w-40"
+                  />
+                </>
+              )}
             </>
           )}
 
@@ -335,18 +380,18 @@ export default function Laporan() {
             icon={<Search size={15} />}
             onClick={load}
             loading={loading}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs border-0 shadow-md shadow-red-600/20"
+            className="h-10 px-4 bg-red-600 hover:bg-red-700 text-white font-bold text-xs border-0 shadow-md shadow-red-600/20"
           >
             Tampilkan Laporan
           </Button>
 
-          <div className="flex gap-2 ml-auto">
+          <div className="flex items-center gap-2 ml-auto">
             <Button
               variant="secondary"
               icon={<FileSpreadsheet size={15} />}
               onClick={() => handleExport('excel')}
               loading={exportLoading === `${tab}-excel`}
-              className="text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60 font-bold text-xs"
+              className="h-10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60 font-bold text-xs"
             >
               Export Excel
             </Button>
@@ -355,12 +400,20 @@ export default function Laporan() {
               icon={<FileText size={15} />}
               onClick={() => handleExport('pdf')}
               loading={exportLoading === `${tab}-pdf`}
-              className="text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/60 font-bold text-xs"
+              className="h-10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/60 font-bold text-xs"
             >
               Export PDF
             </Button>
           </div>
         </div>
+
+        {/* Active Date Helper Badge when preset is selected */}
+        {needsDate && filterPreset !== 'custom' && (
+          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+            <Filter size={13} className="text-red-600 shrink-0" />
+            <span>Rentang data aktif: <strong className="text-slate-900 dark:text-white font-bold">{dateRange.start}</strong> s/d <strong className="text-slate-900 dark:text-white font-bold">{dateRange.end}</strong></span>
+          </div>
+        )}
       </Card>
 
       {/* Results Section */}
