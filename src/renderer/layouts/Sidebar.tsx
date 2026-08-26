@@ -4,7 +4,7 @@ import {
   Activity, Award, ArrowRightLeft, ArrowUpDown, BarChart2, Bell, BookOpen, BookOpenCheck, Bot, Building2,
   Calculator, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Clock, CreditCard,
   Crown, Database, DollarSign, FileText, Gift, Globe, History, LayoutDashboard, LogOut,
-  MessageCircle, Monitor, Package, Plug, Printer, Rocket, RotateCcw, Ruler, Settings, Shield,
+  Menu, MessageCircle, Monitor, Package, Plug, Printer, Rocket, RotateCcw, Ruler, Settings, Shield,
   ShieldCheck, ShoppingBag, ShoppingCart, Star, Store, Tag, Truck, TrendingUp, UserCircle, Users,
   Wallet, X, UtensilsCrossed, Grid3X3, CalendarCheck, ScrollText, Bike, Landmark, Hammer,
   PiggyBank, Ticket, MessageSquare, Megaphone, Globe2, FileSpreadsheet, LineChart, Percent,
@@ -223,26 +223,30 @@ export default function Sidebar({ isOpen, isCollapsed, onClose, onToggleCollapse
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}
     >
-      {/* Logo */}
-      <div className={`border-b border-white/30 dark:border-slate-700/30 ${isCollapsed ? 'lg:flex lg:flex-col lg:items-center lg:gap-2 lg:px-2 lg:py-4 px-5 py-5' : 'flex items-center justify-between gap-3 px-5 py-5'}`}>
+      {/* Header with Logo & Burger Menu Button */}
+      <div className={`border-b border-white/30 dark:border-slate-700/30 ${isCollapsed ? 'lg:flex lg:flex-col lg:items-center lg:gap-2.5 lg:px-2 lg:py-3.5 px-4 py-4' : 'flex items-center justify-between gap-3 px-4 py-4'}`}>
         <div className={`flex items-center min-w-0 ${isCollapsed ? 'lg:justify-center' : 'gap-3'}`}>
-          <img src={appLogo} alt="Zetass Pos" className={`${isCollapsed ? 'h-8 w-8' : 'h-9 w-9'} shrink-0 rounded-lg object-cover shadow-sm`} />
+          <img src={appLogo} alt="Zetass Pos" className={`${isCollapsed ? 'h-8 w-8' : 'h-9 w-9'} shrink-0 rounded-xl object-cover shadow-sm`} />
           <div className={`${isCollapsed ? 'lg:hidden' : ''}`}>
             <p className="font-bold text-sm text-slate-800 dark:text-white leading-tight">Zetass Pos</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Point of Sale</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Point of Sale</p>
           </div>
         </div>
         <div className={`flex items-center ${isCollapsed ? 'lg:justify-center' : 'shrink-0'}`}>
           <button
+            type="button"
             onClick={onToggleCollapse}
-            className="hidden lg:inline-flex p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
-            title={isCollapsed ? 'Buka sidebar' : 'Tutup sidebar'}
+            className="hidden lg:flex p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+            title={isCollapsed ? 'Buka sidebar penuh' : 'Ciutkan sidebar'}
+            aria-label="Toggle sidebar collapse"
           >
-            {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={18} />}
+            <Menu size={18} />
           </button>
           <button
+            type="button"
             onClick={onClose}
-            className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+            className="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+            aria-label="Tutup sidebar"
           >
             <X size={20} />
           </button>
