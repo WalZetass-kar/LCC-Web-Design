@@ -201,6 +201,8 @@ export default function RemoteLicensePopup() {
   const [creatingPlan, setCreatingPlan] = useState<string | null>(null)
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<'midtrans' | 'whatsapp'>('midtrans')
+  const [activeMidtransOrder, setActiveMidtransOrder] = useState<{ orderId: string; redirectUrl: string; planCode: string } | null>(null)
 
   // Listen to remote popup events
   useEffect(() => {
@@ -227,6 +229,28 @@ export default function RemoteLicensePopup() {
     window.addEventListener('license:updated', onLicenseUpdated)
     return () => window.removeEventListener('license:updated', onLicenseUpdated)
   }, [state])
+
+  // Polling active Midtrans order
+  useEffect(() => {
+    if (!activeMidtransOrder?.orderId) return
+    const buyerEmail = user?.email || user?.nama_pengguna || ''
+
+    const interval = setInterval(async () => {
+      try {
+        const r = await api<any>('license:checkMidtransPayment', activeMidtransOrder.orderId, buyerEmail, activeMidtransOrder.planCode)
+        if (r.success && r.data?.status === 'ACTIVE') {
+          setPaymentMessage('🎉 Pembayaran Midtrans Berhasil! Lisensi Anda telah aktif seketika.')
+          window.dispatchEvent(new Event('license:sync-now'))
+          setTimeout(() => {
+            setState(null)
+            setActiveMidtransOrder(null)
+          }, 2000)
+        }
+      } catch {}
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [activeMidtransOrder, user])
 
   // Load public plans from backend / server
   useEffect(() => {
@@ -275,6 +299,38 @@ export default function RemoteLicensePopup() {
   const selectedBenefits = selectedPlan ? getDetailedPlanBenefits(selectedPlan) : []
 
   const handleCheckout = async (plan: PublicPlan) => {
+    const buyerEmail = user?.email || user?.nama_pengguna || ''
+
+    if (paymentMethod === 'midtrans') {
+      setCreatingPlan(plan.code)
+      setPaymentMessage(null)
+      try {
+        const r = await api<any>('license:createMidtransPayment', {
+          email: buyerEmail,
+          plan_code: plan.code,
+          buyer_name: user?.nama_lengkap || user?.nama_pengguna || 'Pembeli Lisensi',
+        })
+        if (r.success && r.data) {
+          setActiveMidtransOrder({
+            orderId: r.data.orderId,
+            redirectUrl: r.data.redirectUrl,
+            planCode: plan.code,
+          })
+          setPaymentMessage('Sesi pembayaran Midtrans aktif. Silakan selesaikan pembayaran...')
+          if (r.data.redirectUrl) {
+            void api('app:openExternal', r.data.redirectUrl)
+          }
+        } else {
+          setPaymentMessage(r.message || 'Gagal membuat sesi pembayaran Midtrans')
+        }
+      } catch (e: any) {
+        setPaymentMessage(e?.message || 'Koneksi ke gateway pembayaran gagal')
+      } finally {
+        setCreatingPlan(null)
+      }
+      return
+    }
+
     const durationText = plan.duration_days === 0
       ? 'Seumur Hidup (Akses Permanen Sekali Bayar)'
       : `${plan.duration_days} Hari Penuh`
@@ -566,44 +622,84 @@ export default function RemoteLicensePopup() {
             </div>
           )}
 
-          {/* ─── Action Buttons ───────────────────────────────────────── */}
-          <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:items-center sm:justify-between border-t border-white/10 pt-4">
-            <div className="flex items-center gap-2">
-              {!isBlocking && (
+          {/* ─── Action Buttons & Payment Mode Selector ────────────────── */}
+          <div className="border-t border-white/10 pt-4 space-y-3">
+            {/* Payment Method Switcher */}
+            {selectedPlan && (
+              <div className="flex items-center justify-between gap-2 p-1.5 rounded-2xl bg-white/[0.03] border border-white/10">
                 <button
                   type="button"
-                  onClick={close}
-                  className="w-full sm:w-auto rounded-xl border border-white/15 px-4 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
+                  onClick={() => setPaymentMethod('midtrans')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition ${
+                    paymentMethod === 'midtrans'
+                      ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
                 >
-                  Nanti Saja
+                  <Zap size={14} className="text-amber-400 fill-amber-400" />
+                  <span>Bayar Otomatis (Midtrans)</span>
                 </button>
-              )}
-              {force && (
                 <button
                   type="button"
-                  onClick={logout}
-                  className="w-full sm:w-auto rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
+                  onClick={() => setPaymentMethod('whatsapp')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition ${
+                    paymentMethod === 'whatsapp'
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
                 >
-                  Keluar Akun
+                  <MessageCircle size={14} className="text-white" />
+                  <span>Manual (WhatsApp)</span>
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                {!isBlocking && (
+                  <button
+                    type="button"
+                    onClick={close}
+                    className="w-full sm:w-auto rounded-xl border border-white/15 px-4 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
+                  >
+                    Nanti Saja
+                  </button>
+                )}
+                {force && (
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="w-full sm:w-auto rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
+                  >
+                    Keluar Akun
+                  </button>
+                )}
+              </div>
+
+              {selectedPlan && (
+                <button
+                  type="button"
+                  onClick={() => handleCheckout(selectedPlan)}
+                  disabled={creatingPlan === selectedPlan.code}
+                  className={`inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-extrabold text-white shadow-xl transition disabled:opacity-50 ${
+                    paymentMethod === 'midtrans'
+                      ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-violet-950/40'
+                      : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-emerald-950/40'
+                  }`}
+                >
+                  {creatingPlan === selectedPlan.code ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : paymentMethod === 'midtrans' ? (
+                    <Zap className="h-4 w-4 fill-white" />
+                  ) : (
+                    <MessageCircle className="h-4 w-4" />
+                  )}
+                  {paymentMethod === 'midtrans'
+                    ? `Bayar Otomatis ${selectedPlan.name} (Midtrans)`
+                    : `Beli Paket ${selectedPlan.name} via WhatsApp`}
                 </button>
               )}
             </div>
-
-            {selectedPlan && (
-              <button
-                type="button"
-                onClick={() => handleCheckout(selectedPlan)}
-                disabled={creatingPlan === selectedPlan.code}
-                className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-3 text-sm font-extrabold text-white shadow-xl shadow-emerald-950/40 transition hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50"
-              >
-                {creatingPlan === selectedPlan.code ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <MessageCircle className="h-4 w-4" />
-                )}
-                Beli Paket {selectedPlan.name} via WhatsApp
-              </button>
-            )}
           </div>
         </div>
       </div>

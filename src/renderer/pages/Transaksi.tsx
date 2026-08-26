@@ -1520,37 +1520,74 @@ Terima kasih atas kunjungan Anda! 🙏`
         open={showQris}
         onClose={cancelQrisPayment}
         title="Pembayaran QRIS Pembeli"
-        size="sm"
+        size="md"
         footer={
-          <>
+          <div className="flex flex-wrap gap-2.5 w-full justify-end">
             {isStaticQrisPayment ? (
-              <Button variant="success" onClick={completeQrisSale} loading={qrisCompleting} disabled={!qrisPayment} className="w-full sm:w-auto font-bold">
+              <Button
+                variant="success"
+                onClick={completeQrisSale}
+                loading={qrisCompleting}
+                disabled={!qrisPayment}
+                className="w-full sm:w-auto font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
                 Konfirmasi Dibayar
               </Button>
             ) : (
-              <Button variant="secondary" onClick={checkQrisStatus} loading={qrisChecking} disabled={!qrisPayment || qrisCompleting} className="w-full sm:w-auto font-bold">
-                Cek Status
+              <Button
+                variant="secondary"
+                onClick={checkQrisStatus}
+                loading={qrisChecking}
+                disabled={!qrisPayment || qrisCompleting}
+                className="w-full sm:w-auto font-bold"
+              >
+                Cek Status Manual
               </Button>
             )}
-            <Button variant="danger" onClick={cancelQrisPayment} disabled={qrisCompleting} className="w-full sm:w-auto font-bold">
-              Batal
+            <Button
+              variant="danger"
+              onClick={cancelQrisPayment}
+              disabled={qrisCompleting}
+              className="w-full sm:w-auto font-bold"
+            >
+              Batalkan QRIS
             </Button>
-          </>
+          </div>
         }
       >
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4">
-            <p className="text-xs text-slate-500 font-medium">Total Pembayaran QRIS</p>
-            <p className="text-2xl font-black text-red-600 dark:text-red-400 mt-0.5">{formatRupiah(totalBayar)}</p>
-            {qrisPayment?.orderId && (
-              <p className="mt-1 text-[11px] text-slate-400 break-all font-mono">Order ID: {qrisPayment.orderId}</p>
-            )}
+          {/* Header Summary */}
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/40 dark:to-orange-950/20 border border-red-200 dark:border-red-900/40 shadow-sm">
+            <div>
+              <span className="text-[11px] font-bold text-red-700 dark:text-red-300 uppercase tracking-wider block">
+                Total Tagihan QRIS
+              </span>
+              <span className="text-2xl sm:text-3xl font-black text-red-600 dark:text-red-400 mt-0.5">
+                {formatRupiah(totalBayar)}
+              </span>
+            </div>
+            <div className="text-right text-[11px] text-slate-500 font-medium">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 font-bold">
+                <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
+                Live QRIS
+              </span>
+              {qrisPayment?.orderId && (
+                <p className="mt-1 font-mono text-[10px] text-slate-400 truncate max-w-[150px]">
+                  {qrisPayment.orderId}
+                </p>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-col items-center gap-3">
+          {/* QR Code Container */}
+          <div className="flex flex-col items-center justify-center p-5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
             {qrisPayment?.qrImageUrl ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-md">
-                <img src={qrisPayment.qrImageUrl} alt="QRIS Pembayaran" className="h-64 w-64 object-contain" />
+              <div className="p-4 bg-white rounded-2xl shadow-xl border border-slate-200">
+                <img
+                  src={qrisPayment.qrImageUrl}
+                  alt="QRIS Pembayaran"
+                  className="h-64 w-64 sm:h-72 sm:w-72 object-contain"
+                />
               </div>
             ) : qrisPayment?.qrString ? (
               <textarea
@@ -1560,20 +1597,26 @@ Terima kasih atas kunjungan Anda! 🙏`
               />
             ) : (
               <div className="flex h-64 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-slate-400">
-                <QrCode size={48} className="mb-2 text-slate-400 animate-pulse" />
-                <p className="text-xs font-bold">Membuat Kode QRIS...</p>
+                <QrCode size={48} className="mb-2 text-red-500 animate-pulse" />
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-300">Membuat Kode QRIS Midtrans...</p>
+                <p className="text-[11px] text-slate-400 mt-1">Menghubungi payment gateway</p>
               </div>
             )}
+            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-3 text-center">
+              Pindai QR menggunakan GoPay, OVO, Dana, ShopeePay, BCA, atau Mobile Banking apa saja
+            </p>
           </div>
 
-          <div className={`rounded-xl px-3.5 py-2.5 text-xs font-bold ${
+          {/* Status Bar */}
+          <div className={`rounded-xl px-4 py-3 text-xs font-bold flex items-center gap-2.5 ${
             qrisCompleting
-              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
               : qrisStatus.includes('gagal') || qrisStatus.includes('dibatalkan')
-                ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
-                : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-800'
+                : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
           }`}>
-            {qrisStatus}
+            <span className="w-2 h-2 rounded-full bg-current animate-pulse shrink-0" />
+            <span>{qrisStatus}</span>
           </div>
         </div>
       </Modal>
