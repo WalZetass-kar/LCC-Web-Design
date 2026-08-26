@@ -651,7 +651,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 sm:gap-5">
               
               {/* Quick Actions Menu */}
-              <Card title="Akses Cepat" subtitle="Fitur utama yang sering digunakan">
+              <Card title="Akses Cepat" subtitle="Fitur utama yang sering digunakan" className="xl:col-span-2">
                 {loading ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 animate-pulse">
                     {Array.from({ length: QUICK_ACTIONS.length }).map((_, i) => (

@@ -1232,25 +1232,38 @@ Terima kasih atas kunjungan Anda! 🙏`
           </div>
 
           {/* Search Input & Camera Scanner Button */}
-          <div className="flex gap-2">
-            <Input
-              ref={searchRef}
-              placeholder="Cari produk (Nama / Kode / Barcode)..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={handleSearchKey}
-              icon={<Search size={16} className="text-slate-400" />}
-              className="flex-1 rounded-xl border-slate-200 dark:border-slate-800 focus:border-red-600 focus:ring-red-600/10"
-            />
-            <Button
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="relative flex-1 group">
+              <Search size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-red-600 transition-colors" />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Cari produk (Nama / Kode / Barcode)... [F1]"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={handleSearchKey}
+                className="w-full h-12 pl-11 pr-10 text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/70 text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:border-red-600 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-600/15 transition-all shadow-inner"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => { setSearch(''); searchRef.current?.focus() }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            <button
               type="button"
-              variant="secondary"
               onClick={openCameraScanner}
-              icon={<ScanLine size={16} />}
-              className="shrink-0 rounded-xl border-slate-200 dark:border-slate-800 font-bold"
+              className="h-12 px-4 sm:px-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-red-600 dark:hover:text-red-400 font-bold text-xs sm:text-sm flex items-center gap-2 shrink-0 shadow-sm active:scale-95 transition-all"
+              title="Buka Kamera Barcode Scanner"
             >
-              Scan Barcode
-            </Button>
+              <ScanLine size={20} className="text-red-600" />
+              <span className="hidden sm:inline">Scan Barcode</span>
+            </button>
           </div>
 
           {/* Category Filter Chips Bar */}
