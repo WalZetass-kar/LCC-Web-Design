@@ -306,19 +306,56 @@ export class EmployeeController {
     }
   }
 
-  static async createPayroll(data: Parameters<typeof EmployeeModel.createPayroll>[0]) {
+  static async createPayroll(data: any) {
     const authError = await requireAuth();
     if (authError) return authError;
 
     try {
-      if (!data.employee_id) {
-        return { success: false, message: 'Karyawan wajib dipilih' }
-      }
-      if (!data.periode_bulan || !data.periode_tahun) {
+      const month = Number(data.periode_bulan)
+      const year = Number(data.periode_tahun)
+
+      if (!month || !year) {
         return { success: false, message: 'Periode bulan dan tahun wajib diisi' }
       }
 
-      EmployeeModel.createPayroll(data)
+      if (data.auto_generate || !data.employee_id) {
+        const allEmployees = EmployeeModel.getAll()
+        const existingPayroll = EmployeeModel.getPayroll(month, year)
+        const existingEmpIds = new Set(existingPayroll.map(p => p.employee_id))
+
+        let createdCount = 0
+        for (const emp of allEmployees) {
+          if (emp.status_karyawan !== 'KELUAR' && !existingEmpIds.has(emp.id)) {
+            const gajiPokok = emp.gaji_pokok || 3000000
+            const tunjangan = emp.tunjangan || 0
+            EmployeeModel.createPayroll({
+              employee_id: emp.id,
+              periode_bulan: month,
+              periode_tahun: year,
+              gaji_pokok: gajiPokok,
+              tunjangan: tunjangan,
+              uang_makan: 300000,
+              uang_transport: 200000,
+              lembur: 0,
+              bonus: 0,
+              komisi: 0,
+              potongan: 0,
+              potongan_bpjs: Math.round(gajiPokok * 0.01),
+              potongan_pph: 0,
+              potongan_lain: 0,
+              total_gaji: gajiPokok + tunjangan + 500000 - Math.round(gajiPokok * 0.01),
+              dibuat_oleh: data.dibuat_oleh || 'ADMIN',
+            })
+            createdCount++
+          }
+        }
+        return { success: true, message: `Berhasil generate gaji untuk ${createdCount} karyawan` }
+      }
+
+      EmployeeModel.createPayroll({
+        ...data,
+        dibuat_oleh: data.dibuat_oleh || 'ADMIN',
+      })
       return { success: true, message: 'Payroll berhasil dibuat' }
     } catch (error) {
       return { success: false, message: 'Gagal membuat payroll: ' + (error as Error).message }

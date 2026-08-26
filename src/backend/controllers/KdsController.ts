@@ -204,6 +204,22 @@ export class KdsController {
     }
   }
 
+  static async deleteFloorLayout(id: number) {
+    const authError = await requireAuth()
+    if (authError) return authError
+
+    try {
+      const layout = KdsModel.getFloorLayoutById(id)
+      if (!layout) {
+        return { success: false, message: 'Layout tidak ditemukan' }
+      }
+      KdsModel.deleteFloorLayout(id)
+      return { success: true, message: 'Layout berhasil dihapus' }
+    } catch (error) {
+      return { success: false, message: 'Gagal menghapus layout: ' + (error as Error).message }
+    }
+  }
+
   // ─── TABLES ──────────────────────────────────────────────────
 
   static getAllTables(layoutId?: number) {

@@ -7,10 +7,14 @@ export class KdsModel {
 
   static getOrders(status?: string, dapur?: string) {
     const conditions: any[] = []
-    if (status) conditions.push(eq(kdsOrders.status, status))
+    if (status && status !== 'SEMUA') conditions.push(eq(kdsOrders.status, status))
     if (dapur) conditions.push(eq(kdsOrders.dapur, dapur))
     const where = conditions.length > 0 ? and(...conditions) : undefined
-    return db.select().from(kdsOrders).where(where).orderBy(desc(kdsOrders.waktu_masuk)).all()
+    const orders = db.select().from(kdsOrders).where(where).orderBy(desc(kdsOrders.waktu_masuk)).all()
+    return orders.map(order => ({
+      ...order,
+      items: this.getOrderItems(order.id),
+    }))
   }
 
   static getOrderById(id: number) {
@@ -167,6 +171,11 @@ export class KdsModel {
     return db.update(floorLayouts).set(data).where(eq(floorLayouts.id, id)).run()
   }
 
+  static deleteFloorLayout(id: number) {
+    db.update(tables).set({ floor_layout_id: null }).where(eq(tables.floor_layout_id, id)).run()
+    return db.delete(floorLayouts).where(eq(floorLayouts.id, id)).run()
+  }
+
   // ─── TABLES ──────────────────────────────────────────────────
 
   static getAllTables(layoutId?: number) {
@@ -247,11 +256,32 @@ export class KdsModel {
 
   static getReservations(date?: string) {
     const where = date ? like(reservations.tgl_reservasi, `%${date}%`) : undefined
-    return db.select().from(reservations).where(where).orderBy(desc(reservations.tgl_reservasi)).all()
+    const list = db.select().from(reservations).where(where).orderBy(desc(reservations.tgl_reservasi)).all()
+    return list.map(r => {
+      let tableInfo: any = null
+      if (r.table_id) {
+        tableInfo = db.select().from(tables).where(eq(tables.id, r.table_id)).get()
+      }
+      return {
+        ...r,
+        nomor_meja: tableInfo?.nomor_meja,
+        label_meja: tableInfo?.label,
+      }
+    })
   }
 
   static getReservationById(id: number) {
-    return db.select().from(reservations).where(eq(reservations.id, id)).get()
+    const r = db.select().from(reservations).where(eq(reservations.id, id)).get()
+    if (!r) return null
+    let tableInfo: any = null
+    if (r.table_id) {
+      tableInfo = db.select().from(tables).where(eq(tables.id, r.table_id)).get()
+    }
+    return {
+      ...r,
+      nomor_meja: tableInfo?.nomor_meja,
+      label_meja: tableInfo?.label,
+    }
   }
 
   static createReservation(data: {
@@ -290,6 +320,16 @@ export class KdsModel {
   }
 
   static updateReservationStatus(id: number, status: string) {
+    const r = this.getReservationById(id)
+    if (r?.table_id) {
+      if (status === 'HADIR') {
+        db.update(tables).set({ status: 'TERISI' }).where(eq(tables.id, r.table_id)).run()
+      } else if (status === 'KONFIRMASI') {
+        db.update(tables).set({ status: 'RESERVASI' }).where(eq(tables.id, r.table_id)).run()
+      } else if (status === 'SELESAI' || status === 'BATAL') {
+        db.update(tables).set({ status: 'KOSONG' }).where(eq(tables.id, r.table_id)).run()
+      }
+    }
     return db.update(reservations).set({
       status,
       updated_at: new Date().toISOString(),
@@ -297,6 +337,10 @@ export class KdsModel {
   }
 
   static cancelReservation(id: number) {
+    const r = this.getReservationById(id)
+    if (r?.table_id) {
+      db.update(tables).set({ status: 'KOSONG' }).where(eq(tables.id, r.table_id)).run()
+    }
     return db.update(reservations).set({
       status: 'BATAL',
       updated_at: new Date().toISOString(),

@@ -321,13 +321,24 @@ export class EmployeeModel {
   // ─── PAYROLL ─────────────────────────────────────────────────────
 
   static getPayroll(month: number, year: number) {
-    return db.select().from(payroll)
+    const list = db.select().from(payroll)
       .where(and(
         eq(payroll.periode_bulan, month),
         eq(payroll.periode_tahun, year),
       ))
       .orderBy(desc(payroll.tgl_dibuat))
       .all()
+
+    return list.map(p => {
+      const emp = db.select().from(employees).where(eq(employees.id, p.employee_id)).get()
+      return {
+        ...p,
+        nama_karyawan: emp?.nama_lengkap,
+        nik: emp?.nik,
+        jabatan: emp?.jabatan,
+        departemen: emp?.departemen,
+      }
+    })
   }
 
   static getPayrollByEmployee(id: number, month: number, year: number) {

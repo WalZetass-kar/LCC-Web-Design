@@ -1064,6 +1064,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   handle(ipcMain, 'floor:getById', (id: number) => KdsController.getFloorLayoutById(id))
   handle(ipcMain, 'floor:create', (data: any) => KdsController.createFloorLayout(data))
   handle(ipcMain, 'floor:update', (id: number, data: any) => KdsController.updateFloorLayout(id, data))
+  handle(ipcMain, 'floor:delete', (id: number) => KdsController.deleteFloorLayout(id))
   handle(ipcMain, 'table:getAll', (layoutId?: number) => KdsController.getAllTables(layoutId))
   handle(ipcMain, 'table:getById', (id: number) => KdsController.getTableById(id))
   handle(ipcMain, 'table:create', (data: any) => KdsController.createTable(data))

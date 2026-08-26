@@ -554,6 +554,7 @@ const ALLOWED_CHANNELS = new Set([
   'floor:getById',
   'floor:create',
   'floor:update',
+  'floor:delete',
   'table:getAll',
   'table:getById',
   'table:create',

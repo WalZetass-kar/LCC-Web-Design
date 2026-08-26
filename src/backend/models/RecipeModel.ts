@@ -1,18 +1,47 @@
 import { db } from '../../database/connection.js'
-import { recipes, recipeIngredients } from '../../database/schema.js'
+import { recipes, recipeIngredients, barang } from '../../database/schema.js'
 import { eq, and, desc, like, or } from 'drizzle-orm'
 
 export class RecipeModel {
   static getAll(kategori?: string) {
     const query = db.select().from(recipes)
-    if (kategori) {
-      return query.where(eq(recipes.kategori, kategori)).orderBy(desc(recipes.created_at)).all()
-    }
-    return query.orderBy(desc(recipes.created_at)).all()
+    const list = kategori
+      ? query.where(eq(recipes.kategori, kategori)).orderBy(desc(recipes.created_at)).all()
+      : query.orderBy(desc(recipes.created_at)).all()
+
+    return list.map(r => {
+      let prod: any = null
+      if (r.kd_barang) {
+        prod = db.select().from(barang).where(eq(barang.kd_barang, r.kd_barang)).get()
+      }
+      const hargaJual = prod?.harga_jual ?? 0
+      const biaya = r.biaya_produksi ?? 0
+      const margin = hargaJual > 0 ? Math.round(((hargaJual - biaya) / hargaJual) * 100) : 0
+      return {
+        ...r,
+        nama_barang: prod?.nama_barang,
+        harga_jual: hargaJual,
+        margin,
+      }
+    })
   }
 
   static getById(id: number) {
-    return db.select().from(recipes).where(eq(recipes.id, id)).get()
+    const r = db.select().from(recipes).where(eq(recipes.id, id)).get()
+    if (!r) return null
+    let prod: any = null
+    if (r.kd_barang) {
+      prod = db.select().from(barang).where(eq(barang.kd_barang, r.kd_barang)).get()
+    }
+    const hargaJual = prod?.harga_jual ?? 0
+    const biaya = r.biaya_produksi ?? 0
+    const margin = hargaJual > 0 ? Math.round(((hargaJual - biaya) / hargaJual) * 100) : 0
+    return {
+      ...r,
+      nama_barang: prod?.nama_barang,
+      harga_jual: hargaJual,
+      margin,
+    }
   }
 
   static getByKdBarang(kd_barang: string) {
@@ -45,11 +74,21 @@ export class RecipeModel {
   }
 
   static addIngredient(data: typeof recipeIngredients.$inferInsert) {
-    return db.insert(recipeIngredients).values(data).run()
+    const sub_total = (data.qty || 0) * (data.harga_per_unit || 0)
+    return db.insert(recipeIngredients).values({
+      ...data,
+      sub_total,
+    }).run()
   }
 
   static updateIngredient(id: number, data: Partial<typeof recipeIngredients.$inferInsert>) {
-    return db.update(recipeIngredients).set(data).where(eq(recipeIngredients.id, id)).run()
+    const updateData: any = { ...data }
+    if (data.qty !== undefined || data.harga_per_unit !== undefined) {
+      const qty = data.qty ?? 0
+      const harga = data.harga_per_unit ?? 0
+      updateData.sub_total = (qty || 0) * (harga || 0)
+    }
+    return db.update(recipeIngredients).set(updateData).where(eq(recipeIngredients.id, id)).run()
   }
 
   static deleteIngredient(id: number) {
