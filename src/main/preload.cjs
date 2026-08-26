@@ -300,6 +300,7 @@ const ALLOWED_CHANNELS = new Set([
   // System
   'system:checkDb',
   'system:resetData',
+  'system:seedSampleData',
 
   // Satuan CRUD
   'satuan:create',

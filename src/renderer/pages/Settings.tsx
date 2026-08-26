@@ -5,7 +5,7 @@ import {
   Sun, Moon, Palette, Store, Receipt, Barcode, Printer, Database, Bell, AlertTriangle,
   Server, RefreshCw, Wifi, Bot, FileSpreadsheet, KeyRound, QrCode, Copy, CheckCircle2,
   Code2, ExternalLink, MessageCircle, ChevronLeft, Search, Monitor, Shield, HardDrive,
-  Info, User, Fingerprint,
+  Info, User, Fingerprint, Sparkles,
 } from 'lucide-react'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -1411,6 +1411,23 @@ function JaringanSettings({ industrySettings, changeIndustrySetting, changeAiPro
 }
 
 function TentangSettings() {
+  const toast = useToast()
+  const [seeding, setSeeding] = useState(false)
+
+  const handleSeed = async () => {
+    setSeeding(true)
+    try {
+      const r = await api<any>('system:seedSampleData')
+      if (r.success) {
+        toast(r.message || 'Data contoh toko berhasil dimuat!', 'success')
+      } else {
+        toast(r.message || 'Gagal memuat data demo', 'error')
+      }
+    } finally {
+      setSeeding(false)
+    }
+  }
+
   return (
     <div className="space-y-3">
       <SectionTitle>Aplikasi</SectionTitle>
@@ -1420,7 +1437,7 @@ function TentangSettings() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Zetass POS</h3>
-              <span className="px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 border border-red-500/20 text-[10px] font-bold uppercase">v2.0.0</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 border border-red-500/20 text-[10px] font-bold uppercase">v2.0.1</span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Sistem Point of Sale (POS)</p>
             <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-red-600 text-white text-xs font-bold shadow-sm shadow-red-600/20">
@@ -1428,6 +1445,25 @@ function TentangSettings() {
             </div>
           </div>
         </div>
+      </div>
+
+      <SectionTitle>Data & Demo Pengujian</SectionTitle>
+      <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 space-y-3">
+        <div>
+          <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">Muat Data Contoh / Demo Toko</h4>
+          <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+            Otomatis mengisi 20+ produk lengkap, meja restoran, customer, resep BOM, dan 7 hari riwayat transaksi untuk simulasi dan demo.
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          icon={<Sparkles size={15} className="text-amber-600 dark:text-amber-400" />}
+          onClick={handleSeed}
+          loading={seeding}
+          className="w-full font-bold border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+        >
+          Muat Data Contoh Toko Sekarang
+        </Button>
       </div>
 
       <SectionTitle>Detail Teknis</SectionTitle>

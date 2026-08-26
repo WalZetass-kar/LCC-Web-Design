@@ -309,6 +309,7 @@ export default function Dashboard() {
   const [insights, setInsights] = useState<InsightData>(EMPTY_INSIGHTS)
   const [insightsLoading, setInsightsLoading] = useState(true)
   const [insightsError, setInsightsError] = useState('')
+  const [seedingDemo, setSeedingDemo] = useState(false)
   const navigate = useNavigate()
   const toast = useToast()
   const { user } = useAuth()
@@ -479,6 +480,46 @@ export default function Dashboard() {
 
         {!error && (
           <>
+            {/* Onboarding Demo Banner if Database is Empty */}
+            {!loading && dashboard.totalBarang === 0 && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 shadow-sm mb-1">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                    <Sparkles size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">Database Masih Kosong</h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                      Muat data contoh toko (20+ produk, meja, customer, resep BOM, dan 7 hari transaksi) agar grafik dan laporan langsung hidup.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  icon={<Sparkles size={16} className="text-amber-600 dark:text-amber-400" />}
+                  loading={seedingDemo}
+                  onClick={async () => {
+                    setSeedingDemo(true)
+                    try {
+                      const r = await api<any>('system:seedSampleData')
+                      if (r.success) {
+                        toast(r.message || 'Data demo berhasil dimuat!', 'success')
+                        fetchData(true)
+                        if (isAdmin) fetchInsights()
+                      } else {
+                        toast(r.message || 'Gagal memuat data demo', 'error')
+                      }
+                    } finally {
+                      setSeedingDemo(false)
+                    }
+                  }}
+                  className="shrink-0 w-full sm:w-auto font-bold border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                >
+                  Muat Data Contoh Toko
+                </Button>
+              </div>
+            )}
+
             {/* Stat Cards (4 KPI Cards) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 sm:gap-4">
               {loading

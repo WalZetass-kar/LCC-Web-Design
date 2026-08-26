@@ -27,6 +27,10 @@ import {
   Layers,
   Receipt,
   Zap,
+  MessageCircle,
+  UtensilsCrossed,
+  ShoppingBag,
+  Bike,
 } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -59,6 +63,9 @@ interface SalePayload {
   diskon_promo: number
   kode_promo?: string
   shift_id?: number
+  tipe_pesanan?: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'
+  nomor_meja?: string
+  catatan?: string
 }
 
 interface QrisPayment {
@@ -123,6 +130,12 @@ export default function Transaksi() {
   const [categories, setCategories] = useState<Kategori[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL')
 
+  // Order Type & Table (F&B / Operational)
+  const [tipePesanan, setTipePesanan] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('DINE_IN')
+  const [nomorMeja, setNomorMeja] = useState('')
+  const [availableTables, setAvailableTables] = useState<Array<{ id: number; nomor_meja: string; label?: string; status: string }>>([])
+  const [manualWaPhone, setManualWaPhone] = useState('')
+
   // Pajak PPN
   const [pajakPersen, setPajakPersen] = useState(0)
 
@@ -164,6 +177,7 @@ export default function Transaksi() {
   useEffect(() => {
     api<Customer[]>('customer:getAll').then(r => { if (r.success) setCustomers(r.data ?? []) })
     api<Kategori[]>('kategori:getAll').then(r => { if (r.success) setCategories(r.data ?? []) })
+    api<any[]>('table:getAll').then(r => { if (r.success && r.data) setAvailableTables(r.data) })
     api<{ rate: number }>('tax:getActiveRate').then(r => { if (r.success && r.data) setPajakPersen(r.data.rate) })
     if (user?.nama_pengguna) {
       api<any>('shift:getCurrent', user.nama_pengguna).then(r => { if (r.success && r.data) setActiveShiftId(r.data.id) })
@@ -513,7 +527,39 @@ export default function Transaksi() {
     diskon_promo: promoDiskon,
     kode_promo: promoCode || undefined,
     shift_id: activeShiftId ?? undefined,
+    tipe_pesanan: tipePesanan,
+    nomor_meja: tipePesanan === 'DINE_IN' ? (nomorMeja.trim() || undefined) : undefined,
   })
+
+  const sendWhatsAppReceipt = () => {
+    const rawPhone = (manualWaPhone || selectedCustomer?.no_telp || '').replace(/\D/g, '')
+    const targetPhone = rawPhone.startsWith('0') ? '62' + rawPhone.slice(1) : rawPhone
+
+    const itemList = cart.map(i => `• ${i.nama_barang} (${i.qty}x) = ${formatRupiah(i.harga_jual * i.qty)}`).join('\n')
+    const msg = 
+`🧾 *STRUK TRANSAKSI ZETASS POS*
+----------------------------------------
+No. Transaksi : *${lastKd || '-'}*
+Waktu         : ${new Date().toLocaleString('id-ID')}
+Tipe Order    : *${tipePesanan === 'DINE_IN' ? 'Makan di Tempat (Dine-In)' : tipePesanan === 'TAKEAWAY' ? 'Bungkus (Takeaway)' : 'Pengiriman (Delivery)'}* ${nomorMeja ? `(Meja: ${nomorMeja})` : ''}
+Kasir         : ${user?.nama_pengguna || 'Kasir'}
+Pelanggan     : ${selectedCustomer?.nama_customer || 'Pelanggan Umum'}
+----------------------------------------
+*DAFTAR PESANAN:*
+${itemList}
+----------------------------------------
+Subtotal      : ${formatRupiah(subTotal)}
+${pajakAmount > 0 ? `PPN (${pajakPersen}%) : ${formatRupiah(pajakAmount)}\n` : ''}${promoDiskon > 0 ? `Diskon Promo : -${formatRupiah(promoDiskon)}\n` : ''}*TOTAL BAYAR  : ${formatRupiah(totalBayar)}*
+Metode Bayar  : ${jenisBayar}
+Bayar         : ${formatRupiah(paidAmount)}
+Kembalian     : ${formatRupiah(kembalian)}
+----------------------------------------
+Terima kasih atas kunjungan Anda! 🙏`
+
+    const url = targetPhone ? `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`
+    window.open(url, '_blank')
+    toast('Membuka WhatsApp untuk mengirim struk...', 'success')
+  }
 
   const completeSale = useCallback(async (payload: SalePayload) => {
     const r = await api<{ kd_transaksi: string }>('penjualan:create', {
@@ -973,6 +1019,45 @@ export default function Transaksi() {
           )}
         </div>
 
+        {/* Order Type & Table Selector */}
+        <div className="flex flex-col gap-1.5 p-2 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-1">
+            {(['DINE_IN', 'TAKEAWAY', 'DELIVERY'] as const).map(type => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setTipePesanan(type)}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  tipePesanan === type
+                    ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                }`}
+              >
+                {type === 'DINE_IN' ? <UtensilsCrossed size={13} /> : type === 'TAKEAWAY' ? <ShoppingBag size={13} /> : <Bike size={13} />}
+                <span>{type === 'DINE_IN' ? 'Dine In' : type === 'TAKEAWAY' ? 'Takeaway' : 'Delivery'}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Table Selector (If Dine In) */}
+          {tipePesanan === 'DINE_IN' && (
+            <div className="flex items-center gap-2 pt-0.5">
+              <select
+                value={nomorMeja}
+                onChange={e => setNomorMeja(e.target.value)}
+                className="w-full text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-slate-900 dark:text-white outline-none focus:border-red-600"
+              >
+                <option value="">-- Pilih Nomor Meja (Opsional) --</option>
+                {availableTables.map(t => (
+                  <option key={t.id} value={t.nomor_meja}>
+                    {t.nomor_meja} {t.label ? `(${t.label})` : ''} - {t.status}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
         {/* Cart Container Card */}
         <div className="flex-1 flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-3.5 overflow-hidden">
           
@@ -1310,32 +1395,54 @@ export default function Transaksi() {
         title="Transaksi Berhasil Disimpan"
         size="sm"
         footer={
-          <>
+          <div className="flex flex-wrap gap-2 w-full justify-end">
+            <Button
+              variant="secondary"
+              icon={<MessageCircle size={16} className="text-emerald-500" />}
+              onClick={sendWhatsAppReceipt}
+              className="w-full sm:w-auto font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800"
+            >
+              Kirim WA
+            </Button>
             <Button variant="secondary" icon={<Printer size={16} />} onClick={handlePrint} className="w-full sm:w-auto font-bold">
               Cetak Struk
             </Button>
             <Button onClick={resetTransaksi} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0">
               Transaksi Baru
             </Button>
-          </>
+          </div>
         }
       >
-        <div ref={strukRef}>
-          <Struk
-            cart={cart}
-            subTotal={subTotal}
-            pajak={pajakAmount}
-            pajakPersen={pajakPersen}
-            totalBayar={totalBayar}
-            promoDiskon={promoDiskon}
-            bayar={paidAmount}
-            kembalian={kembalian}
-            kdTransaksi={lastKd ?? ''}
-            jenisBayar={jenisBayar}
-            customerName={selectedCustomer?.nama_customer}
-            poinEarned={poinEarned}
-            kasirName={user?.nama_pengguna}
-          />
+        <div className="space-y-3">
+          {/* Quick WhatsApp Recipient Input */}
+          <div className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+            <MessageCircle size={16} className="text-emerald-500 shrink-0" />
+            <input
+              type="tel"
+              value={manualWaPhone || selectedCustomer?.no_telp || ''}
+              onChange={e => setManualWaPhone(e.target.value)}
+              placeholder="No. WhatsApp Pembeli (cth: 08123456789)..."
+              className="w-full text-xs bg-transparent text-slate-900 dark:text-white outline-none placeholder:text-slate-400 font-medium"
+            />
+          </div>
+
+          <div ref={strukRef}>
+            <Struk
+              cart={cart}
+              subTotal={subTotal}
+              pajak={pajakAmount}
+              pajakPersen={pajakPersen}
+              totalBayar={totalBayar}
+              promoDiskon={promoDiskon}
+              bayar={paidAmount}
+              kembalian={kembalian}
+              kdTransaksi={lastKd ?? ''}
+              jenisBayar={jenisBayar}
+              customerName={selectedCustomer?.nama_customer}
+              poinEarned={poinEarned}
+              kasirName={user?.nama_pengguna}
+            />
+          </div>
         </div>
       </Modal>
 

@@ -870,6 +870,7 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   // ─── SYSTEM STATUS ─────────────────────────────────────────────────
   handle(ipcMain, 'system:checkDb', () => SystemController.checkDb())
   handle(ipcMain, 'system:resetData', () => SystemController.resetData())
+  handle(ipcMain, 'system:seedSampleData', () => SystemController.seedSampleData())
 
   // ─── WHATSAPP SETTINGS ─────────────────────────────────────────────
   handle(ipcMain, 'whatsapp:get', () => WhatsAppController.get())

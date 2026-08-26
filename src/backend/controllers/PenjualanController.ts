@@ -29,6 +29,9 @@ interface CreateTransaksiPayload {
   diskon_promo?: number
   kode_promo?: string
   shift_id?: number
+  tipe_pesanan?: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'
+  nomor_meja?: string
+  catatan?: string
 }
 
 export class PenjualanController {
@@ -335,6 +338,89 @@ export class PenjualanController {
       if (kode_promo) {
         const promoApply = PromoService.applyPromo(kode_promo)
         if (!promoApply.success) throw new Error(promoApply.message || 'Gagal menerapkan promo')
+      }
+
+      // Automatic Recipe / BOM Raw Ingredient Stock Deduction
+      for (const item of trustedItems) {
+        try {
+          const recipe = sqlite.prepare(`
+            SELECT id, hasil_produksi 
+            FROM mediasoft_recipes 
+            WHERE kd_barang = ? AND is_active = 1 
+            LIMIT 1
+          `).get(item.kd_barang) as { id: number; hasil_produksi: number } | undefined
+
+          if (recipe) {
+            const ingredients = sqlite.prepare(`
+              SELECT kd_barang, qty, nama_bahan 
+              FROM mediasoft_recipe_ingredients 
+              WHERE recipe_id = ?
+            `).all(recipe.id) as Array<{ kd_barang: string; qty: number; nama_bahan: string }>
+
+            const yieldRatio = recipe.hasil_produksi > 0 ? recipe.hasil_produksi : 1
+            for (const ing of ingredients) {
+              const deductQty = (ing.qty / yieldRatio) * item.qty
+              sqlite.prepare(`
+                UPDATE mediasoft_barang 
+                SET stok = COALESCE(stok, 0) - ? 
+                WHERE kd_barang = ?
+              `).run(deductQty, ing.kd_barang)
+
+              sqlite.prepare(`
+                INSERT INTO mediasoft_stock_history (kd_barang, tipe, qty, stok_sebelum, stok_sesudah, keterangan, user_id, created_at)
+                SELECT ?, 'OUT', ?, stok + ?, stok, ?, ?, datetime('now')
+                FROM mediasoft_barang WHERE kd_barang = ?
+              `).run(
+                ing.kd_barang,
+                deductQty,
+                deductQty,
+                `BOM Resep: ${item.nama_barang} (Trx ${kd_transaksi})`,
+                username,
+                ing.kd_barang
+              )
+            }
+          }
+        } catch (bomErr) {
+          console.warn('[BOM Deduction] Failed for item', item.kd_barang, bomErr)
+        }
+      }
+
+      // Automatic KDS (Kitchen Display System) Ticket Creation
+      try {
+        const orderType = payload.tipe_pesanan || 'DINE_IN'
+        const kdsRes = sqlite.prepare(`
+          INSERT INTO mediasoft_kds_orders (
+            kd_transaksi, nomor_meja, jenis_order, nama_pelanggan, catatan, status, waktu_masuk, dibuat_oleh
+          ) VALUES (?, ?, ?, ?, ?, 'BARU', ?, ?)
+        `).run(
+          kd_transaksi,
+          payload.nomor_meja || null,
+          orderType,
+          payload.kd_customer ? (sqlite.prepare('SELECT nama_customer FROM mediasoft_customer WHERE kd_customer = ?').get(payload.kd_customer) as any)?.nama_customer : 'Customer POS',
+          payload.catatan || null,
+          header.tgl_wkt_transaksi,
+          username
+        )
+
+        const kdsOrderId = kdsRes.lastInsertRowid
+        const insertKdsItem = sqlite.prepare(`
+          INSERT INTO mediasoft_kds_order_items (kds_order_id, kd_barang, nama_item, qty, status)
+          VALUES (?, ?, ?, ?, 'BARU')
+        `)
+        for (const item of trustedItems) {
+          insertKdsItem.run(kdsOrderId, item.kd_barang, item.nama_barang, item.qty)
+        }
+
+        // Update table status if table is specified
+        if (payload.nomor_meja) {
+          sqlite.prepare(`
+            UPDATE mediasoft_tables 
+            SET status = 'TERISI' 
+            WHERE nomor_meja = ?
+          `).run(payload.nomor_meja)
+        }
+      } catch (kdsErr) {
+        console.warn('[KDS Order] Failed to create KDS ticket', kdsErr)
       }
       
       return kd_transaksi
