@@ -42,11 +42,12 @@ import { useToast } from '../contexts/ToastContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useDemoGuard } from '../hooks/useDemoGuard'
 import { useHoldCart } from '../hooks/useHoldCart'
-import type { Barang, CartItem, Customer } from '../../shared/types'
+import type { Barang, CartItem, Customer, Kategori } from '../../shared/types'
 import Struk from '../components/Struk'
 import { useReactToPrint } from 'react-to-print'
 import { ensureBluetoothPrinterPermission, ensureCameraPermission } from '../utils/nativePermissions'
 import { ProductGridSkeleton } from '../components/Skeleton'
+import { cashierSound } from '../utils/sound'
 
 interface SalePayload {
   username: string
@@ -118,6 +119,10 @@ export default function Transaksi() {
   const [cameraScannerError, setCameraScannerError] = useState('')
   const [cameraScannerStatus, setCameraScannerStatus] = useState('Menyiapkan kamera...')
 
+  // Kategori filter
+  const [categories, setCategories] = useState<Kategori[]>([])
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL')
+
   // Pajak PPN
   const [pajakPersen, setPajakPersen] = useState(0)
 
@@ -158,6 +163,7 @@ export default function Transaksi() {
   useEffect(() => { searchRef.current?.focus() }, [])
   useEffect(() => {
     api<Customer[]>('customer:getAll').then(r => { if (r.success) setCustomers(r.data ?? []) })
+    api<Kategori[]>('kategori:getAll').then(r => { if (r.success) setCategories(r.data ?? []) })
     api<{ rate: number }>('tax:getActiveRate').then(r => { if (r.success && r.data) setPajakPersen(r.data.rate) })
     if (user?.nama_pengguna) {
       api<any>('shift:getCurrent', user.nama_pengguna).then(r => { if (r.success && r.data) setActiveShiftId(r.data.id) })
@@ -239,6 +245,7 @@ export default function Transaksi() {
           if (product) {
             addToCartRef.current(product)
           } else {
+            cashierSound.playErrorBuzz()
             toast(`Barcode "${barcode}" tidak ditemukan`, 'error')
           }
         }
@@ -266,16 +273,61 @@ export default function Transaksi() {
      (c.no_telp ?? '').includes(customerSearch))
   ).slice(0, 8), [customers, customerSearch])
 
-  const filtered = useMemo(() => products.filter(p =>
-    p.jenis_transaksi === 'INCOME' &&
-    (p.nama_barang?.toLowerCase().includes(search.toLowerCase()) ||
-     p.kd_barang.toLowerCase().includes(search.toLowerCase()) ||
-     (p.barcode ?? '').toLowerCase().includes(search.toLowerCase()))
-  ), [products, search])
+  // Dynamic Category List with counts
+  const categoryList = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; count: number }>()
+    const incomeProducts = products.filter(p => p.jenis_transaksi === 'INCOME')
+    
+    // First, register from categories table if available
+    categories.forEach(c => {
+      if (c.kategori_barang) {
+        const id = String(c.kd_kategori_barang ?? c.kategori_barang)
+        map.set(id, { id, name: c.kategori_barang, count: 0 })
+      }
+    })
+
+    // Count products and populate map
+    incomeProducts.forEach(p => {
+      const catName = p.kategori_barang || 'Lainnya'
+      const catId = String(p.kd_kategori_barang ?? catName)
+      const existing = map.get(catId) || map.get(catName)
+      if (existing) {
+        existing.count += 1
+      } else {
+        map.set(catId, { id: catId, name: catName, count: 1 })
+      }
+    })
+
+    return Array.from(map.values()).filter(c => c.count > 0)
+  }, [categories, products])
+
+  const filtered = useMemo(() => products.filter(p => {
+    if (p.jenis_transaksi !== 'INCOME') return false
+
+    // Category filter
+    if (selectedCategory !== 'ALL') {
+      const catName = (p.kategori_barang ?? '').toLowerCase()
+      const catId = String(p.kd_kategori_barang ?? '')
+      const selected = selectedCategory.toLowerCase()
+      if (catId !== selectedCategory && catName !== selected) return false
+    }
+
+    // Search query filter
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      const matchName = (p.nama_barang ?? '').toLowerCase().includes(q)
+      const matchKd = p.kd_barang.toLowerCase().includes(q)
+      const matchBarcode = (p.barcode ?? '').toLowerCase().includes(q)
+      if (!matchName && !matchKd && !matchBarcode) return false
+    }
+
+    return true
+  }), [products, search, selectedCategory])
 
   const addToCart = (p: Barang) => {
     const maxStok = p.stok ?? 0
     if (maxStok <= 0) {
+      cashierSound.playErrorBuzz()
       toast('Stok produk habis', 'error')
       return
     }
@@ -283,11 +335,14 @@ export default function Transaksi() {
       const existing = prev.find(c => c.kd_barang === p.kd_barang)
       if (existing) {
         if (existing.qty >= maxStok) {
+          cashierSound.playErrorBuzz()
           toast(`Stok ${p.nama_barang} tidak mencukupi (tersisa ${maxStok})`, 'error')
           return prev
         }
+        cashierSound.playScanBeep()
         return prev.map(c => c.kd_barang === p.kd_barang ? { ...c, qty: c.qty + 1 } : c)
       }
+      cashierSound.playScanBeep()
       return [...prev, { kd_barang: p.kd_barang, nama_barang: p.nama_barang ?? '', harga_jual: p.harga_barang ?? 0, harga_modal: p.harga_modal ?? 0, qty: 1, disc: p.potongan ?? 0 }]
     })
     toast(`${p.nama_barang} ditambahkan ke keranjang`, 'success')
@@ -311,6 +366,7 @@ export default function Transaksi() {
   const handleCameraBarcode = useCallback((barcode: string) => {
     const product = products.find(p => p.barcode === barcode || p.kd_barang === barcode)
     if (!product) {
+      cashierSound.playErrorBuzz()
       toast(`Barcode "${barcode}" tidak ditemukan`, 'error')
       stopCameraScanner()
       return
@@ -464,6 +520,7 @@ export default function Transaksi() {
       ...payload,
     })
     if (r.success) {
+      cashierSound.playSuccessChime()
       setLastKd(r.data?.kd_transaksi ?? null)
       toast(r.message as string)
       setShowStruk(true)
@@ -473,6 +530,7 @@ export default function Transaksi() {
       }
       return true
     } else {
+      cashierSound.playErrorBuzz()
       if (['TRANSACTION_LIMIT', 'FEATURE_LOCKED', 'EXPIRED'].includes(r.error_code ?? '')) {
         showPricing()
       }
@@ -628,20 +686,30 @@ export default function Transaksi() {
 
   const handleBayar = async () => {
     if (loading) return
-    if (!cart.length) return toast('Keranjang kosong', 'error')
+    if (!cart.length) {
+      cashierSound.playErrorBuzz()
+      return toast('Keranjang kosong', 'error')
+    }
     if (!activeShiftId) {
+      cashierSound.playErrorBuzz()
       toast('Shift kasir belum dibuka. Buka shift terlebih dahulu.', 'error')
       return
     }
-    if (jenisBayar !== 'QRIS' && (parseFloat(bayar) || 0) < totalBayar) return toast('Jumlah bayar kurang', 'error')
+    if (jenisBayar !== 'QRIS' && (parseFloat(bayar) || 0) < totalBayar) {
+      cashierSound.playErrorBuzz()
+      const kurang = totalBayar - (parseFloat(bayar) || 0)
+      return toast(`Jumlah bayar kurang ${formatRupiah(kurang)}`, 'error')
+    }
     
     if (isDemo && isOverLimit) {
+      cashierSound.playErrorBuzz()
       toast('Batas transaksi demo tercapai. Upgrade untuk melanjutkan.', 'error')
       return
     }
     if (user?.nama_pengguna) {
       const limit = await api<{ allowed: boolean; used: number; max: number }>('subscription:checkTransactionLimit', user.nama_pengguna)
       if (limit.success && limit.data && !limit.data.allowed) {
+        cashierSound.playErrorBuzz()
         toast(`Limit transaksi harian paket sudah tercapai (${limit.data.used}/${limit.data.max}).`, 'error')
         showPricing()
         return
@@ -748,6 +816,46 @@ export default function Transaksi() {
           >
             Scan Barcode
           </Button>
+        </div>
+
+        {/* Category Filter Chips Bar */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none pt-0.5">
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+              selectedCategory === 'ALL'
+                ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            <span>Semua</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+              selectedCategory === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+            }`}>
+              {products.filter(p => p.jenis_transaksi === 'INCOME').length}
+            </span>
+          </button>
+
+          {categoryList.map(cat => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                selectedCategory === cat.id
+                  ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <span>{cat.name}</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                selectedCategory === cat.id ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+              }`}>
+                {cat.count}
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* Product Catalog Grid */}
@@ -1089,18 +1197,39 @@ export default function Transaksi() {
             helperText={jenisBayar === 'QRIS' ? 'Nominal QRIS otomatis mengikuti total transaksi.' : undefined}
           />
 
-          {paidAmount > 0 && (
-            <div className={`flex justify-between text-xs font-bold pt-1 ${kembalian >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-              <span>Kembalian</span>
-              <span>{formatRupiah(kembalian)}</span>
+          {/* Dynamic Kembalian / Uang Kurang Feedback */}
+          {jenisBayar === 'TUNAI' && bayar.trim() !== '' && (
+            kembalian < 0 ? (
+              <div className="flex items-center justify-between text-xs font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-xl px-3.5 py-2.5">
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle size={15} className="shrink-0 text-red-500" />
+                  <span>Uang Pembayaran Kurang:</span>
+                </div>
+                <span className="text-sm font-black">{formatRupiah(Math.abs(kembalian))}</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-xl px-3.5 py-2.5">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />
+                  <span>Kembalian:</span>
+                </div>
+                <span className="text-sm font-black">{formatRupiah(kembalian)}</span>
+              </div>
+            )
+          )}
+
+          {jenisBayar !== 'TUNAI' && paidAmount > 0 && (
+            <div className="flex justify-between text-xs font-bold pt-1 text-emerald-600 dark:text-emerald-400">
+              <span>Status Pembayaran</span>
+              <span>Sesuai Tagihan</span>
             </div>
           )}
 
           {/* Submit Pay Button */}
           <Button
-            className="w-full h-13 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-md shadow-red-600/20 border-0 active:scale-[0.98] transition-all"
+            className="w-full h-13 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-md shadow-red-600/20 border-0 active:scale-[0.98] transition-all disabled:opacity-50"
             loading={loading}
-            disabled={loading || (jenisBayar === 'QRIS' ? !qrisCanPay : (!cart.length || !bayar))}
+            disabled={loading || (jenisBayar === 'QRIS' ? !qrisCanPay : (!cart.length || !bayar || (jenisBayar === 'TUNAI' && kembalian < 0)))}
             onClick={handleBayar}
             icon={jenisBayar === 'QRIS' ? <QrCode size={18} /> : <ShoppingCart size={18} />}
           >
