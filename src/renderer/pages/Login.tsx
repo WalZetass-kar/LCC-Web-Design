@@ -594,7 +594,7 @@ export default function Login() {
             </button>
           </div>
 
-          <div className="w-full max-w-[450px] my-auto">
+          <div className={`w-full transition-all duration-300 my-auto ${showRegisterForm ? 'max-w-xl' : 'max-w-[450px]'}`}>
             {authLoading ? (
               <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 shadow-xl shadow-slate-900/5 dark:shadow-black/50">
                 <div className="animate-pulse space-y-4">
@@ -602,14 +602,14 @@ export default function Login() {
                   <div className="h-6 bg-slate-200 dark:bg-slate-800 rounded w-3/4"></div>
                   <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-1/2"></div>
                   <div className="space-y-3 mt-6">
-                    <div className="h-13 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
-                    <div className="h-13 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
-                    <div className="h-13 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                    <div className="h-12 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                    <div className="h-12 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+                    <div className="h-12 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
                   </div>
                 </div>
               </div>
             ) : (
-              /* Premium Login Card (Width 440-460px, Padding 28-32px, Radius 24px) */
+              /* Premium Login Card (Width adaptive, Padding 28-32px, Radius 24px) */
               <motion.div
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -619,8 +619,8 @@ export default function Login() {
                 {/* Header */}
                 <div className="mb-6">
                   <div className="flex items-center gap-3.5 mb-4">
-                    <div className="p-1 rounded-2xl border border-red-600/20 bg-red-50 dark:bg-red-950/40">
-                      <img src={appLogo} alt="Zetass Pos" className="h-11 w-11 rounded-xl object-cover" />
+                    <div className="p-1.5 rounded-2xl border border-red-600/20 bg-red-50 dark:bg-red-950/40">
+                      <img src={appLogo} alt="Zetass Pos" className="h-10 w-10 rounded-xl object-contain" />
                     </div>
                     <div>
                       <span className="text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400 block">Autentikasi Pengguna</span>
@@ -633,70 +633,109 @@ export default function Login() {
                   </h2>
                   <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1 leading-relaxed">
                     {showRegisterForm
-                      ? 'Buat akun pembeli dan mulai trial terbatas 3 hari.'
+                      ? 'Buat akun pembeli dan mulai masa uji coba trial 3 hari gratis.'
                       : 'Masuk ke akun Anda untuk membuka dashboard kasir.'}
                   </p>
                 </div>
 
                 {showRegisterForm ? (
-                  /* ─── TRIAL REGISTER FORM ─── */
+                  /* ─── TRIAL REGISTER FORM (Roomy & Responsive Grid) ─── */
                   <form onSubmit={handleTrialRegister} className="space-y-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                        Username <span className="text-red-600">*</span>
-                      </label>
-                      <div className="relative group">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-red-600 transition-colors">
-                          <User size={18} />
-                        </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                          Nama Lengkap <span className="text-red-600">*</span>
+                        </label>
                         <input
-                          value={setupForm.username}
-                          onChange={e => setSetupForm(prev => ({ ...prev, username: e.target.value }))}
-                          autoComplete="username"
-                          className="w-full h-13 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 pl-11 pr-4 text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-4 focus:ring-red-600/10 transition-all"
-                          placeholder="contoh: owner"
+                          value={setupForm.nama_lengkap}
+                          onChange={e => setSetupForm(prev => ({ ...prev, nama_lengkap: e.target.value }))}
+                          className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 text-sm font-semibold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-4 focus:ring-red-600/10 transition-all"
+                          placeholder="Nama pemilik / toko"
+                          required
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                          Username Login <span className="text-red-600">*</span>
+                        </label>
+                        <div className="relative group">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-red-600 transition-colors">
+                            <User size={18} />
+                          </span>
+                          <input
+                            value={setupForm.username}
+                            onChange={e => setSetupForm(prev => ({ ...prev, username: e.target.value }))}
+                            autoComplete="username"
+                            className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 pl-11 pr-4 text-sm font-semibold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-4 focus:ring-red-600/10 transition-all"
+                            placeholder="Contoh: owner, kasir1"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                          Email Valid <span className="text-red-600">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          value={setupForm.email}
+                          onChange={e => setSetupForm(prev => ({ ...prev, email: e.target.value }))}
+                          className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 text-sm font-semibold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-4 focus:ring-red-600/10 transition-all"
+                          placeholder="email@bisnis.com"
+                          required
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                          No WhatsApp (Opsional)
+                        </label>
+                        <input
+                          type="tel"
+                          value={setupForm.no_telp}
+                          onChange={e => setSetupForm(prev => ({ ...prev, no_telp: e.target.value }))}
+                          className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 text-sm font-semibold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-4 focus:ring-red-600/10 transition-all"
+                          placeholder="08123456789"
                         />
                       </div>
                     </div>
 
-                    <Input
-                      label="Nama Lengkap *"
-                      value={setupForm.nama_lengkap}
-                      onChange={e => setSetupForm(prev => ({ ...prev, nama_lengkap: e.target.value }))}
-                      placeholder="Nama pemilik akun"
-                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                          Password <span className="text-red-600">*</span>
+                        </label>
+                        <input
+                          type="password"
+                          value={setupForm.password}
+                          onChange={e => setSetupForm(prev => ({ ...prev, password: e.target.value }))}
+                          className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 text-sm font-semibold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-4 focus:ring-red-600/10 transition-all"
+                          placeholder="Min 8 karakter"
+                          required
+                        />
+                      </div>
 
-                    <Input
-                      label="Email Valid *"
-                      type="email"
-                      value={setupForm.email}
-                      onChange={e => setSetupForm(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="email@bisnis.com"
-                    />
-
-                    <Input
-                      label="No WhatsApp (Opsional)"
-                      value={setupForm.no_telp}
-                      onChange={e => setSetupForm(prev => ({ ...prev, no_telp: e.target.value }))}
-                      placeholder="contoh: 08123456789"
-                    />
-
-                    <Input
-                      label="Password *"
-                      type="password"
-                      value={setupForm.password}
-                      onChange={e => setSetupForm(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Minimal 8 karakter"
-                      helperText="Wajib kombinasi huruf besar, kecil, angka & simbol"
-                    />
-
-                    <Input
-                      label="Konfirmasi Password *"
-                      type="password"
-                      value={setupForm.confirmPassword}
-                      onChange={e => setSetupForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                      placeholder="Ulangi password"
-                    />
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                          Konfirmasi Password <span className="text-red-600">*</span>
+                        </label>
+                        <input
+                          type="password"
+                          value={setupForm.confirmPassword}
+                          onChange={e => setSetupForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                          className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-4 text-sm font-semibold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-4 focus:ring-red-600/10 transition-all"
+                          placeholder="Ulangi password"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-1">
+                      * Password wajib kombinasi huruf besar, kecil, angka, dan simbol (minimal 8 karakter).
+                    </p>
 
                     <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30 p-3.5">
                       <p className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Ketentuan Trial</p>
@@ -714,7 +753,7 @@ export default function Login() {
 
                     <Button
                       type="submit"
-                      className="w-full h-13 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white font-bold text-sm shadow-md shadow-red-600/20 border-0"
+                      className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white font-bold text-sm shadow-md shadow-red-600/20 border-0"
                       size="lg"
                       loading={loading}
                     >
@@ -724,7 +763,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => { setAuthView('login'); setError('') }}
-                      className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                      className="w-full h-11 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
                     >
                       Sudah Punya Akun? Masuk Halaman Login
                     </button>
