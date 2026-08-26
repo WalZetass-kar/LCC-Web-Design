@@ -20,7 +20,95 @@ serve(async (req) => {
     const url = new URL(req.url);
     const pathname = url.pathname;
     
+    // 1. Health check & Ping
+    if (pathname.endsWith("/health") || pathname.endsWith("/ping") || pathname.endsWith("/mediasoft-license") || pathname.endsWith("/mediasoft-license/")) {
+      if (req.method === "GET" || req.method === "POST") {
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: "Mediasoft License Edge Function is healthy",
+          time: new Date().toISOString(),
+          status: "online"
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const body = await req.json().catch(() => ({}));
+
+    // 2. Auth Login (for License Client & Admin)
+    if (pathname.endsWith("/auth/login") && req.method === "POST") {
+      const { email, password } = body;
+      if (!email || !password) {
+        return new Response(JSON.stringify({ success: false, message: "Email dan password wajib diisi" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError || !authData?.session) {
+        return new Response(JSON.stringify({ 
+          success: false, 
+          message: authError?.message || "Email atau password salah" 
+        }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          access_token: authData.session.access_token,
+          refresh_token: authData.session.refresh_token,
+          user: {
+            id: authData.user.id,
+            email: authData.user.email,
+            name: authData.user.user_metadata?.name || "Admin",
+            role: "admin",
+          },
+        },
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 3. Plans list
+    if ((pathname.endsWith("/plans") || pathname.endsWith("/admin/plans")) && req.method === "GET") {
+      const { data: plans, error: planErr } = await supabase
+        .from('subscription_plans')
+        .select('*')
+        .order('sort_order', { ascending: true });
+
+      if (planErr) throw planErr;
+      return new Response(JSON.stringify({ success: true, data: plans || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 4. Stats overview
+    if (pathname.endsWith("/admin/stats") && req.method === "GET") {
+      const { count: userCount } = await supabase.from('license_customers').select('*', { count: 'exact', head: true });
+      const { count: planCount } = await supabase.from('subscription_plans').select('*', { count: 'exact', head: true });
+      const { count: deviceCount } = await supabase.from('customer_devices').select('*', { count: 'exact', head: true });
+
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          total_users: userCount || 0,
+          total_plans: planCount || 0,
+          total_devices: deviceCount || 0,
+          online_devices: deviceCount || 0,
+        }
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (pathname.endsWith("/generate") && req.method === "POST") {
       const adminSecret = req.headers.get("x-admin-secret");

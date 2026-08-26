@@ -109,6 +109,31 @@ export default function LicenseServerConfig() {
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
         <h2 className="font-semibold text-slate-800 dark:text-white mb-4">Konfigurasi License Server</h2>
+        
+        {/* Preset server quick select */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => {
+              setForm(f => ({ ...f, url: 'https://azhkvmkmimepmflzqqty.supabase.co/functions/v1/mediasoft-license', email: 'admin@lcc-web-design.local' }))
+              setPingOk(null)
+            }}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 hover:bg-red-100 transition-colors flex items-center gap-1.5"
+          >
+            <span>🌐 Supabase Cloud (Default)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setForm(f => ({ ...f, url: 'http://localhost:4000/api', email: 'admin@lcc-web-design.local' }))
+              setPingOk(null)
+            }}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 transition-colors flex items-center gap-1.5"
+          >
+            <span>💻 Local Server (Port 4000)</span>
+          </button>
+        </div>
+
         <form onSubmit={connect} className="space-y-3">
           <div>
             <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1.5">URL License Server</label>
@@ -128,7 +153,7 @@ export default function LicenseServerConfig() {
                   : pingOk === true ? <Wifi className="w-4 h-4 text-green-500" />
                   : pingOk === false ? <WifiOff className="w-4 h-4 text-red-500" />
                   : <Wifi className="w-4 h-4 text-slate-400" />}
-                <span className="text-xs">Ping</span>
+                <span className="text-xs font-bold">Ping</span>
               </button>
             </div>
             {pingOk === true && <p className="text-xs text-green-600 mt-1">✓ Server dapat dijangkau</p>}
