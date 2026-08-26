@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type PointerEvent } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { BarChart2, LayoutDashboard, Package, Settings, ShoppingCart } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
@@ -43,6 +44,12 @@ export default function MobileBottomNav() {
   const btnRef = useRef<HTMLAnchorElement>(null)
   const rippleId = useRef(0)
 
+  const triggerHaptic = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(14) } catch {}
+    }
+  }
+
   // Track window resize so notch SVG scales perfectly with zero distortion
   useEffect(() => {
     const handleResize = () => setNavWidth(window.innerWidth)
@@ -76,6 +83,7 @@ export default function MobileBottomNav() {
   const isKasirActive = location.pathname.startsWith('/transaksi')
 
   const handlePointerDown = (e: PointerEvent<HTMLAnchorElement>) => {
+    triggerHaptic()
     setPressing(true)
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
@@ -137,11 +145,12 @@ export default function MobileBottomNav() {
                 key={to}
                 to={to}
                 end={to === '/'}
+                onClick={triggerHaptic}
                 aria-label={label}
                 className={({ isActive }) =>
-                  `relative flex flex-col items-center justify-center py-1.5 px-2.5 rounded-2xl transition-all duration-200 ${
+                  `relative flex flex-col items-center justify-center py-1.5 px-3 rounded-2xl transition-colors duration-200 ${
                     isActive
-                      ? 'text-red-600 dark:text-red-500 font-semibold scale-[1.02]'
+                      ? 'text-red-600 dark:text-red-500 font-bold'
                       : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 font-medium'
                   }`
                 }
@@ -149,18 +158,32 @@ export default function MobileBottomNav() {
                 {({ isActive }) => (
                   <>
                     {isActive && (
-                      <span className="absolute inset-0 rounded-2xl bg-red-50/80 dark:bg-red-950/30 transition-all duration-200" />
+                      <motion.div
+                        layoutId="mobile-nav-active-pill"
+                        className="absolute inset-0 rounded-2xl bg-red-50/90 dark:bg-red-950/40 border border-red-200/60 dark:border-red-900/40 shadow-sm"
+                        transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                      />
                     )}
-                    <Icon
-                      size={20}
-                      strokeWidth={isActive ? 2.4 : 1.8}
-                      className="relative transition-transform duration-200"
-                    />
-                    <span className="relative text-[10px] leading-none mt-1 tracking-tight truncate max-w-[56px]">
-                      {label}
-                    </span>
+                    <motion.div
+                      animate={{ scale: isActive ? 1.08 : 1, y: isActive ? -1 : 0 }}
+                      transition={{ type: 'spring', stiffness: 450, damping: 24 }}
+                      className="relative flex flex-col items-center"
+                    >
+                      <Icon
+                        size={20}
+                        strokeWidth={isActive ? 2.4 : 1.8}
+                        className="transition-colors duration-200"
+                      />
+                      <span className="text-[10px] leading-none mt-1 tracking-tight truncate max-w-[56px]">
+                        {label}
+                      </span>
+                    </motion.div>
                     {isActive && (
-                      <span className="relative w-1 h-1 rounded-full bg-red-600 dark:bg-red-500 mt-0.5 animate-pulse" />
+                      <motion.span
+                        layoutId="mobile-nav-active-dot"
+                        className="relative w-1 h-1 rounded-full bg-red-600 dark:bg-red-500 mt-0.5"
+                        transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                      />
                     )}
                   </>
                 )}
@@ -177,11 +200,12 @@ export default function MobileBottomNav() {
               <NavLink
                 key={to}
                 to={to}
+                onClick={triggerHaptic}
                 aria-label={label}
                 className={({ isActive }) =>
-                  `relative flex flex-col items-center justify-center py-1.5 px-2.5 rounded-2xl transition-all duration-200 ${
+                  `relative flex flex-col items-center justify-center py-1.5 px-3 rounded-2xl transition-colors duration-200 ${
                     isActive
-                      ? 'text-red-600 dark:text-red-500 font-semibold scale-[1.02]'
+                      ? 'text-red-600 dark:text-red-500 font-bold'
                       : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 font-medium'
                   }`
                 }
@@ -189,18 +213,32 @@ export default function MobileBottomNav() {
                 {({ isActive }) => (
                   <>
                     {isActive && (
-                      <span className="absolute inset-0 rounded-2xl bg-red-50/80 dark:bg-red-950/30 transition-all duration-200" />
+                      <motion.div
+                        layoutId="mobile-nav-active-pill"
+                        className="absolute inset-0 rounded-2xl bg-red-50/90 dark:bg-red-950/40 border border-red-200/60 dark:border-red-900/40 shadow-sm"
+                        transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                      />
                     )}
-                    <Icon
-                      size={20}
-                      strokeWidth={isActive ? 2.4 : 1.8}
-                      className="relative transition-transform duration-200"
-                    />
-                    <span className="relative text-[10px] leading-none mt-1 tracking-tight truncate max-w-[56px]">
-                      {label}
-                    </span>
+                    <motion.div
+                      animate={{ scale: isActive ? 1.08 : 1, y: isActive ? -1 : 0 }}
+                      transition={{ type: 'spring', stiffness: 450, damping: 24 }}
+                      className="relative flex flex-col items-center"
+                    >
+                      <Icon
+                        size={20}
+                        strokeWidth={isActive ? 2.4 : 1.8}
+                        className="transition-colors duration-200"
+                      />
+                      <span className="text-[10px] leading-none mt-1 tracking-tight truncate max-w-[56px]">
+                        {label}
+                      </span>
+                    </motion.div>
                     {isActive && (
-                      <span className="relative w-1 h-1 rounded-full bg-red-600 dark:bg-red-500 mt-0.5 animate-pulse" />
+                      <motion.span
+                        layoutId="mobile-nav-active-dot"
+                        className="relative w-1 h-1 rounded-full bg-red-600 dark:bg-red-500 mt-0.5"
+                        transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                      />
                     )}
                   </>
                 )}
