@@ -905,10 +905,8 @@ Terima kasih atas kunjungan Anda! 🙏`
       </div>
 
       {/* Cart Container Card */}
-      <div className={`flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-3.5 ${
-        isMobileSheet ? 'max-h-60 overflow-hidden' : 'flex-1 overflow-hidden'
-      }`}>
-        <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 mb-2">
+      <div className="flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 p-3 shrink-0">
+        <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 dark:border-slate-800 mb-2">
           <div className="flex items-center gap-2">
             <ShoppingCart size={16} className="text-red-600" />
             <span className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">Keranjang Belanja</span>
@@ -966,11 +964,11 @@ Terima kasih atas kunjungan Anda! 🙏`
           </div>
         </div>
 
-        {/* Cart Items Scroll Area */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin space-y-2 pr-1">
+        {/* Cart Items Scroll Area - Isolated scrolling */}
+        <div className={`overflow-y-auto scrollbar-thin space-y-2 pr-1 ${isMobileSheet ? 'max-h-60' : 'max-h-44 xl:max-h-52'}`}>
           {cart.length === 0 ? (
-            <div className="py-8 text-center text-slate-400 space-y-1.5">
-              <ShoppingCart size={28} className="mx-auto opacity-30" />
+            <div className="py-6 text-center text-slate-400 space-y-1">
+              <ShoppingCart size={24} className="mx-auto opacity-30" />
               <p className="text-xs font-semibold">Keranjang Belanja Kosong</p>
               <p className="text-[11px]">Klik produk untuk menambahkan item</p>
             </div>
@@ -1174,184 +1172,190 @@ Terima kasih atas kunjungan Anda! 🙏`
   )
 
   return (
-    <div className="flex flex-col gap-3 lg:h-[calc(100vh-7rem)] lg:flex-row select-none">
+    <div className="flex flex-col gap-3 lg:h-[calc(100vh-8.5rem)] lg:flex-row select-none">
       
-      <div className="flex min-w-0 flex-none lg:flex-1 flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm lg:p-5 lg:min-h-0 lg:max-h-none lg:overflow-y-auto">
+      {/* Left Column (Katalog Produk) */}
+      <div className="flex min-w-0 flex-none lg:flex-1 flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm lg:p-4 lg:h-full lg:overflow-hidden">
         
-        {/* Shift Warning Banner */}
-        {!activeShiftId && (
-          <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30 p-3.5 text-xs text-amber-800 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle size={16} className="text-amber-600 shrink-0" />
-              <span>Shift kasir belum dibuka. Buka shift untuk memproses transaksi.</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate('/shifts')}
-              className="rounded-lg bg-amber-600 px-3 py-1.5 font-bold text-white transition-colors hover:bg-amber-700 shadow-sm shrink-0"
-            >
-              Buka Shift Kasir
-            </button>
-          </div>
-        )}
-
-        {/* Top Header & Keyboard Shortcuts Bar */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Katalog Kasir</h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-red-600/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 text-[11px] font-bold border border-red-600/20">
-                {filtered.length} Produk
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Pilih produk atau scan barcode untuk menambahkan ke keranjang</p>
-          </div>
-
-          <div className="flex items-center justify-between sm:justify-end gap-2">
-            {/* Mobile Header Cart Shortcut */}
-            {cart.length > 0 && (
+        {/* Fixed Header Section (Shift banner, Title, Shortcuts, Search, Category chips) */}
+        <div className="shrink-0 flex flex-col gap-2.5">
+          {/* Shift Warning Banner */}
+          {!activeShiftId && (
+            <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                <span>Shift kasir belum dibuka. Buka shift untuk memproses transaksi.</span>
+              </div>
               <button
                 type="button"
-                onClick={() => setMobileCartDrawerOpen(true)}
-                className="lg:hidden px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-red-600/30 active:scale-95 transition-transform"
+                onClick={() => navigate('/shifts')}
+                className="rounded-lg bg-amber-600 px-3 py-1.5 font-bold text-white transition-colors hover:bg-amber-700 shadow-sm shrink-0"
               >
-                <ShoppingCart size={14} />
-                <span>{totalCartQty} Item</span>
-                <span className="bg-white/20 px-1.5 py-0.5 rounded-md text-[10px]">{formatRupiah(totalBayar)}</span>
+                Buka Shift Kasir
               </button>
-            )}
+            </div>
+          )}
 
-            <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 font-medium">
-              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F1 Cari</span>
-              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F2 Bayar</span>
-              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F5 Proses</span>
-              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">Esc Reset</span>
+          {/* Top Header & Keyboard Shortcuts Bar */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Katalog Kasir</h1>
+                <span className="px-2.5 py-0.5 rounded-full bg-red-600/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 text-[11px] font-bold border border-red-600/20">
+                  {filtered.length} Produk
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Pilih produk atau scan barcode untuk menambahkan ke keranjang</p>
+            </div>
+
+            <div className="flex items-center justify-between sm:justify-end gap-2">
+              {/* Mobile Header Cart Shortcut */}
+              {cart.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMobileCartDrawerOpen(true)}
+                  className="lg:hidden px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-red-600/30 active:scale-95 transition-transform"
+                >
+                  <ShoppingCart size={14} />
+                  <span>{totalCartQty} Item</span>
+                  <span className="bg-white/20 px-1.5 py-0.5 rounded-md text-[10px]">{formatRupiah(totalBayar)}</span>
+                </button>
+              )}
+
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 font-medium">
+                <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F1 Cari</span>
+                <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F2 Bayar</span>
+                <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">F5 Proses</span>
+                <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono">Esc Reset</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Search Input & Camera Scanner Button */}
-        <div className="flex gap-2">
-          <Input
-            ref={searchRef}
-            placeholder="Cari produk (Nama / Kode / Barcode)..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            onKeyDown={handleSearchKey}
-            icon={<Search size={16} className="text-slate-400" />}
-            className="flex-1 rounded-xl border-slate-200 dark:border-slate-800 focus:border-red-600 focus:ring-red-600/10"
-          />
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={openCameraScanner}
-            icon={<ScanLine size={16} />}
-            className="shrink-0 rounded-xl border-slate-200 dark:border-slate-800 font-bold"
-          >
-            Scan Barcode
-          </Button>
-        </div>
-
-        {/* Category Filter Chips Bar */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none pt-0.5">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory('ALL')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-              selectedCategory === 'ALL'
-                ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-            }`}
-          >
-            <span>Semua</span>
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-              selectedCategory === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-            }`}>
-              {products.filter(p => p.jenis_transaksi === 'INCOME').length}
-            </span>
-          </button>
-
-          {categoryList.map(cat => (
-            <button
-              key={cat.id}
+          {/* Search Input & Camera Scanner Button */}
+          <div className="flex gap-2">
+            <Input
+              ref={searchRef}
+              placeholder="Cari produk (Nama / Kode / Barcode)..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={handleSearchKey}
+              icon={<Search size={16} className="text-slate-400" />}
+              className="flex-1 rounded-xl border-slate-200 dark:border-slate-800 focus:border-red-600 focus:ring-red-600/10"
+            />
+            <Button
               type="button"
-              onClick={() => setSelectedCategory(cat.id)}
+              variant="secondary"
+              onClick={openCameraScanner}
+              icon={<ScanLine size={16} />}
+              className="shrink-0 rounded-xl border-slate-200 dark:border-slate-800 font-bold"
+            >
+              Scan Barcode
+            </Button>
+          </div>
+
+          {/* Category Filter Chips Bar */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none pt-0.5">
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('ALL')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                selectedCategory === cat.id
+                selectedCategory === 'ALL'
                   ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
-              <span>{cat.name}</span>
+              <span>Semua</span>
               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                selectedCategory === cat.id ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                selectedCategory === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
               }`}>
-                {cat.count}
+                {products.filter(p => p.jenis_transaksi === 'INCOME').length}
               </span>
             </button>
-          ))}
+
+            {categoryList.map(cat => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                  selectedCategory === cat.id
+                    ? 'bg-red-600 text-white shadow-sm shadow-red-600/20'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <span>{cat.name}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  selectedCategory === cat.id ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                }`}>
+                  {cat.count}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Product Catalog Grid */}
-        {productsLoading ? (
-          <ProductGridSkeleton />
-        ) : filtered.length === 0 ? (
-          <div className="flex items-center justify-center h-64 text-slate-400">
-            <div className="text-center space-y-2">
-              <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
-                <ShoppingCart size={32} />
+        {/* Product Catalog Grid (Scrolls independently) */}
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 scrollbar-thin">
+          {productsLoading ? (
+            <ProductGridSkeleton />
+          ) : filtered.length === 0 ? (
+            <div className="flex items-center justify-center h-64 text-slate-400">
+              <div className="text-center space-y-2">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
+                  <ShoppingCart size={32} />
+                </div>
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Produk Tidak Ditemukan</p>
+                <p className="text-xs text-slate-400">Coba ubah kata kunci pencarian Anda</p>
               </div>
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Produk Tidak Ditemukan</p>
-              <p className="text-xs text-slate-400">Coba ubah kata kunci pencarian Anda</p>
             </div>
-          </div>
-        ) : (
-          <div className="grid gap-3 p-1 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-            {filtered.map((p, index) => {
-              const isOutOfStock = (p.stok ?? 0) <= 0
-              return (
-                <button
-                  key={p.kd_barang ?? String(index)}
-                  onClick={() => addToCart(p)}
-                  disabled={isOutOfStock}
-                  className={`w-full rounded-2xl border p-3 text-left transition-all relative overflow-hidden flex flex-col justify-between ${
-                    isOutOfStock
-                      ? 'cursor-not-allowed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 opacity-50'
-                      : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 active:border-red-600/40 active:shadow-md'
-                  }`}
-                >
-                  <div>
-                    <div className="mb-2.5 flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800/80 relative">
-                      {p.foto_barang ? (
-                        <img src={p.foto_barang} alt={p.nama_barang ?? ''} className="w-full h-full object-cover" />
-                      ) : (
-                        <ImageIcon size={32} className="text-slate-400 opacity-60" />
-                      )}
-                      <span className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        isOutOfStock ? 'bg-red-500 text-white' : (p.stok ?? 0) <= 5 ? 'bg-amber-500 text-white' : 'bg-slate-900/70 text-white backdrop-blur-sm'
-                      }`}>
-                        {isOutOfStock ? 'Habis' : `${p.stok} stok`}
-                      </span>
+          ) : (
+            <div className="grid gap-3 p-1 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+              {filtered.map((p, index) => {
+                const isOutOfStock = (p.stok ?? 0) <= 0
+                return (
+                  <button
+                    key={p.kd_barang ?? String(index)}
+                    onClick={() => addToCart(p)}
+                    disabled={isOutOfStock}
+                    className={`w-full rounded-2xl border p-3 text-left transition-all relative overflow-hidden flex flex-col justify-between ${
+                      isOutOfStock
+                        ? 'cursor-not-allowed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 opacity-50'
+                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 active:border-red-600/40 active:shadow-md'
+                    }`}
+                  >
+                    <div>
+                      <div className="mb-2.5 flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800/80 relative">
+                        {p.foto_barang ? (
+                          <img src={p.foto_barang} alt={p.nama_barang ?? ''} className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageIcon size={32} className="text-slate-400 opacity-60" />
+                        )}
+                        <span className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          isOutOfStock ? 'bg-red-500 text-white' : (p.stok ?? 0) <= 5 ? 'bg-amber-500 text-white' : 'bg-slate-900/70 text-white backdrop-blur-sm'
+                        }`}>
+                          {isOutOfStock ? 'Habis' : `${p.stok} stok`}
+                        </span>
+                      </div>
+                      <p className="font-bold text-xs text-slate-900 dark:text-white truncate leading-snug">{p.nama_barang}</p>
                     </div>
-                    <p className="font-bold text-xs text-slate-900 dark:text-white truncate leading-snug">{p.nama_barang}</p>
-                  </div>
 
-                  <div className="mt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 pt-2">
-                    <p className="text-red-600 dark:text-red-400 font-extrabold text-sm">{formatRupiah(p.harga_barang)}</p>
-                    <div className="w-6 h-6 rounded-lg bg-red-600/10 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center">
-                      <Plus size={14} />
+                    <div className="mt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 pt-2">
+                      <p className="text-red-600 dark:text-red-400 font-extrabold text-sm">{formatRupiah(p.harga_barang)}</p>
+                      <div className="w-6 h-6 rounded-lg bg-red-600/10 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center">
+                        <Plus size={14} />
+                      </div>
                     </div>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
       </div>
 
       {/* Desktop Side-by-Side Cart & Payment Panel */}
-      <div className="hidden lg:flex flex-none w-full shrink-0 flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm lg:w-[26rem] xl:w-[28rem] lg:shrink">
+      <div className="hidden lg:flex flex-none w-full shrink-0 flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 sm:p-4 shadow-sm lg:w-[26rem] xl:w-[28rem] lg:h-full lg:overflow-y-auto scrollbar-thin">
         {renderCartAndPayment(false)}
       </div>
 
