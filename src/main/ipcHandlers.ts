@@ -1,5 +1,5 @@
 import type { IpcMain, IpcMainInvokeEvent } from 'electron'
-import { dialog, BrowserWindow } from 'electron'
+import { app, dialog, BrowserWindow } from 'electron'
 import path from 'path'
 import { BarangController } from '../backend/controllers/BarangController.js'
 import { KategoriController } from '../backend/controllers/KategoriController.js'
@@ -1235,4 +1235,55 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
     }
   })
   ipcMain.handle('print:execute', withDemoGuard('print:execute', printExecute))
+
+  // ─── WINDOW / CUSTOMER DISPLAY ─────────────────────────────────────
+  let customerDisplayWindow: BrowserWindow | null = null
+
+  const openCustomerDisplay = registerChannel('window:openCustomerDisplay', async () => {
+    try {
+      if (customerDisplayWindow && !customerDisplayWindow.isDestroyed()) {
+        customerDisplayWindow.show()
+        customerDisplayWindow.focus()
+        return { success: true, message: 'Layar Customer Display sudah terbuka' }
+      }
+
+      const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+      const preloadPath = isDev 
+        ? path.join(process.cwd(), 'src', 'main', 'preload.cjs')
+        : path.join(app.getAppPath(), 'dist-electron', 'main', 'preload.cjs')
+
+      customerDisplayWindow = new BrowserWindow({
+        width: 1024,
+        height: 700,
+        minWidth: 800,
+        minHeight: 500,
+        title: 'Zetass Pos - Customer Display',
+        webPreferences: {
+          preload: preloadPath,
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+          webSecurity: true,
+        },
+        backgroundColor: '#020617',
+        autoHideMenuBar: true,
+      })
+
+      if (isDev) {
+        await customerDisplayWindow.loadURL('http://localhost:5173/#/customer-display')
+      } else {
+        const rendererIndexPath = path.join(app.getAppPath(), 'dist', 'index.html')
+        await customerDisplayWindow.loadFile(rendererIndexPath, { hash: '/customer-display' })
+      }
+
+      customerDisplayWindow.on('closed', () => {
+        customerDisplayWindow = null
+      })
+
+      return { success: true, message: 'Layar Customer Display berhasil dibuka' }
+    } catch (error) {
+      return { success: false, message: String(error) }
+    }
+  })
+  ipcMain.handle('window:openCustomerDisplay', withDemoGuard('window:openCustomerDisplay', openCustomerDisplay))
 }

@@ -496,6 +496,9 @@ const ALLOWED_CHANNELS = new Set([
   'print:getPrinters',
   'print:execute',
 
+  // Window / Display
+  'window:openCustomerDisplay',
+
   // Employee / HR
   'employee:getAll',
   'employee:getById',

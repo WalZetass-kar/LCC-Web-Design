@@ -146,6 +146,19 @@ export function configureElectronSecurity(isDev: boolean) {
 
 export function attachWindowSecurity(win: ElectronBrowserWindow, isDev: boolean) {
   win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.includes('customer-display') || isTrustedRendererOrigin(url, isDev)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 1024,
+          height: 700,
+          minWidth: 800,
+          minHeight: 500,
+          title: 'Zetass Pos - Customer Display',
+          autoHideMenuBar: true,
+        },
+      }
+    }
     void openExternalHttps(url)
     return { action: 'deny' }
   })
