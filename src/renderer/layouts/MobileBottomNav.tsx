@@ -7,23 +7,23 @@ import { useAuth } from '../contexts/AuthContext'
 import { hasMinRole } from '../../shared/config/rbac'
 
 /**
- * Calculates a smooth cubic Bézier Concave Notch SVG path.
- * Hugs a 72px floating button (+ 4px ring) with a natural curve.
+ * Calculates a smooth, precision cubic Bézier Concave Notch SVG path.
+ * Snugly hugs the 64px floating Kasir button (+ 3.5px ring) with an organic, uniform margin.
  */
 function getNotchPath(w: number, h: number = 72) {
   const rTop = 20 // Top corner radius of navbar
   const cx = w / 2
   
-  // Cutout parameters: 112px total top cut width, 40px depth
-  const cutW = 50
-  const cutH = 40
+  // Cutout parameters: 88px total top opening, 37px bottom depth
+  const cutW = 44
+  const cutH = 37
   
   return `
     M 0,${rTop}
     A ${rTop},${rTop} 0 0,1 ${rTop},0
     L ${cx - cutW},0
-    C ${cx - 38},0 ${cx - 22},${cutH} ${cx},${cutH}
-    C ${cx + 22},${cutH} ${cx + 38},0 ${cx + cutW},0
+    C ${cx - 31},0 ${cx - 21},${cutH} ${cx},${cutH}
+    C ${cx + 21},${cutH} ${cx + 31},0 ${cx + cutW},0
     L ${w - rTop},0
     A ${rTop},${rTop} 0 0,1 ${w},${rTop}
     L ${w},${h}
@@ -257,11 +257,11 @@ export default function MobileBottomNav() {
           onPointerDown={handlePointerDown}
           className="absolute left-1/2 top-0 z-20 block group"
           style={{
-            width: 62,
-            height: 62,
-            marginTop: -26,
+            width: 64,
+            height: 64,
+            marginTop: -27,
             transform: entered
-              ? `translateX(-50%) scale(${pressing ? 0.94 : isKasirActive ? 1.05 : 1})`
+              ? `translateX(-50%) scale(${pressing ? 0.93 : isKasirActive ? 1.04 : 1})`
               : 'translateX(-50%) scale(0.4)',
             opacity: entered ? 1 : 0,
             transition: entered
@@ -272,8 +272,8 @@ export default function MobileBottomNav() {
           <div
             className={`relative flex flex-col items-center justify-center w-full h-full rounded-full overflow-hidden transition-all duration-300 select-none ${
               isKasirActive
-                ? 'bg-red-600 text-white ring-4 ring-white dark:ring-slate-900 shadow-[0_14px_32px_-4px_rgba(220,38,38,0.55),_0_6px_16px_rgba(0,0,0,0.12)]'
-                : 'bg-red-600 text-white ring-4 ring-white dark:ring-slate-900 shadow-[0_10px_28px_-6px_rgba(220,38,38,0.4),_0_4px_12px_rgba(0,0,0,0.1)] hover:bg-red-700'
+                ? 'bg-red-600 text-white ring-[3.5px] ring-white dark:ring-slate-900 shadow-[0_12px_28px_-4px_rgba(220,38,38,0.6),_0_6px_16px_rgba(0,0,0,0.12)]'
+                : 'bg-red-600 text-white ring-[3.5px] ring-white dark:ring-slate-900 shadow-[0_8px_22px_-4px_rgba(220,38,38,0.45),_0_4px_12px_rgba(0,0,0,0.1)] hover:bg-red-700'
             }`}
           >
             <ShoppingCart
