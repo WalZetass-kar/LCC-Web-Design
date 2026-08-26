@@ -2,10 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ══════════════════════════════════════════════════════════════════════
    🎨 THEME SYSTEM — CSS Custom Properties
    All shadow/glow colors derive from these so every theme works fully.
-   ══════════════════════════════════════════════════════════════════════ */
 
 /* ── Default theme: Pink Soft ── */
 :root {
@@ -208,9 +206,7 @@
   --chart-bar-color: #ec4899;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
    BASE STYLES
-   ══════════════════════════════════════════════════════════════════════ */
 
 @layer base {
   body {
@@ -222,9 +218,7 @@
   }
 }
 
-/* ══════════════════════════════════════════════════════════════════════
    TYPOGRAPHY SCALE — Consistent heading hierarchy
-   ══════════════════════════════════════════════════════════════════════ */
 
 @layer components {
   .heading-1 { @apply text-xl sm:text-2xl font-bold text-slate-800 dark:text-white; }
@@ -235,9 +229,7 @@
   .text-label { @apply text-sm font-semibold text-slate-700 dark:text-slate-300; }
 }
 
-/* ══════════════════════════════════════════════════════════════════════
    GLASSMORPHISM UTILITIES — Theme-aware glass effects
-   ══════════════════════════════════════════════════════════════════════ */
 
 @layer utilities {
   /* Glass effect — uses theme-aware shadow color */
@@ -320,9 +312,7 @@
   }
 }
 
-/* ══════════════════════════════════════════════════════════════════════
    COMPONENT OVERRIDES — Theme-aware focus & selection
-   ══════════════════════════════════════════════════════════════════════ */
 
 /* Focus rings — use primary color from theme */
 *:focus-visible {
@@ -344,9 +334,7 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(var(--glass-shadow-rgb), 0.1) !important;
 }
 
-/* ══════════════════════════════════════════════════════════════════════
    KEYFRAME ANIMATIONS
-   ══════════════════════════════════════════════════════════════════════ */
 
 @keyframes slideIn {
   from {
@@ -388,9 +376,7 @@ select:focus {
   }
 }
 
-/* ══════════════════════════════════════════════════════════════════════
    DEMO MODE STYLES
-   ══════════════════════════════════════════════════════════════════════ */
 
 /* Top banner gradient with animation */
 .demo-banner-gradient {
@@ -442,9 +428,7 @@ select:focus {
   color: rgba(248, 113, 113, 0.04);
 }
 
-/* ══════════════════════════════════════════════════════════════════════
    PRICING POPUP ANIMATIONS
-   ══════════════════════════════════════════════════════════════════════ */
 
 /* Backdrop fade-in with subtle blur ramp */
 .pricing-backdrop-animate {

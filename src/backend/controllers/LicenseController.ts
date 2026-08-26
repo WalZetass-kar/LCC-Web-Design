@@ -1,5 +1,6 @@
 import { sqlite } from '../../database/connection.js'
 import { PenggunaModel } from '../models/PenggunaModel.js'
+import { PlanModel } from '../models/PlanModel.js'
 import {
   syncBuyerLicense as fbSyncBuyerLicense,
   heartbeat as fbHeartbeat
@@ -146,21 +147,125 @@ export class LicenseController {
 
   static async syncBuyerLicense(username: string, deviceInfo?: unknown): Promise<ApiResult<any>> {
     const user = sqlite
-      .prepare(`SELECT nama_pengguna, email, is_buyer FROM mediasoft_pengguna WHERE nama_pengguna = ? LIMIT 1`)
-      .get(username) as { nama_pengguna?: string; email?: string | null; is_buyer?: number | null } | undefined
+      .prepare(`SELECT id, nama_pengguna, email, is_buyer, hak_akses, subscription_plan_id, subscription_expires_at FROM mediasoft_pengguna WHERE nama_pengguna = ? LIMIT 1`)
+      .get(username) as { id?: number; nama_pengguna?: string; email?: string | null; is_buyer?: number | null; hak_akses?: string; subscription_plan_id?: number | null; subscription_expires_at?: string | null } | undefined
 
-    if (!user?.nama_pengguna || !user.is_buyer || !user.email) {
-      return { success: true, data: { skipped: true, reason: 'not_remote_buyer' } }
+    if (!user?.nama_pengguna) {
+      return { success: false, message: 'User tidak ditemukan' }
     }
 
-    const r = await fbSyncBuyerLicense({ email: user.email, deviceInfo: deviceInfo as any })
-    if (!r.success) {
-      const code = String((r as any).error_code ?? '').toUpperCase()
-      if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED', 'EXPIRED'].includes(code)) {
-        sqlite.prepare(`UPDATE mediasoft_pengguna SET status_user = 'Nonaktif' WHERE nama_pengguna = ?`).run(username)
+    // Try remote sync if buyer and email exists
+    if (user.is_buyer && user.email) {
+      try {
+        const r = await fbSyncBuyerLicense({ email: user.email, deviceInfo: deviceInfo as any })
+        if (r.success && r.data) {
+          const sub = (r.data as any)?.subscription
+          const plan = sub?.plan
+          const expiresAt = typeof sub?.expires_at === 'string' ? sub.expires_at : null
+
+          if (plan) {
+            let localPlanId: number | null = null
+            const foundPlan = sqlite.prepare('SELECT id FROM mediasoft_subscription_plans WHERE code = ? OR name = ? LIMIT 1').get(plan.code, plan.name) as { id?: number } | undefined
+            if (foundPlan?.id) {
+              localPlanId = foundPlan.id
+            } else {
+              PlanModel.create({
+                code: plan.code,
+                name: plan.name || 'Paket Pro',
+                price: 0,
+                duration_days: plan.duration_days ?? 30,
+                description: plan.description,
+                features: Array.isArray(plan.features) ? plan.features : [],
+                max_devices: plan.max_devices ?? 1,
+                max_transactions_per_day: plan.max_transactions_per_day ?? -1,
+                max_products: plan.max_products ?? -1,
+                max_users: plan.max_users ?? 1,
+                feature_flags: plan.feature_flags ?? {},
+              })
+              const inserted = sqlite.prepare('SELECT id FROM mediasoft_subscription_plans WHERE code = ? OR name = ? ORDER BY id DESC LIMIT 1').get(plan.code, plan.name) as { id?: number } | undefined
+              localPlanId = inserted?.id ?? null
+            }
+
+            sqlite.prepare(`
+              UPDATE mediasoft_pengguna SET
+                subscription_plan_id = COALESCE(?, subscription_plan_id),
+                subscription_expires_at = ?,
+                status_user = 'Aktif',
+                hak_akses = CASE WHEN hak_akses = 'demo' THEN 'admin' ELSE hak_akses END
+              WHERE nama_pengguna = ?
+            `).run(localPlanId, expiresAt, username)
+          }
+
+          return {
+            success: true,
+            data: {
+              ...(r.data as any),
+              synced_at: new Date().toISOString(),
+            },
+            message: 'Lisensi berhasil disinkronkan',
+          }
+        } else if (!r.success) {
+          const code = String((r as any).error_code ?? '').toUpperCase()
+          if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED'].includes(code)) {
+            sqlite.prepare(`UPDATE mediasoft_pengguna SET status_user = 'Nonaktif' WHERE nama_pengguna = ?`).run(username)
+          }
+        }
+      } catch (err) {
+        console.warn('[syncBuyerLicense] Remote sync warning:', err)
       }
     }
-    return { success: r.success, data: { ...(r.data as any), synced_at: new Date().toISOString() }, message: (r as any).message }
+
+    // Local fallback from SQLite
+    try {
+      const localUser = sqlite.prepare(`
+        SELECT p.id, p.nama_pengguna, p.nama_lengkap, p.email, p.hak_akses, p.subscription_plan_id, p.subscription_expires_at, p.status_user,
+               s.code AS plan_code, s.name AS plan_name, s.duration_days, s.features, s.max_devices, s.max_transactions_per_day, s.max_products, s.max_users, s.feature_flags
+        FROM mediasoft_pengguna p
+        LEFT JOIN mediasoft_subscription_plans s ON s.id = p.subscription_plan_id
+        WHERE p.nama_pengguna = ? LIMIT 1
+      `).get(username) as any
+
+      if (localUser) {
+        let parsedFeatures: string[] = []
+        try { parsedFeatures = localUser.features ? JSON.parse(localUser.features) : [] } catch {}
+        let parsedFlags: Record<string, boolean> = {}
+        try { parsedFlags = localUser.feature_flags ? JSON.parse(localUser.feature_flags) : {} } catch {}
+        const exp = localUser.subscription_expires_at ? new Date(localUser.subscription_expires_at).getTime() : NaN
+        const daysRemaining = localUser.subscription_expires_at && Number.isFinite(exp)
+          ? Math.max(0, Math.ceil((exp - Date.now()) / 86400000))
+          : null
+
+        return {
+          success: true,
+          data: {
+            subscription: {
+              id: localUser.subscription_plan_id,
+              status: localUser.status_user === 'Aktif' ? 'ACTIVE' : 'INACTIVE',
+              expires_at: localUser.subscription_expires_at,
+              days_remaining: daysRemaining,
+              plan: {
+                id: localUser.subscription_plan_id,
+                code: localUser.plan_code || (localUser.hak_akses === 'demo' ? 'DEMO' : 'PRO'),
+                name: localUser.plan_name || (localUser.hak_akses === 'demo' ? 'Akun Demo' : 'Akses Penuh'),
+                duration_days: localUser.duration_days ?? (localUser.hak_akses === 'demo' ? 1 : 0),
+                features: parsedFeatures,
+                max_devices: localUser.max_devices ?? 1,
+                max_transactions_per_day: localUser.max_transactions_per_day ?? -1,
+                max_products: localUser.max_products ?? -1,
+                max_users: localUser.max_users ?? 1,
+                feature_flags: parsedFlags,
+              },
+            },
+            synced_at: new Date().toISOString(),
+          },
+          message: 'Lisensi lokal aktif',
+        }
+      }
+    } catch (err: any) {
+      console.warn('[syncBuyerLicense] Local fallback error:', err)
+    }
+
+    return { success: true, data: { skipped: true, synced_at: new Date().toISOString() } }
   }
 
   static async loginAdmin(...args: any[]) { return { success: false, message: 'Deprecated API', data: {} as any } }
@@ -215,10 +320,131 @@ export class LicenseController {
   }
 
   static async syncFromServer() {
-    const plans = await call<any[]>('GET', '/admin/plans')
-    if (!plans.success) return plans
-    const count = (plans.data ?? []).length
-    return { success: true, message: `Sync lisensi selesai: ${count} paket diproses`, data: { plans: count } }
+    const cfg = getConfig()
+    if (!cfg?.url) return { success: false, message: 'License server belum dikonfigurasi' }
+
+    let plansSynced = 0
+    let popupsSynced = 0
+
+    // Sync plans
+    const plansRes = await call<any[]>('GET', '/admin/plans')
+    if (plansRes.success && Array.isArray(plansRes.data)) {
+      for (const p of plansRes.data) {
+        try {
+          const existing = sqlite.prepare('SELECT id FROM mediasoft_subscription_plans WHERE code = ? OR name = ? LIMIT 1').get(p.code, p.name) as { id?: number } | undefined
+          if (existing?.id) {
+            PlanModel.update(existing.id, {
+              code: p.code,
+              name: p.name,
+              price: Number(p.price || 0),
+              currency: p.currency || 'IDR',
+              duration_days: Number(p.duration_days ?? 30),
+              description: p.description,
+              is_active: p.is_active !== false && p.is_active !== 0,
+              is_recommended: Boolean(p.is_recommended),
+              max_devices: p.max_devices,
+              max_transactions_per_day: p.max_transactions_per_day,
+              max_products: p.max_products,
+              max_users: p.max_users,
+              sort_order: p.sort_order,
+            })
+          } else {
+            PlanModel.create({
+              code: p.code,
+              name: p.name,
+              price: Number(p.price || 0),
+              currency: p.currency || 'IDR',
+              duration_days: Number(p.duration_days ?? 30),
+              description: p.description,
+              features: Array.isArray(p.features) ? p.features : [],
+              is_active: p.is_active !== false && p.is_active !== 0,
+              is_recommended: Boolean(p.is_recommended),
+              max_devices: p.max_devices,
+              max_transactions_per_day: p.max_transactions_per_day,
+              max_products: p.max_products,
+              max_users: p.max_users,
+              sort_order: p.sort_order,
+            })
+          }
+          plansSynced++
+        } catch (e) {
+          console.warn('[syncFromServer] Plan sync error:', e)
+        }
+      }
+    }
+
+    // Sync popups
+    const popupsRes = await call<any[]>('GET', '/admin/popups')
+    if (popupsRes.success && Array.isArray(popupsRes.data)) {
+      for (const pop of popupsRes.data) {
+        try {
+          const existing = sqlite.prepare('SELECT id FROM mediasoft_popup_rules WHERE code = ? LIMIT 1').get(pop.code) as { id?: number } | undefined
+          if (existing?.id) {
+            sqlite.prepare(`
+              UPDATE mediasoft_popup_rules SET
+                title = COALESCE(?, title),
+                description = ?,
+                cta_text = COALESCE(?, cta_text),
+                cta_url = ?,
+                whatsapp_number = ?,
+                image_url = ?,
+                pricing_html = ?,
+                is_active = ?,
+                force_popup = ?,
+                force_popup_until = ?,
+                severity = COALESCE(?, severity),
+                dismissible = ?,
+                updated_at = datetime('now')
+              WHERE id = ?
+            `).run(
+              pop.title ?? null,
+              pop.description ?? null,
+              pop.cta_text ?? null,
+              pop.cta_url ?? null,
+              pop.whatsapp_number ?? null,
+              pop.image_url ?? null,
+              pop.pricing_html ?? null,
+              pop.is_active ? 1 : 0,
+              pop.force_popup ? 1 : 0,
+              pop.force_popup_until ?? null,
+              pop.severity ?? null,
+              pop.dismissible === false || pop.dismissible === 0 ? 0 : 1,
+              existing.id
+            )
+          } else if (pop.code && pop.title) {
+            sqlite.prepare(`
+              INSERT INTO mediasoft_popup_rules (
+                code, title, description, cta_text, cta_url, whatsapp_number,
+                image_url, pricing_html, is_active, force_popup, force_popup_until, severity, dismissible
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              pop.code,
+              pop.title,
+              pop.description ?? null,
+              pop.cta_text ?? 'Upgrade Sekarang',
+              pop.cta_url ?? null,
+              pop.whatsapp_number ?? null,
+              pop.image_url ?? null,
+              pop.pricing_html ?? null,
+              pop.is_active ? 1 : 0,
+              pop.force_popup ? 1 : 0,
+              pop.force_popup_until ?? null,
+              pop.severity ?? 'warning',
+              pop.dismissible === false || pop.dismissible === 0 ? 0 : 1
+            )
+          }
+          popupsSynced++
+        } catch (e) {
+          console.warn('[syncFromServer] Popup sync error:', e)
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: `Sync lisensi selesai: ${plansSynced} paket & ${popupsSynced} popup disinkronkan`,
+      data: { plans: plansSynced, popups: popupsSynced },
+    }
   }
 
   static async createPaymentInvoice(data: { email?: string; customer_id?: string; plan_code: string; notes?: string }) {
@@ -234,13 +460,133 @@ export class LicenseController {
     return call('GET', `/payments/status?external_ref=${encodeURIComponent(externalRef)}`)
   }
 
-  static async getPublicPlans() { return call('GET', '/plans') }
-  static async getPublicPopup(code: string) { return call('GET', `/popup/${encodeURIComponent(String(code ?? '').trim())}`) }
+  static async getPublicPlans() {
+    const cfg = getConfig()
+    if (cfg?.url) {
+      const remote = await call<any[]>('GET', '/plans')
+      if (remote.success && Array.isArray(remote.data) && remote.data.length > 0) {
+        return {
+          success: true,
+          data: remote.data
+            .filter((p: any) => p.is_active !== false && p.is_active !== 0)
+            .map((p: any) => ({
+              id: p.id,
+              code: p.code || `PLAN_${p.id}`,
+              name: p.name,
+              price: Number(p.price || 0),
+              currency: p.currency || 'IDR',
+              duration_days: Number(p.duration_days ?? 30),
+              description: p.description ?? null,
+              features: Array.isArray(p.features) ? p.features : (typeof p.features === 'string' ? (()=>{ try { return JSON.parse(p.features) } catch { return [] } })() : []),
+              feature_flags: typeof p.feature_flags === 'string' ? (()=>{ try { return JSON.parse(p.feature_flags) } catch { return {} } })() : (p.feature_flags || {}),
+              is_recommended: Boolean(p.is_recommended),
+              is_active: true,
+              sort_order: Number(p.sort_order ?? 0),
+              max_devices: p.max_devices ?? 1,
+              max_transactions_per_day: p.max_transactions_per_day ?? -1,
+              max_products: p.max_products ?? -1,
+              max_users: p.max_users ?? 1,
+            }))
+        }
+      }
+    }
+    // Local fallback from SQLite
+    try {
+      const local = PlanModel.getActive()
+      const mapped = local.map((p) => {
+        let parsedFeatures: string[] = []
+        try { parsedFeatures = p.features ? JSON.parse(p.features) : [] } catch {}
+        let parsedFlags: Record<string, boolean> = {}
+        try { parsedFlags = p.feature_flags ? JSON.parse(p.feature_flags) : {} } catch {}
+        return {
+          id: p.id,
+          code: p.code || `PLAN_${p.id}`,
+          name: p.name,
+          price: Number(p.price || 0),
+          currency: p.currency || 'IDR',
+          duration_days: Number(p.duration_days ?? 30),
+          description: p.description ?? (parsedFeatures.length > 0 ? parsedFeatures.join('\n') : null),
+          features: parsedFeatures,
+          feature_flags: parsedFlags,
+          is_recommended: Boolean(p.is_recommended),
+          is_active: true,
+          sort_order: Number(p.sort_order ?? 0),
+          max_devices: p.max_devices ?? 1,
+          max_transactions_per_day: p.max_transactions_per_day ?? -1,
+          max_products: p.max_products ?? -1,
+          max_users: p.max_users ?? 1,
+        }
+      })
+      return { success: true, data: mapped }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal memuat paket' }
+    }
+  }
+
+  static async getPublicPopup(code: string) {
+    const cleanCode = String(code ?? '').trim()
+    const cfg = getConfig()
+    if (cfg?.url) {
+      const remote = await call<any>('GET', `/popup/${encodeURIComponent(cleanCode)}`)
+      if (remote.success && remote.data) {
+        return remote
+      }
+    }
+    // Local fallback from SQLite
+    try {
+      const row = sqlite.prepare('SELECT * FROM mediasoft_popup_rules WHERE code = ? LIMIT 1').get(cleanCode) as any
+      if (row) {
+        return {
+          success: true,
+          data: {
+            ...row,
+            is_active: !!row.is_active,
+            force_popup: !!row.force_popup,
+            dismissible: row.dismissible !== 0 && row.dismissible !== false,
+          },
+        }
+      }
+    } catch {}
+    return { success: false, message: 'Popup tidak ditemukan' }
+  }
+
   static async getUsers(search?: string) { return call('GET', `/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`) }
   static async createUser(data: unknown) { return call('POST', '/admin/users', data) }
   static async updateUser(id: string | number, data: unknown) { return call('PATCH', `/admin/users/${id}`, data) }
   static async deleteUser(id: string | number) { return call('DELETE', `/admin/users/${id}`) }
-  static async changeUserPlan(id: string | number, data: unknown) { return call('PUT', `/admin/users/${id}/plan`, data) }
+  static async changeUserPlan(id: string | number, data: unknown) {
+    const payload = (data && typeof data === 'object' ? data : {}) as any
+    const planCode = payload.plan_code || payload.code
+    const durationDays = payload.duration_days !== undefined ? Number(payload.duration_days) : null
+
+    try {
+      let targetPlan: any = null
+      if (planCode) {
+        targetPlan = sqlite.prepare('SELECT * FROM mediasoft_subscription_plans WHERE code = ? OR name = ? LIMIT 1').get(planCode, planCode)
+      }
+      const duration = durationDays !== null ? durationDays : (targetPlan?.duration_days ?? 30)
+      const expiresAt = duration === 0
+        ? null
+        : new Date(Date.now() + duration * 86400000).toISOString()
+
+      sqlite.prepare(`
+        UPDATE mediasoft_pengguna SET
+          subscription_plan_id = COALESCE(?, subscription_plan_id),
+          subscription_expires_at = ?,
+          status_user = 'Aktif',
+          hak_akses = CASE WHEN hak_akses = 'demo' THEN 'admin' ELSE hak_akses END
+        WHERE id = ? OR email = ? OR nama_pengguna = ?
+      `).run(targetPlan?.id ?? null, expiresAt, id, String(id), String(id))
+    } catch (err) {
+      console.warn('[changeUserPlan] Local SQLite update warning:', err)
+    }
+
+    const cfg = getConfig()
+    if (cfg?.url) {
+      return call('PUT', `/admin/users/${id}/plan`, data)
+    }
+    return { success: true, message: 'Paket pengguna berhasil diperbarui' }
+  }
   static async resetUserPassword(id: string | number) {
     const res = await call<any>('POST', `/admin/users/${id}/reset-password`, {})
     if (res?.success && res?.data) {
@@ -262,20 +608,205 @@ export class LicenseController {
     }
     return res
   }
-  static async getLicensePlans() { return call('GET', '/admin/plans') }
-  static async createLicensePlan(data: unknown) { return call('POST', '/admin/plans', data) }
-  static async updateLicensePlan(id: string | number, data: unknown) { return call('PATCH', `/admin/plans/${id}`, data) }
-  static async deleteLicensePlan(id: string | number) { return call('DELETE', `/admin/plans/${id}`) }
+
+  static async getLicensePlans() {
+    const cfg = getConfig()
+    if (cfg?.url) {
+      const remote = await call<any[]>('GET', '/admin/plans')
+      if (remote.success) return remote
+    }
+    try {
+      const local = PlanModel.getAll()
+      return {
+        success: true,
+        data: local.map(p => ({
+          ...p,
+          code: p.code || `PLAN_${p.id}`,
+          features: p.features ? (()=>{ try { return JSON.parse(p.features) } catch { return [] } })() : [],
+          feature_flags: p.feature_flags ? (()=>{ try { return JSON.parse(p.feature_flags) } catch { return {} } })() : {},
+          is_active: !!p.is_active,
+          is_recommended: !!p.is_recommended,
+        }))
+      }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal memuat paket' }
+    }
+  }
+
+  static async createLicensePlan(data: unknown) {
+    const payload = (data && typeof data === 'object' ? data : {}) as any
+    try {
+      PlanModel.create({
+        code: payload.code,
+        name: payload.name || 'Paket Baru',
+        price: Number(payload.price || 0),
+        currency: payload.currency || 'IDR',
+        duration_days: Number(payload.duration_days ?? 30),
+        description: payload.description ?? '',
+        features: Array.isArray(payload.features) ? payload.features : [],
+        is_active: payload.is_active !== false,
+        is_recommended: Boolean(payload.is_recommended),
+        max_devices: payload.max_devices,
+        max_transactions_per_day: payload.max_transactions_per_day,
+        max_products: payload.max_products,
+        max_users: payload.max_users,
+        feature_flags: payload.feature_flags,
+        sort_order: payload.sort_order,
+      })
+    } catch (err) {
+      console.warn('[createLicensePlan] Local create warning:', err)
+    }
+
+    const cfg = getConfig()
+    if (cfg?.url) {
+      return call('POST', '/admin/plans', data)
+    }
+    return { success: true, message: 'Paket berhasil ditambahkan' }
+  }
+
+  static async updateLicensePlan(id: string | number, data: unknown) {
+    const payload = (data && typeof data === 'object' ? data : {}) as any
+    const numericId = Number(id)
+    if (Number.isFinite(numericId) && numericId > 0) {
+      try {
+        PlanModel.update(numericId, {
+          code: payload.code,
+          name: payload.name,
+          price: payload.price !== undefined ? Number(payload.price) : undefined,
+          currency: payload.currency,
+          duration_days: payload.duration_days !== undefined ? Number(payload.duration_days) : undefined,
+          description: payload.description,
+          features: Array.isArray(payload.features) ? payload.features : undefined,
+          is_active: payload.is_active,
+          is_recommended: payload.is_recommended,
+          max_devices: payload.max_devices,
+          max_transactions_per_day: payload.max_transactions_per_day,
+          max_products: payload.max_products,
+          max_users: payload.max_users,
+          feature_flags: payload.feature_flags,
+          sort_order: payload.sort_order,
+        })
+      } catch (err) {
+        console.warn('[updateLicensePlan] Local update warning:', err)
+      }
+    }
+
+    const cfg = getConfig()
+    if (cfg?.url) {
+      return call('PATCH', `/admin/plans/${id}`, data)
+    }
+    return { success: true, message: 'Paket berhasil diperbarui' }
+  }
+
+  static async deleteLicensePlan(id: string | number) {
+    const numericId = Number(id)
+    if (Number.isFinite(numericId) && numericId > 0) {
+      try { PlanModel.delete(numericId) } catch {}
+    }
+    const cfg = getConfig()
+    if (cfg?.url) {
+      return call('DELETE', `/admin/plans/${id}`)
+    }
+    return { success: true, message: 'Paket berhasil dihapus' }
+  }
+
   static async getPlanFeatures(planId: string | number) { return call('GET', `/admin/plans/${planId}/features`) }
   static async setPlanFeatures(planId: string | number, data: unknown) { return call('PUT', `/admin/plans/${planId}/features`, data) }
   static async getLicenseFeatures() { return call('GET', '/admin/features') }
   static async createLicenseFeature(data: unknown) { return call('POST', '/admin/features', data) }
   static async updateLicenseFeature(id: string | number, data: unknown) { return call('PATCH', `/admin/features/${id}`, data) }
-  static async getPopups() { return call('GET', '/admin/popups') }
-  static async updatePopup(id: string | number, data: unknown) { return call('PATCH', `/admin/popups/${id}`, data) }
+
+  static async getPopups() {
+    const cfg = getConfig()
+    if (cfg?.url) {
+      const remote = await call<any[]>('GET', '/admin/popups')
+      if (remote.success && Array.isArray(remote.data) && remote.data.length > 0) {
+        return remote
+      }
+    }
+    try {
+      const rows = sqlite.prepare('SELECT * FROM mediasoft_popup_rules ORDER BY id').all()
+      return { success: true, data: rows }
+    } catch (e: any) {
+      return { success: false, message: e?.message || 'Gagal memuat popup' }
+    }
+  }
+
+  static async updatePopup(id: string | number, data: unknown) {
+    const payload = (data && typeof data === 'object' ? data : {}) as any
+    try {
+      const allowed = new Set([
+        'title', 'description', 'cta_text', 'cta_url', 'whatsapp_number',
+        'image_url', 'pricing_html', 'is_active', 'force_popup',
+        'force_popup_until', 'severity', 'dismissible', 'trigger_on'
+      ])
+      const entries = Object.entries(payload ?? {}).filter(([k]) => allowed.has(k))
+      if (entries.length > 0) {
+        const fields = entries.map(([k]) => `${k} = ?`).join(', ')
+        const vals = entries.map(([, v]) => typeof v === 'boolean' ? (v ? 1 : 0) : v)
+        const numericId = Number(id)
+        if (Number.isFinite(numericId) && numericId > 0) {
+          sqlite.prepare(`UPDATE mediasoft_popup_rules SET ${fields}, updated_at = datetime('now') WHERE id = ?`).run(...vals, numericId)
+        } else {
+          sqlite.prepare(`UPDATE mediasoft_popup_rules SET ${fields}, updated_at = datetime('now') WHERE code = ?`).run(...vals, String(id))
+        }
+      }
+    } catch (err) {
+      console.warn('[updatePopup] Local SQLite update warning:', err)
+    }
+
+    const cfg = getConfig()
+    if (cfg?.url) {
+      return call('PATCH', `/admin/popups/${id}`, data)
+    }
+    return { success: true, message: 'Popup berhasil disimpan' }
+  }
+
   static async getPayments() { return call('GET', '/admin/payments') }
   static async createPayment(data: unknown) { return call('POST', '/admin/payments', data) }
-  static async approvePayment(id: string | number) { return call('POST', `/admin/payments/${id}/approve`) }
+  static async approvePayment(id: string | number) {
+    const cfg = getConfig()
+    let remoteRes: any = null
+    if (cfg?.url) {
+      remoteRes = await call('POST', `/admin/payments/${id}/approve`)
+    }
+
+    try {
+      const userEmail = remoteRes?.data?.user_email || remoteRes?.data?.email
+      const planCode = remoteRes?.data?.plan_code || remoteRes?.data?.plan
+
+      let targetPlan: any = null
+      if (planCode) {
+        targetPlan = sqlite.prepare('SELECT * FROM mediasoft_subscription_plans WHERE code = ? OR name = ? LIMIT 1').get(planCode, planCode)
+      }
+      const duration = targetPlan ? targetPlan.duration_days : 365
+      const expiresAt = duration === 0 ? null : new Date(Date.now() + duration * 86400000).toISOString()
+
+      if (userEmail) {
+        sqlite.prepare(`
+          UPDATE mediasoft_pengguna SET
+            subscription_plan_id = COALESCE(?, subscription_plan_id),
+            subscription_expires_at = ?,
+            status_user = 'Aktif',
+            hak_akses = CASE WHEN hak_akses = 'demo' THEN 'admin' ELSE hak_akses END
+          WHERE lower(email) = lower(?)
+        `).run(targetPlan?.id ?? null, expiresAt, userEmail)
+      } else {
+        sqlite.prepare(`
+          UPDATE mediasoft_pengguna SET
+            subscription_plan_id = COALESCE(?, subscription_plan_id),
+            subscription_expires_at = ?,
+            status_user = 'Aktif',
+            hak_akses = CASE WHEN hak_akses = 'demo' THEN 'admin' ELSE hak_akses END
+          WHERE is_buyer = 1 OR hak_akses = 'demo'
+        `).run(targetPlan?.id ?? null, expiresAt)
+      }
+    } catch (err) {
+      console.warn('[approvePayment] Local SQLite update warning:', err)
+    }
+
+    return remoteRes || { success: true, message: 'Pembayaran berhasil disetujui' }
+  }
   static async deletePayment(id: string | number) { return call('DELETE', `/admin/payments/${id}`) }
   static async getStats() { return call('GET', '/admin/stats') }
   static async getRevenue() { return call('GET', '/admin/revenue') }

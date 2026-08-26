@@ -1,9 +1,3 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * DEMO CONTEXT — Central state for demo mode + subscription conversion
- * ═══════════════════════════════════════════════════════════════════════
- */
-
 import {
   createContext, useContext, useState, useCallback,
   useEffect, useMemo, type ReactNode,

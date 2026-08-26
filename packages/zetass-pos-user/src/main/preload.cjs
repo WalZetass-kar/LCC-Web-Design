@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * PRELOAD BRIDGE — Channel Whitelist Security (Layer 3)
- * ═══════════════════════════════════════════════════════════════════════
  * 
  * SECURITY: Only whitelisted IPC channels are exposed to the renderer.
  * This prevents attackers from invoking arbitrary channels even if they

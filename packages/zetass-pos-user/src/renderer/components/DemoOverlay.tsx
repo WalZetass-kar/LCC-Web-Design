@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * DEMO OVERLAY — Visual Demo Mode Indicators (Layer 5 — UX)
- * ═══════════════════════════════════════════════════════════════════════
  * 
  * Renders:
  * 1. A persistent top banner (red, can't be dismissed)

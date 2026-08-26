@@ -6,30 +6,55 @@ export const subscribeLicense = (
   onUpdate: () => void,
   onError: (error: any) => void
 ) => {
-  let channel: any = null
+  const channels: any[] = []
   try {
-    const channelName = `license-${email}-${Date.now()}`
-    channel = supabase
-      .channel(channelName)
+    const channelName1 = `license-cust-${email}-${Date.now()}`
+    const ch1 = supabase
+      .channel(channelName1)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'license_customers', filter: `email=eq.${email}` },
-        (payload) => {
-          onUpdate()
-        }
+        () => onUpdate()
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('Realtime license tracking active')
+          console.log('Realtime license tracking (customers) active')
         }
       })
+    channels.push(ch1)
+
+    const channelName2 = `license-sub-${email}-${Date.now()}`
+    const ch2 = supabase
+      .channel(channelName2)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'customer_subscriptions' },
+        () => onUpdate()
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Realtime license tracking (subscriptions) active')
+        }
+      })
+    channels.push(ch2)
+
+    const channelName3 = `license-pay-${email}-${Date.now()}`
+    const ch3 = supabase
+      .channel(channelName3)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'customer_payments' },
+        () => onUpdate()
+      )
+      .subscribe()
+    channels.push(ch3)
   } catch (err) {
     onError(err)
   }
 
   return () => {
-    if (channel) {
-      supabase.removeChannel(channel).catch(() => {})
+    for (const ch of channels) {
+      try { supabase.removeChannel(ch).catch(() => {}) } catch {}
     }
   }
 }
@@ -69,10 +94,10 @@ export const syncBuyerLicense = async (params: { email: string; customerId?: str
     if (!subscription) return { success: false, error_code: 'NOT_FOUND' }
 
     // Query 3: Get plan details (array, always 200)
-    logSupabaseQuery('SELECT', 'subscription_plans', 'id,code,name,duration_days', { id: subscription.plan_id })
+    logSupabaseQuery('SELECT', 'subscription_plans', 'id,code,name,duration_days,description,features,max_devices,max_transactions_per_day,max_products,max_users,feature_flags', { id: subscription.plan_id })
     const { data: plans, error: planError, status: planStatus } = await (supabase
       .from('subscription_plans') as any)
-      .select('id, code, name, duration_days')
+      .select('id, code, name, duration_days, description, features, max_devices, max_transactions_per_day, max_products, max_users, feature_flags')
       .eq('id', subscription.plan_id)
 
     logSupabaseResponse('subscription_plans', 'SELECT', planStatus, planError, plans)
@@ -83,12 +108,33 @@ export const syncBuyerLicense = async (params: { email: string; customerId?: str
     return {
       success: true,
       data: {
+        customer: {
+          id: customer.id,
+          name: customer.name,
+          email: customer.email,
+          status: customer.status,
+        },
         subscription: {
-          plan: { duration_days: plan?.duration_days ?? 365 },
+          id: subscription.id,
+          status: subscription.status,
+          started_at: subscription.started_at,
           expires_at: subscription.expires_at,
           days_remaining: subscription.expires_at
             ? Math.max(0, Math.ceil((new Date(subscription.expires_at).getTime() - Date.now()) / 86400000))
             : null,
+          plan: {
+            id: plan?.id,
+            code: plan?.code || 'PRO',
+            name: plan?.name || 'Paket Pro',
+            duration_days: plan?.duration_days ?? 365,
+            description: plan?.description ?? null,
+            features: Array.isArray(plan?.features) ? plan?.features : [],
+            max_devices: plan?.max_devices ?? 1,
+            max_transactions_per_day: plan?.max_transactions_per_day ?? -1,
+            max_products: plan?.max_products ?? -1,
+            max_users: plan?.max_users ?? 1,
+            feature_flags: plan?.feature_flags ?? {},
+          },
         },
         popup: null,
       },

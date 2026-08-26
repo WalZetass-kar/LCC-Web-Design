@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(cd /home/walzetass-kar/Documents/ProjectIhwal/LCC-Web-Design && npx tsc -p tsconfig.json --noEmit 2>&1 | grep -E \"error TS\" | grep -v \"apiClient\\\\|axios\" | head -10)",
-      "Bash(cd /home/walzetass-kar/Documents/ProjectIhwal/LCC-Web-Design && npm run typecheck 2>&1 | grep -E \"error TS\" | grep -v \"apiClient\\\\|axios\" | head -10)"
-    ]
-  }
-}

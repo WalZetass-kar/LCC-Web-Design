@@ -1,250 +1,315 @@
-# Zetass Pos
+# Zetass POS
 
-Desktop & Mobile Point of Sale Application built with Electron, React, and Capacitor.
+> **Aplikasi Point of Sale Desktop & Mobile** yang dibangun dengan Electron, React, dan Capacitor.
 
-**Platform:** Windows, Linux, macOS, Android, iOS
+**Developer:** [WalZetass-Kar](https://github.com/WalZetass-kar)  
+**Platform:** Windows · Linux · macOS · Android · iOS  
+**Versi:** 2.0.1
 
-## Download
+---
 
-Download the latest release from [GitHub Releases](https://github.com/WalZetass-kar/LCC-Web-Design/releases/latest).
+## 📸 Screenshot
 
-## Screenshots
+| Login | Dashboard | POS / Kasir |
+|-------|-----------|-------------|
+| ![Login](docs/screenshots/login.png) | ![Dashboard](docs/screenshots/dashboard.png) | ![POS](docs/screenshots/pos.png) |
 
-| Dashboard | POS | Products |
-|-----------|-----|----------|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![POS](docs/screenshots/pos.png) | ![Products](docs/screenshots/products.png) |
+---
 
-## Tech Stack
+## 🛠️ Tech Stack
 
-- **Frontend:** React 18, TypeScript, TailwindCSS
-- **Desktop:** Electron 31, Vite 5
-- **Mobile:** Capacitor 8
-- **Database:** SQLite (better-sqlite3), Drizzle ORM
-- **Build:** Vite, electron-builder
-- **CI/CD:** GitHub Actions
+| Layer | Teknologi |
+|-------|-----------|
+| Frontend | React 18, TypeScript, TailwindCSS |
+| Desktop | Electron 31, Vite 5 |
+| Mobile | Capacitor 8 (Android & iOS) |
+| Database | SQLite (better-sqlite3), Drizzle ORM |
+| Build | Vite, electron-builder |
+| CI/CD | GitHub Actions |
 
-## Quick Start
+---
 
-### Prerequisites
+## ⚙️ Prasyarat Sistem
 
-- Node.js 20+
-- pnpm 9+
-- JDK 17+ (for Android)
-- Android SDK (for Android)
+Pastikan semua tools berikut sudah terinstal sebelum menjalankan proyek:
 
-### Install Dependencies
+| Tool | Versi Minimum | Perintah Cek |
+|------|--------------|--------------|
+| **Node.js** | 20+ | `node --version` |
+| **npm** | 9+ | `npm --version` |
+| **pnpm** *(direkomendasikan)* | 9+ | `pnpm --version` |
+| **Git** | Any | `git --version` |
+| **JDK** | 17+ *(untuk Android)* | `java --version` |
+| **Android Studio** | Ladybug+ *(untuk Android)* | — |
 
+### Instal pnpm (jika belum ada)
 ```bash
-pnpm install
+npm install -g pnpm
 ```
 
-### Development (Desktop)
+---
 
+## 🚀 Cara Menjalankan — Desktop (Electron)
+
+### 1. Clone repository
+```bash
+git clone https://github.com/WalZetass-kar/LCC-Web-Design.git
+cd LCC-Web-Design
+```
+
+### 2. Install dependencies
+```bash
+pnpm install
+# atau jika tidak ada pnpm:
+npm install
+```
+
+### 3. Jalankan aplikasi desktop
 ```bash
 npm run dev
 ```
 
-### Development (Mobile/Android)
+Aplikasi Electron akan terbuka otomatis. Jika baru pertama kali, akan muncul form **Setup Akun Admin** — isi username, nama lengkap, dan password untuk membuat akun pertama.
 
+> **Login Default (jika database sudah ada):**
+> - Username & Password: sesuai yang dibuat saat setup pertama
+> - Atau gunakan akun **Demo** untuk melihat-lihat tanpa akun
+
+---
+
+## 📱 Cara Menjalankan — Android
+
+Ada **3 cara** untuk menjalankan di Android:
+
+---
+
+### Cara 1: Android Studio + Emulator (Tanpa HP Fisik)
+
+#### Langkah 1 — Buat Emulator di Android Studio
+1. Buka **Android Studio**
+2. Klik **Device Manager** (ikon HP di toolbar kanan)
+3. Klik **Create Device**
+4. Pilih device: **Pixel 7** atau **Galaxy Nexus**
+5. Pilih System Image: **API 33 (Android 13)** atau lebih tinggi — unduh jika belum ada
+6. Klik **Finish** → emulator siap
+
+#### Langkah 2 — Build & Sync ke Android
 ```bash
-npm run dev:mobile
-# In another terminal:
+# Build web frontend dulu
+npm run build:vite
+
+# Sync hasil build ke folder android/
+npm run android:sync
+```
+
+#### Langkah 3 — Buka di Android Studio
+```bash
+npm run android:open
+```
+> Android Studio akan terbuka secara otomatis mengarah ke folder `android/`
+
+#### Langkah 4 — Jalankan dari Android Studio
+1. Tunggu proses **Gradle Sync** selesai (lihat indikator progress di bagian bawah)
+2. Pilih **emulator** dari dropdown device di toolbar atas
+3. Klik tombol ▶️ **Run 'app'**
+4. Tunggu proses build & install (~1–3 menit pertama kali)
+
+---
+
+### Cara 2: HP Fisik via USB (Paling Cepat & Direkomendasikan)
+
+#### Langkah 1 — Aktifkan Developer Mode di HP Android
+1. Buka **Pengaturan** → **Tentang Ponsel**
+2. Ketuk **Nomor Build** sebanyak **7 kali** hingga muncul notif "Anda sekarang adalah developer"
+3. Kembali ke **Pengaturan** → **Opsi Pengembang**
+4. Aktifkan **USB Debugging** ✅
+
+#### Langkah 2 — Sambungkan HP ke Laptop
+1. Hubungkan HP dengan kabel USB ke laptop
+2. Di HP, pilih **"Transfer File"** (MTP) saat muncul dialog USB
+3. Di HP, ketuk **"Izinkan"** saat muncul dialog **USB Debugging**
+4. Verifikasi HP terdeteksi:
+   ```bash
+   adb devices
+   ```
+   Harus muncul nomor serial HP.
+
+#### Langkah 3 — Build & Jalankan
+```bash
+# Build web frontend
+npm run build:vite
+
+# Sync ke android
+npm run android:sync
+
+# Buka Android Studio
 npm run android:open
 ```
 
-## Build
+Di Android Studio:
+1. Tunggu Gradle sync selesai
+2. Pilih **nama HP kamu** dari dropdown device (bukan emulator)
+3. Klik ▶️ **Run** → aplikasi akan terinstal langsung di HP
 
-### Build All (Desktop)
+---
 
+### Cara 3: Live Dev Mode (Hot Reload)
+
+Mode ini cocok untuk development — perubahan kode langsung terlihat di HP tanpa perlu build ulang.
+
+#### Terminal 1 — Jalankan Dev Server
 ```bash
-npm run build:desktop
+npm run dev:mobile
+```
+> Server berjalan di `http://localhost:5173`
+
+#### Terminal 2 — Buka Android Studio
+```bash
+npm run android:open
 ```
 
-### Build Windows
+---
+
+## 🌐 Preview di Browser (Mobile View)
+
+Cara termudah dan tercepat untuk melihat tampilan mobile tanpa HP/emulator:
 
 ```bash
-# Full build (NSIS Installer + Portable + ZIP)
+npm run dev:mobile
+```
+
+Lalu buka browser → tekan **F12** → klik ikon **📱 Toggle Device Toolbar** → pilih perangkat seperti `Pixel 7`, `Galaxy S20`, dll.
+
+---
+
+## 🏗️ Build untuk Distribusi
+
+### Build Windows (.exe Installer)
+```bash
 npm run build:desktop:windows
-# or
-npx electron-builder --win nsis portable zip --publish never
 ```
+Output: `release/Zetass Pos-2.0.1-x64.exe`
 
-**Output:** `release/` directory
-
-- `Zetass Pos-2.0.0-x64.exe` - NSIS Installer
-- `Zetass Pos-2.0.0-x64.exe` (portable) - Portable Executable
-- `Zetass Pos-2.0.0-x64.zip` - ZIP Archive
-
-### Build Linux
-
+### Build Linux (.deb / .AppImage)
 ```bash
-# Full build (AppImage + deb + rpm + tar.gz)
 npm run build:desktop:linux
-# or
-npx electron-builder --linux AppImage deb rpm tar.gz --publish never
 ```
+Output: `release/zetass-pos_2.0.1_amd64.deb`
 
-**Output:** `release/` directory
-
-- `Zetass Pos-2.0.0-x64.AppImage` - AppImage
-- `zetass-pos_2.0.0_amd64.deb` - Debian Package
-- `zetass-pos-2.0.0-1.x86_64.rpm` - RPM Package
-- `zetass-pos-2.0.0-x64.tar.gz` - Tarball
-
-### Build Android
-
+### Build Android Debug APK
 ```bash
-# Debug APK
 npm run android:debug
+```
+Output: `release/ZetassPOS-debug.apk`
 
-# Release APK
+### Build Android Release APK
+```bash
 npm run android:release
-
-# AAB (Google Play)
-npm run android:aab
 ```
+Output: `release/ZetassPOS.apk`
 
-**Output:** `release/` directory
+---
 
-- `ZetassPOS.apk` - Debug/Release APK
-- `ZetassPOS.aab` - Android App Bundle
+## 🔑 Login Pertama Kali
 
-## Installation
+Saat database **kosong / baru**, aplikasi akan menampilkan halaman **Setup Akun**.
 
-### Windows
+Isi form berikut:
+- **Username:** bebas (misal: `admin`)
+- **Nama Lengkap:** nama Anda
+- **Email:** opsional
+- **Password:** minimal 8 karakter
 
-1. Download `Zetass Pos-2.0.0-x64.exe` (NSIS Installer)
-2. Run the installer
-3. Choose installation directory
-4. Launch from Desktop or Start Menu
+Setelah setup, gunakan username & password tersebut untuk login.
 
-### Linux
+---
 
-**AppImage (Universal):**
-```bash
-chmod +x Zetass*.AppImage
-./Zetass*.AppImage
-```
-
-**Debian/Ubuntu:**
-```bash
-sudo dpkg -i zetass-pos_*.deb
-sudo apt-get install -f
-```
-
-**Fedora/RHEL:**
-```bash
-sudo rpm -i zetass-pos-*.rpm
-```
-
-### Android
-
-1. Enable "Install from Unknown Sources"
-2. Download and open the `.apk` file
-3. Follow installation prompts
-
-## Release Process
-
-### Automated Release (Recommended)
-
-1. Update version:
-```bash
-npm run release:patch   # v2.0.0 -> v2.0.1
-npm run release:minor   # v2.0.0 -> v2.1.0
-npm run release:major   # v2.0.0 -> v3.0.0
-```
-
-This will:
-- Update `package.json` version
-- Sync Android `versionCode` and `versionName`
-- Create a git commit and tag
-- Push to GitHub
-- Trigger the Release workflow automatically
-
-### Manual Release
-
-```bash
-# Create and push tag
-git tag v2.0.0
-git push origin v2.0.0
-```
-
-The GitHub Actions workflow will automatically:
-1. Validate (lint, typecheck, test)
-2. Build Windows (NSIS + Portable + ZIP)
-3. Build Linux (AppImage + deb + rpm + tar.gz)
-4. Build Android (Debug APK + Release APK + AAB)
-5. Generate CHANGELOG
-6. Create GitHub Release
-7. Upload all artifacts
-
-### Release Artifacts
-
-| Platform | File | Description |
-|----------|------|-------------|
-| Windows | `*.exe` | NSIS Installer |
-| Windows | `*.exe` (portable) | Portable Executable |
-| Windows | `*.zip` | ZIP Archive |
-| Linux | `*.AppImage` | Universal Linux Binary |
-| Linux | `*.deb` | Debian/Ubuntu Package |
-| Linux | `*.rpm` | Fedora/RHEL Package |
-| Linux | `*.tar.gz` | Tarball |
-| Android | `*.apk` | Android Package |
-| Android | `*.aab` | Android App Bundle |
-
-## Project Structure
+## 📁 Struktur Proyek
 
 ```
 LCC-Web-Design/
 ├── src/
-│   ├── main/              # Electron main process
-│   ├── renderer/          # React frontend
-│   ├── backend/           # Backend services
-│   └── shared/            # Shared code
-├── android/               # Capacitor Android
-├── ios/                   # Capacitor iOS
-├── build/                 # Build resources (icons)
-├── scripts/               # Build & release scripts
-├── .github/workflows/     # CI/CD workflows
-├── package.json           # Electron config
-├── capacitor.config.ts    # Capacitor config
-├── vite.config.ts         # Vite config
-├── tsconfig.json          # TypeScript config
-└── tsconfig.electron.json # Electron TypeScript config
+│   ├── main/              # Electron main process (Node.js)
+│   ├── renderer/          # React frontend (UI)
+│   │   ├── pages/         # Halaman-halaman aplikasi
+│   │   ├── components/    # Komponen reusable
+│   │   ├── contexts/      # React Context (Auth, Theme, dll)
+│   │   └── utils/         # Utilities & API wrapper
+│   ├── backend/           # Business logic & controllers
+│   └── database/          # Schema & koneksi SQLite
+├── android/               # Capacitor Android project
+├── ios/                   # Capacitor iOS project
+├── scripts/               # Build & utility scripts
+├── tests/                 # Unit tests (Vitest)
+├── .github/workflows/     # CI/CD GitHub Actions
+├── capacitor.config.ts    # Konfigurasi Capacitor
+├── vite.config.ts         # Konfigurasi Vite
+└── package.json
 ```
 
-## Development Scripts
+---
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start desktop development |
-| `npm run dev:mobile` | Start mobile dev server |
-| `npm run build:desktop` | Build desktop (all platforms) |
-| `npm run build:desktop:windows` | Build for Windows |
-| `npm run build:desktop:linux` | Build for Linux |
-| `npm run android:debug` | Build Android debug APK |
-| `npm run android:release` | Build Android release APK |
-| `npm run android:aab` | Build Android AAB |
-| `npm run typecheck` | Run TypeScript checks |
-| `npm run lint` | Run ESLint |
-| `npm test` | Run tests |
-| `npm run release:patch` | Release patch version |
-| `npm run release:minor` | Release minor version |
-| `npm run release:major` | Release major version |
+## 📋 Daftar Script
 
-## Security
+| Perintah | Fungsi |
+|----------|--------|
+| `npm run dev` | Jalankan aplikasi Desktop (Electron) |
+| `npm run dev:mobile` | Jalankan dev server untuk Mobile |
+| `npm run android:open` | Buka project Android di Android Studio |
+| `npm run android:sync` | Sync web build ke Android |
+| `npm run android:debug` | Build APK debug |
+| `npm run android:release` | Build APK release |
+| `npm run build:desktop:windows` | Build installer Windows |
+| `npm run build:desktop:linux` | Build installer Linux |
+| `npm run typecheck` | Cek TypeScript |
+| `npm run test` | Jalankan unit tests |
 
-- `.env` files are gitignored
-- `.keys/` directory is gitignored
-- Keystores and certificates are never committed
-- API keys stored in environment variables
-- Context isolation enabled in Electron
-- Certificate pinning for Android network requests
+---
 
-## License
+## ❓ Troubleshooting
 
-MIT License
+### Error: `pnpm: command not found`
+```bash
+npm install -g pnpm
+```
 
-## Author
+### Error: `Gradle sync failed` di Android Studio
+- Pastikan JDK 17+ terinstal: `java --version`
+- Di Android Studio: **File → Project Structure → SDK Location** → cek JDK path
+- Klik **Sync Project with Gradle Files** di toolbar
 
-Zetass Pos
+### HP tidak terdeteksi di Android Studio
+- Pastikan **USB Debugging** aktif di HP
+- Coba cabut dan pasang ulang kabel USB
+- Ganti mode USB ke **"Transfer File (MTP)"**
+- Jalankan: `adb devices` untuk cek koneksi
+
+### Error: `INSTALL_FAILED_OLDER_SDK`
+- HP Android minimum **Android 8.0 (API 26)**
+
+### Aplikasi tidak bisa login / database error
+- Hapus file `sistem_pos.db` di root folder proyek
+- Restart aplikasi → akan muncul Setup Akun baru
+
+---
+
+## 🔒 Keamanan
+
+- File `.env` dan `.keys/` tidak di-commit ke Git
+- Database SQLite tersimpan lokal di perangkat pengguna
+- Semua IPC channel Electron divalidasi via whitelist di `preload.cjs`
+- Context isolation aktif di Electron
+
+---
+
+## 📄 Lisensi
+
+MIT License © 2026 [WalZetass-Kar](https://github.com/WalZetass-kar)
+
+---
+
+## 👨‍💻 Developer
+
+**WalZetass-Kar**
+- GitHub: [@WalZetass-kar](https://github.com/WalZetass-kar)
+- Repository: [LCC-Web-Design](https://github.com/WalZetass-kar/LCC-Web-Design)

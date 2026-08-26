@@ -1,22 +1,3 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * DATABASE WRITE GUARD — Last Line of Defense (Layer 4)
- * ═══════════════════════════════════════════════════════════════════════
- * 
- * This is the DOUBLE LOCK on the database layer.
- * Even if all IPC guards somehow fail, this blocks writes for demo users.
- * 
- * Usage: Wrap ALL database write operations with safeWrite()
- * 
- * Example:
- *   import { safeWrite } from './dbWriteGuard'
- *   
- *   function createProduct(data) {
- *     safeWrite()  // Throws if demo mode
- *     db.insert(barang).values(data).run()
- *   }
- */
-
 import { demoSession } from './demoSessionManager.js'
 
 /**

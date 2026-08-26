@@ -429,9 +429,6 @@ export default function Assistant() {
 
   return (
     <div className="flex h-[calc(100vh-100px)] sm:h-[calc(100vh-76px)] bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm">
-      {/* ════════════════════════════════════════════════════════════════
-          1. LEFT SIDEBAR (CHATS & HISTORY)
-          ════════════════════════════════════════════════════════════════ */}
       <aside
         className={`fixed inset-y-0 left-0 z-30 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300 ease-in-out lg:static lg:z-auto ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-72'
@@ -586,9 +583,6 @@ export default function Assistant() {
         />
       )}
 
-      {/* ════════════════════════════════════════════════════════════════
-          2. CENTER CHAT AREA
-          ════════════════════════════════════════════════════════════════ */}
       <main className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-900 relative">
         {/* Header Bar */}
         <header className="h-14 px-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10">
@@ -844,9 +838,6 @@ export default function Assistant() {
           </button>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════
-            3. FLOATING CHAT COMPOSER (INPUT BAR)
-            ════════════════════════════════════════════════════════════════ */}
         <div className="p-3 sm:p-4 border-t border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shrink-0">
           <div className="max-w-[880px] mx-auto space-y-2">
             {/* Floating Input Box */}
@@ -899,9 +890,6 @@ export default function Assistant() {
         </div>
       </main>
 
-      {/* ════════════════════════════════════════════════════════════════
-          4. RIGHT PANEL (AI TELEMETRY & STATS)
-          ════════════════════════════════════════════════════════════════ */}
       {isInfoOpen && (
         <aside className="w-72 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 p-4 hidden xl:flex flex-col gap-4 overflow-y-auto scrollbar-thin">
           <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-3">

@@ -1,16 +1,3 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * MAIN PROCESS — Electron Entry Point with DEMO MODE Hardening
- * ═══════════════════════════════════════════════════════════════════════
- * 
- * Security hardening applied:
- * 1. contextIsolation: true (already set)
- * 2. nodeIntegration: false (already set)
- * 3. DevTools disabled for demo users
- * 4. IPC handlers wrapped with demo guard
- * 5. Server-side session management
- */
-
 import './env.js'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
@@ -47,13 +34,10 @@ function getAppIconPath() {
 }
 
 function createWindow() {
-  // Preload script path - use .cjs file (CommonJS) because package.json has "type": "module"
   const preloadPath = isDev 
     ? path.join(process.cwd(), 'src', 'main', 'preload.cjs')
     : path.join(app.getAppPath(), 'dist-electron', 'main', 'preload.cjs')
 
-  console.log('🔍 Preload path:', preloadPath)
-  console.log('🔍 Preload exists:', existsSync(preloadPath))
   const iconPath = getAppIconPath()
 
   const win = new BrowserWindow({
@@ -63,10 +47,10 @@ function createWindow() {
     minHeight: 600,
     webPreferences: {
       preload: preloadPath,
-      contextIsolation: true,      // SECURITY: Isolate renderer from Node.js
-      nodeIntegration: false,       // SECURITY: No Node.js in renderer
+      contextIsolation: true,
+      nodeIntegration: false,
       sandbox: true,
-      webSecurity: true,                   // SECURITY: Always enforce web security
+      webSecurity: true,
       devTools: isDev,
     },
     titleBarStyle: 'default',
@@ -82,50 +66,30 @@ function createWindow() {
     win.loadURL('http://localhost:5173')
   } else {
     const rendererIndexPath = path.join(app.getAppPath(), 'dist', 'index.html')
-    console.log('🔍 Renderer index path:', rendererIndexPath)
-    console.log('🔍 Renderer index exists:', existsSync(rendererIndexPath))
     win.loadFile(rendererIndexPath)
   }
 
-  // Log when preload script fails
   win.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('❌ Failed to load:', errorCode, errorDescription)
+    console.error('Failed to load:', errorCode, errorDescription)
   })
 
-  // Check if preload was loaded
   win.webContents.on('did-finish-load', () => {
-    console.log('✅ Page loaded')
-    // Check if window.api is available
-    win.webContents.executeJavaScript('typeof window.api !== "undefined"')
-      .then(hasApi => {
-        console.log('🎯 window.api available:', hasApi)
-        if (!hasApi) {
-          console.error('❌ window.api is NOT available! Preload failed!')
-        }
-      })
     flushPendingDeepLink(win)
   })
 
-  // ═══════════════════════════════════════════════════════════════════
-  // DEMO MODE HARDENING: Disable DevTools for demo users
-  // ═══════════════════════════════════════════════════════════════════
   win.webContents.on('devtools-opened', () => {
     if (!isDev || demoSession.isDemoMode()) {
-      console.warn('🚫 DevTools blocked')
       win.webContents.closeDevTools()
     }
   })
 
-  // Block keyboard shortcut for DevTools in packaged builds and demo mode.
   win.webContents.on('before-input-event', (event, input) => {
     if (!isDev || demoSession.isDemoMode()) {
-      // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C
       if (
         input.key === 'F12' ||
         (input.control && input.shift && ['I', 'i', 'J', 'j', 'C', 'c'].includes(input.key))
       ) {
         event.preventDefault()
-        console.warn('🚫 DevTools shortcut blocked')
       }
     }
   })

@@ -55,8 +55,13 @@ GoogleService-Info.plist
 # Temporary files
 *.tmp
 *.temp
+*.timestamp-*.mjs
 .cache/
 .local-jdk21/
+.agents/
+.codex/
+.mimocode/
+.qoder/
 openjdk-*.deb
 
 # Android build outputs

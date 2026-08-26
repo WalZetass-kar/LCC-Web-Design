@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * IPC HANDLERS — All IPC channels with DEMO GUARD protection
- * ═══════════════════════════════════════════════════════════════════════
  * 
  * SECURITY: Every handler is wrapped with withDemoGuard().
  * Mutation channels are automatically blocked for demo users.

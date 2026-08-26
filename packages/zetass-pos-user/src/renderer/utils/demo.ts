@@ -1,12 +1,4 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * DEMO UTILITY — Renderer-side demo mode helpers
- * ═══════════════════════════════════════════════════════════════════════
- * 
- * NOTE: These checks are for UX only — NOT security.
- * Real security is enforced in the main process (ipcHandlers + demoGuardV2).
- * Even if someone bypasses these checks, the main process still blocks writes.
- */
+import { secureStorage } from './secureStorage'
 
 /**
  * Check if the current user is in demo mode.
@@ -53,6 +45,4 @@ export const MUTATION_KEYWORDS = [
   'create', 'update', 'delete', 'save', 'simpan', 'hapus', 'ubah',
   'buka', 'tutup', 'bayar', 'cicil', 'approve', 'reject', 'reset',
   'add', 'remove', 'set', 'toggle', 'import', 'restore', 'clear',
-  'open', 'close', 'generate',
 ] as const
-import { secureStorage } from './secureStorage'

@@ -288,9 +288,15 @@ export interface UserSession {
   remote_customer_id?: string | null
   remote_auth_user_id?: string | null
   remote_registration_status?: 'synced' | 'pending' | null
-  remote_registration_message?: string | null
   subscription_plan_id?: number | null
+  subscription_plan_name?: string | null
+  subscription_plan_code?: string | null
   subscription_expires_at?: string | null
+  max_devices?: number | null
+  max_transactions_per_day?: number | null
+  max_products?: number | null
+  max_users?: number | null
+  feature_flags?: Record<string, boolean> | null
 }
 
 export interface SubscriptionPlan {

@@ -11,8 +11,8 @@ import { logActivity } from '../../shared/supabase/logging'
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000
 /** Check session expiry every 60 seconds */
 const EXPIRY_CHECK_INTERVAL_MS = 60 * 1000
-/** Re-check remote license (Supabase) every 30 seconds while logged in. */
-const REMOTE_LICENSE_SYNC_INTERVAL_MS = 30 * 1000
+/** Re-check remote license (Supabase) every 12 seconds while logged in. */
+const REMOTE_LICENSE_SYNC_INTERVAL_MS = 12 * 1000
 const LICENSE_LAST_SUCCESS_KEY = 'license_last_success_at'
 const LICENSE_OFFLINE_GRACE_MS = Number(import.meta.env.VITE_LICENSE_OFFLINE_GRACE_HOURS ?? 720) * 60 * 60 * 1000
 
@@ -184,53 +184,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!user?.nama_pengguna) return
-    const stored = restoreSession()
-    if (!stored?.sessionToken) {
-      logout()
-      return
-    }
-
     let cancelled = false
-    api<UserSession>('auth:restoreSession', {
-      username: user.nama_pengguna,
-      sessionToken: stored.sessionToken,
-      deviceInfo: collectAuthDeviceInfo(),
-      remoteLicenseToken: stored.remote_license_token ?? null,
-      remoteLicenseRefreshToken: stored.remote_license_refresh_token ?? null,
+    api('auth:init').then(() => {
+      if (cancelled) return
+      const stored = restoreSession()
+      if (stored) {
+        setUser(toPublicSession(stored))
+        if (stored.sessionToken && stored.nama_pengguna) {
+          api<UserSession>('auth:restoreSession', {
+            username: stored.nama_pengguna,
+            sessionToken: stored.sessionToken,
+            deviceInfo: collectAuthDeviceInfo(),
+            remoteLicenseToken: stored.remote_license_token ?? null,
+            remoteLicenseRefreshToken: stored.remote_license_refresh_token ?? null,
+          }).then(result => {
+            if (cancelled) return
+            if (result?.success && result.data) {
+              const restored = result.data as UserSession
+              const nextStored: StoredSession = {
+                ...restored,
+                sessionToken: stored.sessionToken,
+                sessionExpiresAt: stored.sessionExpiresAt,
+                deviceId: stored.deviceId,
+                remote_license_token: restored.remote_license_token ?? stored.remote_license_token ?? null,
+                remote_license_refresh_token: restored.remote_license_refresh_token ?? stored.remote_license_refresh_token ?? null,
+                remote_customer_id: restored.remote_customer_id ?? stored.remote_customer_id ?? null,
+                remote_auth_user_id: restored.remote_auth_user_id ?? stored.remote_auth_user_id ?? null,
+                loginAt: stored.loginAt,
+                expiresAt: Math.min(stored.expiresAt, new Date(stored.sessionExpiresAt).getTime()),
+              }
+              setUser(toPublicSession(nextStored))
+              secureStorage.setJSON('pos_session', nextStored)
+            } else if (result && !result.success && ['BLOCKED', 'SUSPENDED', 'SESSION_INVALID'].includes(String(result.error_code || ''))) {
+              logout()
+            }
+          }).catch(() => {})
+        }
+      }
     })
-      .then(result => {
-        if (cancelled) return
-        if (!result?.success || !result.data) {
-          logout()
-          return
-        }
-
-        const restored = result.data as UserSession
-        const nextStored: StoredSession = {
-          ...restored,
-          sessionToken: stored.sessionToken,
-          sessionExpiresAt: stored.sessionExpiresAt,
-          deviceId: stored.deviceId,
-          remote_license_token: restored.remote_license_token ?? stored.remote_license_token ?? null,
-          remote_license_refresh_token: restored.remote_license_refresh_token ?? stored.remote_license_refresh_token ?? null,
-          remote_customer_id: restored.remote_customer_id ?? stored.remote_customer_id ?? null,
-          remote_auth_user_id: restored.remote_auth_user_id ?? stored.remote_auth_user_id ?? null,
-          loginAt: stored.loginAt,
-          expiresAt: Math.min(stored.expiresAt, new Date(stored.sessionExpiresAt).getTime()),
-        }
-        setUser(toPublicSession(nextStored))
-        secureStorage.setJSON('pos_session', {
-          ...nextStored,
-          loginAt: Date.now(),
-        })
-      })
-      .catch(() => {
-        if (!cancelled) logout()
-      })
-
     return () => { cancelled = true }
-  }, [user?.nama_pengguna, logout])
+  }, [logout])
 
   useEffect(() => {
     if (!user?.nama_pengguna) return
@@ -300,39 +293,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           syncing = false
           return
         }
-        const r = await syncBuyerLicense({
-          email: user.email,
-          customerId: user.remote_customer_id ?? undefined,
-          deviceInfo: collectAuthDeviceInfo(),
-        })
+        // 1. Sync license with backend
+        const r = await api<any>('license:syncBuyerLicense', user.nama_pengguna, collectAuthDeviceInfo())
         if (cancelled) return
 
-        const data: any = r.data ?? {}
-        if (r.success) {
+        const data: any = r?.data ?? {}
+        if (r?.success) {
           secureStorage.setItem(LICENSE_LAST_SUCCESS_KEY, String(Date.now()))
-          const hasSubscriptionPayload = data?.subscription && typeof data.subscription === 'object'
-          const subscriptionExpiresAt = typeof data?.subscription?.expires_at === 'string'
-            ? data.subscription?.expires_at
-            : hasSubscriptionPayload
-              ? null
-              : undefined
-          if (hasSubscriptionPayload) {
-            const expires = subscriptionExpiresAt ? new Date(subscriptionExpiresAt).getTime() : NaN
-            setUser(prev => prev && prev.nama_pengguna === user.nama_pengguna ? {
-              ...prev,
-              access_expires_at: subscriptionExpiresAt,
-              subscription_expires_at: subscriptionExpiresAt,
-              access_days_remaining: subscriptionExpiresAt && Number.isFinite(expires)
-                ? Math.max(0, Math.ceil((expires - Date.now()) / 86400000))
-                : null,
-            } : prev)
+        }
+
+        // 2. Refresh local session from backend DB to get latest permissions, plan, expiry, and limits
+        const stored = restoreSession()
+        if (stored?.sessionToken) {
+          const restoreRes = await api<UserSession>('auth:restoreSession', {
+            username: user.nama_pengguna,
+            sessionToken: stored.sessionToken,
+            deviceInfo: collectAuthDeviceInfo(),
+            remoteLicenseToken: stored.remote_license_token ?? null,
+            remoteLicenseRefreshToken: stored.remote_license_refresh_token ?? null,
+          })
+
+          if (!cancelled && restoreRes?.success && restoreRes.data) {
+            const nextUser = restoreRes.data
+            const wasDemo = user.hak_akses === 'demo'
+            const isNowPaid = nextUser.hak_akses !== 'demo' && (Boolean(nextUser.subscription_plan_name) || Boolean(nextUser.subscription_plan_id))
+
+            const nextStored: StoredSession = {
+              ...nextUser,
+              sessionToken: stored.sessionToken,
+              sessionExpiresAt: stored.sessionExpiresAt,
+              deviceId: stored.deviceId,
+              loginAt: stored.loginAt,
+              expiresAt: Math.min(stored.expiresAt, new Date(stored.sessionExpiresAt).getTime()),
+            }
+
+            setUser(toPublicSession(nextStored))
+            secureStorage.setJSON('pos_session', nextStored)
+
+            window.dispatchEvent(new CustomEvent('license:updated', { detail: { user: nextUser } }))
+
+            if (wasDemo && isNowPaid) {
+              window.dispatchEvent(new CustomEvent('toast:show', {
+                detail: {
+                  message: `🎉 Lisensi Aktif: ${nextUser.subscription_plan_name || 'Paket Berhasil Diaktifkan'}!`,
+                  type: 'success',
+                },
+              }))
+            }
           }
-          if (data?.popup && shouldShowRemoteLicensePopup(data)) {
-            window.dispatchEvent(new CustomEvent('license:remote-popup', {
-              detail: { popup: data.popup, force: !!data.force_popup },
-            }))
-          }
-          return
+        }
+
+        if (data?.popup && shouldShowRemoteLicensePopup(data)) {
+          window.dispatchEvent(new CustomEvent('license:remote-popup', {
+            detail: { popup: data.popup, force: !!data.force_popup },
+          }))
         }
 
         const code = String(data?.error_code ?? '').toUpperCase()
@@ -358,26 +372,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           return
         }
-        if (data?.popup && shouldShowRemoteLicensePopup(data)) {
-          window.dispatchEvent(new CustomEvent('license:remote-popup', {
-            detail: {
-              popup: data.popup,
-              force: ['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED'].includes(code),
-            },
-          }))
-        }
 
-        if (code === 'EXPIRED' && data?.subscription?.expires_at) {
-          setUser(prev => prev && prev.nama_pengguna === user.nama_pengguna ? {
-            ...prev,
-            access_expires_at: data.subscription?.expires_at,
-            subscription_expires_at: data.subscription?.expires_at,
-            access_days_remaining: 0,
-          } : prev)
-          return
-        }
-
-        if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED', 'DEVICE_LIMIT', 'NOT_FOUND'].includes(code)) {
+        if (['BLOCKED', 'SUSPENDED', 'DEVICE_BLOCKED'].includes(code)) {
           setTimeout(() => {
             if (!cancelled) logout()
           }, 1200)

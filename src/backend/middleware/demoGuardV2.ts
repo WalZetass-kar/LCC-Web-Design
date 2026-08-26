@@ -1,19 +1,3 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * DEMO GUARD V2 — Centralized IPC Mutation Blocker (Layer 2)
- * ═══════════════════════════════════════════════════════════════════════
- * 
- * This guard wraps ALL IPC handlers in the main process.
- * It checks the server-side session (NOT client data) to determine
- * if the current user is in demo mode.
- * 
- * Key security properties:
- * 1. Uses demoSession (main process memory) — renderer can't tamper
- * 2. Blocks based on channel pattern — comprehensive coverage
- * 3. Logs all violation attempts — audit trail
- * 4. Catches errors from deeper layers — consistent error response
- */
-
 import { demoSession } from '../services/demoSessionManager.js'
 import type { IpcResponse } from '../../shared/types.js'
 import { canManageOperations, canOpenDeveloperPanel } from '../../shared/config/rbac.js'

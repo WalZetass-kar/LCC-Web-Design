@@ -278,6 +278,8 @@ function App() {
             <Route path="/ecommerce-api" element={<RequireOperationalAdmin><EcommerceApi /></RequireOperationalAdmin>} />
             <Route path="/marketplace" element={<RequireOperationalAdmin><Marketplace /></RequireOperationalAdmin>} />
             <Route path="/payment" element={<PaymentInvoice />} />
+            <Route path="/subscription" element={<PaymentInvoice />} />
+            <Route path="/my-subscription" element={<PaymentInvoice />} />
             <Route path="/payment-automation" element={<RequireOperationalAdmin><PaymentAutomation /></RequireOperationalAdmin>} />
             <Route path="/stock-transfer" element={<RequireRoles allowedRoles={['developer', 'super_admin', 'admin']}><StockTransfer /></RequireRoles>} />
             <Route path="/customer-display-page" element={<CustomerDisplayPage />} />

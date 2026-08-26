@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * DEMO GUARD V2 — Centralized IPC Mutation Blocker (Layer 2)
- * ═══════════════════════════════════════════════════════════════════════
  * 
  * This guard wraps ALL IPC handlers in the main process.
  * It checks the server-side session (NOT client data) to determine

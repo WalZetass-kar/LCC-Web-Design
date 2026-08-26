@@ -1,18 +1,3 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * DEMO SESSION MANAGER — Server-Side Session Role Tracking
- * ═══════════════════════════════════════════════════════════════════════
- * 
- * This is the SINGLE SOURCE OF TRUTH for the current user's role.
- * It lives in the main process memory — the renderer CANNOT modify it.
- * 
- * Security model:
- * - Role is set ONLY during auth:login (validated against database)
- * - Renderer cannot send fake role data
- * - All IPC guards read from this manager
- * - Even DevTools manipulation cannot change these values
- */
-
 interface DemoSession {
   username: string
   hakAkses: string

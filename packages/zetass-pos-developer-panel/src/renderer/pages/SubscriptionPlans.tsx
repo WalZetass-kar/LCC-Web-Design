@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * SUBSCRIPTION PLANS — Admin page for managing pricing plans
- * ═══════════════════════════════════════════════════════════════════════
  *
  * Legacy local plans page. Runtime routing now points users to Developer Panel -> Paket.
  * CRUD: Create, Edit, Deactivate (soft delete) for old local data only.

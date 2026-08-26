@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * LEGACY RE-EXPORT — Backward compatibility barrel file
- * ═══════════════════════════════════════════════════════════════════════
  * 
  * Each controller has been split into its own file for maintainability.
  * This barrel file re-exports all of them so existing imports still work.

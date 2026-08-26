@@ -1,17 +1,3 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * DEMO OVERLAY — Visual Demo Mode Indicators (Layer 5 — UX)
- * ═══════════════════════════════════════════════════════════════════════
- * 
- * Renders:
- * 1. A persistent top banner (red, can't be dismissed)
- * 2. A transparent watermark across the entire app
- * 3. A floating badge at bottom-right (clickable → opens pricing popup)
- * 
- * NOTE: This is UX feedback only. Security is in the main process.
- * Even if someone removes this overlay via DevTools, writes are still blocked.
- */
-
 import { useAuth } from '../contexts/AuthContext'
 import { useDemo } from '../contexts/DemoContext'
 import { ShieldAlert, Lock, Eye, Rocket } from 'lucide-react'

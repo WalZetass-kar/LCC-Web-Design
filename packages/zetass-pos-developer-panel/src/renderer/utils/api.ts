@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * API WRAPPER — Pre-flight demo block + typed IPC invocation
- * ═══════════════════════════════════════════════════════════════════════
  * 
  * This is the renderer-side API layer with demo mode pre-filtering.
  * 

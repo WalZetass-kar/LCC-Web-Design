@@ -453,9 +453,6 @@ export default function Login() {
       {/* Main Grid: 2 Columns on Desktop (60% Left Hero / 40% Right Login Form) */}
       <div className="flex-1 lg:grid lg:grid-cols-[1.2fr_0.8fr] relative z-10 w-full min-h-screen">
         
-        {/* ════════════════════════════════════════════════════════════════
-           LEFT HERO PANEL (Desktop 60% Width, Hidden on Small Mobile Header)
-           ════════════════════════════════════════════════════════════════ */}
         <div className="hidden lg:flex flex-col justify-between border-r border-slate-200 dark:border-slate-800/80 bg-slate-100/70 dark:bg-slate-950 p-10 lg:p-12">
           
           {/* Header Bar */}
@@ -577,9 +574,6 @@ export default function Login() {
           </div>
         </div>
 
-        {/* ════════════════════════════════════════════════════════════════
-           RIGHT LOGIN PANEL (Desktop 40% Width & Dedicated Mobile Responsive Layout)
-           ════════════════════════════════════════════════════════════════ */}
         <div className="flex flex-col justify-between items-center p-4 sm:p-8 lg:p-10 bg-white dark:bg-slate-900 min-h-screen">
           
           {/* Mobile Top Header */}
@@ -970,11 +964,7 @@ export default function Login() {
 
       </div>
 
-      {/* ════════════════════════════════════════════════════════════════
-         MODALS (Force Password Change & Store Identity Setup)
-         ════════════════════════════════════════════════════════════════ */}
-      
-      {/* Force Password Change Modal */}
+      {/* Modals */}
       <Modal
         open={!!forcePasswordUser}
         onClose={() => {}}

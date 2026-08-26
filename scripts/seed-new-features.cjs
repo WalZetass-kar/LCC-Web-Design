@@ -360,9 +360,7 @@ const defaultCustomer = existingCustomers[0]?.kd_customer || 'CUST0001'
 
 console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.length} pengguna, ${existingCustomers.length} customer`)
 
-// ═══════════════════════════════════════════════════════════════════════
 // 1. EMPLOYEES
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedEmployees() {
   if (!isEmpty('mediasoft_employees')) {
     console.log('⏭️  Employees already seeded')
@@ -396,9 +394,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${employees.length} employees`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 2. EMPLOYEE CONTRACTS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedContracts() {
   if (!isEmpty('mediasoft_employee_contracts')) {
     console.log('⏭️  Employee contracts already seeded')
@@ -429,9 +425,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${employees.length} employee contracts`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 3. ATTENDANCE (today + past 7 days)
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedAttendance() {
   if (!isEmpty('mediasoft_attendance')) {
     console.log('⏭️  Attendance already seeded')
@@ -466,9 +460,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${count} attendance records`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 4. PAYROLL (current month)
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedPayroll() {
   if (!isEmpty('mediasoft_payroll')) {
     console.log('⏭️  Payroll already seeded')
@@ -515,9 +507,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${activeEmp.length} payroll records`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 5. TIP POOLING
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedTipPooling() {
   if (!isEmpty('mediasoft_tip_pooling')) {
     console.log('⏭️  Tip pooling already seeded')
@@ -550,9 +540,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log('✅ Seeded tip pooling for 2 days')
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 6. SHIFT SCHEDULES (this week)
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedShiftSchedules() {
   if (!isEmpty('mediasoft_shift_schedules')) {
     console.log('⏭️  Shift schedules already seeded')
@@ -579,9 +567,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${count} shift schedules`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 7. KDS ORDERS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedKdsOrders() {
   if (!isEmpty('mediasoft_kds_orders')) {
     console.log('⏭️  KDS orders already seeded')
@@ -650,9 +636,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${count} KDS orders with items`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 8. FLOOR LAYOUTS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedFloorLayouts() {
   if (!isEmpty('mediasoft_floor_layouts')) {
     console.log('⏭️  Floor layouts already seeded')
@@ -668,9 +652,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log('✅ Seeded 2 floor layouts')
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 9. TABLES
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedTables() {
   if (!isEmpty('mediasoft_tables')) {
     console.log('⏭️  Tables already seeded')
@@ -703,9 +685,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${tableCount} tables`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 10. RESERVATIONS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedReservations() {
   if (!isEmpty('mediasoft_reservations')) {
     console.log('⏭️  Reservations already seeded')
@@ -746,9 +726,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${guests.length} reservations`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 11. RECIPES
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedRecipes() {
   if (!isEmpty('mediasoft_recipes')) {
     console.log('⏭️  Recipes already seeded')
@@ -850,9 +828,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${recipes.length} recipes with ingredients`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 12. DELIVERY ORDERS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedDeliveries() {
   if (!isEmpty('mediasoft_delivery_orders')) {
     console.log('⏭️  Delivery orders already seeded')
@@ -888,9 +864,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${deliveries.length} delivery orders`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 13. BANK ACCOUNTS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedBankAccounts() {
   if (!isEmpty('mediasoft_bank_accounts')) {
     console.log('⏭️  Bank accounts already seeded')
@@ -907,9 +881,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log('✅ Seeded 3 bank accounts')
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 14. BANK TRANSACTIONS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedBankTransactions() {
   if (!isEmpty('mediasoft_bank_transactions')) {
     console.log('⏭️  Bank transactions already seeded')
@@ -941,9 +913,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${count} bank transactions`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 15. FIXED ASSETS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedFixedAssets() {
   if (!isEmpty('mediasoft_fixed_assets')) {
     console.log('⏭️  Fixed assets already seeded')
@@ -973,9 +943,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${assets.length} fixed assets`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 16. BUDGETS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedBudgets() {
   if (!isEmpty('mediasoft_budgets')) {
     console.log('⏭️  Budgets already seeded')
@@ -1004,9 +972,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${budgets.length} budgets`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 17. GIFT CARDS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedGiftCards() {
   if (!isEmpty('mediasoft_gift_cards')) {
     console.log('⏭️  Gift cards already seeded')
@@ -1031,9 +997,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${cards.length} gift cards`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 18. CUSTOMER FEEDBACK
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedFeedback() {
   if (!isEmpty('mediasoft_customer_feedback')) {
     console.log('⏭️  Customer feedback already seeded')
@@ -1061,9 +1025,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${feedbacks.length} customer feedback`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 19. CAMPAIGNS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedCampaigns() {
   if (!isEmpty('mediasoft_campaigns')) {
     console.log('⏭️  Campaigns already seeded')
@@ -1116,9 +1078,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${campaigns.length} campaigns`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 20. STOREFRONT SETTINGS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedStorefront() {
   const exists = db.prepare('SELECT COUNT(*) as cnt FROM mediasoft_storefront_settings').get().cnt > 0
   if (exists) {
@@ -1155,9 +1115,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   }
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 21. DOCUMENTS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedDocuments() {
   if (!isEmpty('mediasoft_documents')) {
     console.log('⏭️  Documents already seeded')
@@ -1182,9 +1140,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log(`✅ Seeded ${docs.length} documents`)
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 22. FORECAST SETTINGS
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedForecast() {
   const exists = db.prepare('SELECT COUNT(*) as cnt FROM mediasoft_forecast_settings').get().cnt > 0
   if (exists) {
@@ -1199,9 +1155,7 @@ console.log(`📦 Ditemukan ${existingBarang.length} barang, ${existingUsers.len
   console.log('✅ Seeded forecast settings')
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
 // 23. DYNAMIC PRICING RULES
-// ═══════════════════════════════════════════════════════════════════════
 ;(function seedPricingRules() {
   if (!isEmpty('mediasoft_dynamic_pricing_rules')) {
     console.log('⏭️  Dynamic pricing rules already seeded')

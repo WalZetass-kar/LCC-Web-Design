@@ -1,13 +1,3 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * IPC HANDLERS — All IPC channels with DEMO GUARD protection
- * ═══════════════════════════════════════════════════════════════════════
- * 
- * SECURITY: Every handler is wrapped with withDemoGuard().
- * Mutation channels are automatically blocked for demo users.
- * The guard checks the server-side session — NOT client data.
- */
-
 import type { IpcMain, IpcMainInvokeEvent } from 'electron'
 import { dialog, BrowserWindow } from 'electron'
 import path from 'path'
@@ -205,6 +195,8 @@ export function registerIpcHandlers(ipcMain: IpcMain) {
   })
 
   // ─── AUTH (always allowed — no demo guard needed) ───────────────────
+  ipcMain.handle('auth:init', () => ({ success: true }))
+
   const authHasUsers = registerChannel('auth:hasUsers', () => AuthController.hasUsers())
   ipcMain.handle('auth:hasUsers', () => invokeRendererChannel('auth:hasUsers', [], authHasUsers))
 

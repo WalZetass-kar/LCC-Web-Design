@@ -1,19 +1,48 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, CreditCard, ExternalLink, MessageCircle, RefreshCw } from 'lucide-react'
+import {
+  AlertTriangle,
+  Award,
+  Check,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  Crown,
+  ExternalLink,
+  HelpCircle,
+  Laptop,
+  Loader2,
+  Lock,
+  MessageCircle,
+  Package,
+  Radio,
+  RefreshCw,
+  Rocket,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Users,
+  XCircle,
+  Zap,
+} from 'lucide-react'
 import { api } from '../utils/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useDemo } from '../contexts/DemoContext'
 import { useToast } from '../contexts/ToastContext'
-import { SkeletonSpinner } from '../components/Skeleton'
+import { SkeletonPage } from '../components/Skeleton'
+import { SUBSCRIPTION_UPGRADE_WA_NUMBER, normalizePhoneNumber } from '../utils/whatsapp'
 
 interface PublicPlan {
-  id: string
+  id: string | number
   code: string
   name: string
   description?: string | null
+  features?: string[] | null
+  feature_flags?: Record<string, boolean> | null
   price: number
   currency: string
   duration_days: number
   is_recommended?: boolean
+  sort_order?: number
 }
 
 interface Invoice {
@@ -31,48 +60,109 @@ interface Invoice {
   created_at: string
 }
 
-function isLifetimePlan(plan: PublicPlan) {
-  const text = `${plan.code} ${plan.name}`.toLowerCase()
-  return plan.duration_days === 0 || text.includes('lifetime') || text.includes('seumur')
+const ALL_SYSTEM_FEATURES = [
+  { key: 'reports', label: 'Laporan & Analitik Keuangan' },
+  { key: 'export_excel', label: 'Export Laporan ke Excel' },
+  { key: 'export_pdf', label: 'Export Laporan ke PDF' },
+  { key: 'multi_user', label: 'Multi-User & Pembatasan Role' },
+  { key: 'stock_opname', label: 'Stok Opname & Penyesuaian' },
+  { key: 'debt_management', label: 'Manajemen Hutang & Piutang' },
+  { key: 'shift_management', label: 'Manajemen Shift Kasir' },
+  { key: 'multi_branch', label: 'Multi Cabang & Gudang' },
+  { key: 'return_refund', label: 'Retur Penjualan & Refund' },
+  { key: 'backup', label: 'Backup & Restore Database' },
+  { key: 'api_access', label: 'Akses API E-Commerce' },
+]
+
+function formatPlanPrice(plan: { price: number; currency?: string }): string {
+  const curr = !plan.currency || plan.currency.toUpperCase() === 'IDR' ? 'Rp' : plan.currency
+  return `${curr} ${Number(plan.price || 0).toLocaleString('id-ID')}`
 }
 
-function getBuyerVisiblePlans(plans: PublicPlan[]) {
-  const lifetimePlans = plans.filter(isLifetimePlan)
-  return lifetimePlans.length > 0 ? lifetimePlans : plans
+function buildWhatsAppUrl(phone: string | null | undefined, message: string): string {
+  const target = normalizePhoneNumber(phone || SUBSCRIPTION_UPGRADE_WA_NUMBER)
+  return `https://wa.me/${target}?text=${encodeURIComponent(message)}`
+}
+
+function getPlanDurationLabel(durationDays: number): string {
+  if (durationDays === 0) return 'Seumur Hidup'
+  if (durationDays <= 1) return '1 Hari'
+  if (durationDays >= 360) return '1 Tahun'
+  if (durationDays >= 28 && durationDays <= 31) return '1 Bulan'
+  return `${durationDays} Hari`
 }
 
 export default function PaymentInvoice() {
-  const { user } = useAuth()
+  const { user, isDemo } = useAuth()
+  const { state: demoState, remainingUsage } = useDemo()
   const toast = useToast()
+
   const [plans, setPlans] = useState<PublicPlan[]>([])
   const [selectedCode, setSelectedCode] = useState('')
   const [email, setEmail] = useState(user?.email ?? '')
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
   const [creating, setCreating] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
+  // Load plans from server / local database
+  const loadPlans = async () => {
     setLoading(true)
-    api<PublicPlan[]>('license:getPublicPlans').then(r => {
-      if (cancelled) return
-      if (r.success) {
-        const rows = getBuyerVisiblePlans(r.data ?? [])
-        setPlans(rows)
-        setSelectedCode(current => current || rows.find(p => p.is_recommended || isLifetimePlan(p))?.code || rows[0]?.code || '')
-      } else {
-        toast(r.message || 'Gagal memuat paket pembayaran', 'error')
-      }
-      setLoading(false)
-    })
-    return () => { cancelled = true }
-  }, [toast])
+    const r = await api<PublicPlan[]>('license:getPublicPlans')
+    if (r.success) {
+      const rows = (r.data ?? []).sort((a, b) => (Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0)) || (Number(a.price) - Number(b.price)))
+      setPlans(rows)
+      setSelectedCode(current => current || rows.find(p => p.is_recommended || p.duration_days === 0)?.code || rows[0]?.code || '')
+    } else {
+      toast(r.message || 'Gagal memuat daftar paket', 'error')
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    void loadPlans()
+  }, [])
+
+  // Sync email when user updates
+  useEffect(() => {
+    if (user?.email && !email) setEmail(user.email)
+  }, [user?.email])
+
+  // Listen to realtime license updates
+  useEffect(() => {
+    const onLicenseUpdated = () => {
+      void loadPlans()
+    }
+    window.addEventListener('license:updated', onLicenseUpdated)
+    return () => window.removeEventListener('license:updated', onLicenseUpdated)
+  }, [])
 
   const selectedPlan = useMemo(
-    () => plans.find(plan => plan.code === selectedCode) ?? null,
+    () => plans.find(plan => plan.code === selectedCode) ?? plans[0] ?? null,
     [plans, selectedCode],
   )
 
+  // Manual instant sync triggered by user
+  const handleSyncNow = async () => {
+    if (!user?.nama_pengguna) return
+    setSyncing(true)
+    try {
+      const res = await api<any>('license:syncBuyerLicense', user.nama_pengguna)
+      // Trigger global event for AuthContext to refresh local session
+      window.dispatchEvent(new Event('license:sync-now'))
+      if (res.success) {
+        toast('Lisensi berhasil disinkronkan secara realtime!', 'success')
+      } else {
+        toast(res.message || 'Gagal sinkronisasi lisensi', 'info')
+      }
+    } catch {
+      toast('Koneksi ke server lisensi gagal', 'error')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  // Poll invoice status if pending
   useEffect(() => {
     if (!invoice?.external_ref || invoice.status === 'paid') return
     const interval = window.setInterval(async () => {
@@ -81,147 +171,496 @@ export default function PaymentInvoice() {
       const next = r.data
       setInvoice(prev => prev ? { ...prev, ...next } : next)
       if (next.status === 'paid') {
-        toast('Pembayaran sudah diapprove. Lisensi akan disinkronkan.', 'success')
-        if (user?.nama_pengguna) await api('license:syncBuyerLicense', user.nama_pengguna)
+        toast('Pembayaran telah disetujui developer! Lisensi aktif seketika.', 'success')
+        window.dispatchEvent(new Event('license:sync-now'))
       }
-    }, 15_000)
+    }, 10_000)
     return () => window.clearInterval(interval)
-  }, [invoice?.external_ref, invoice?.status, toast, user?.nama_pengguna])
+  }, [invoice?.external_ref, invoice?.status, toast])
 
-  if (loading) return <SkeletonSpinner />
+  const handleRequestPayment = async () => {
+    if (!selectedPlan) return toast('Pilih salah satu paket terlebih dahulu', 'error')
+    const buyerEmail = email.trim() || user?.email || user?.nama_pengguna || ''
 
-  async function createInvoice() {
-    if (!selectedPlan) return toast('Paket wajib dipilih', 'error')
-    if (!email.trim()) return toast('Email akun pembeli wajib diisi', 'error')
+    const durationText = selectedPlan.duration_days === 0
+      ? 'Seumur Hidup (Sekali Bayar)'
+      : `${selectedPlan.duration_days} hari`
+
+    const message = [
+      'Halo Admin Zetass POS, saya ingin membeli / berlangganan lisensi:',
+      '',
+      `📦 Paket: ${selectedPlan.name} (${selectedPlan.code})`,
+      `💰 Harga: ${formatPlanPrice(selectedPlan)} / ${getPlanDurationLabel(selectedPlan.duration_days)}`,
+      `⏱️ Durasi: ${durationText}`,
+      `👤 Akun: ${user?.nama_lengkap ?? user?.nama_pengguna ?? '-'}`,
+      `📧 Email: ${buyerEmail || '-'}`,
+      '',
+      'Mohon nomor rekening pembayaran dan aktivasi lisensinya. Terima kasih.',
+    ].join('\n')
+
+    const directWaUrl = buildWhatsAppUrl(null, message)
+
     setCreating(true)
-    const r = await api<Invoice>('license:createManualPaymentRequest', {
-      email: email.trim(),
-      plan_code: selectedPlan.code,
-    })
-    setCreating(false)
-    if (!r.success || !r.data) return toast(r.message || 'Gagal membuat request pembayaran', 'error')
-    setInvoice(r.data)
-    toast('Request pembayaran dibuat', 'success')
-    if (r.data.payment_url) void api('app:openExternal', r.data.payment_url)
+    try {
+      const r = await api<Invoice>('license:createManualPaymentRequest', {
+        email: buyerEmail,
+        plan_code: selectedPlan.code,
+      })
+      if (r.success && r.data) {
+        setInvoice(r.data)
+        toast('Permintaan lisensi dibuat! Mengarahkan ke WhatsApp developer...', 'success')
+        const targetUrl = r.data.payment_url || buildWhatsAppUrl(r.data.whatsapp_number, r.data.whatsapp_message || message)
+        void api('app:openExternal', targetUrl)
+      } else {
+        void api('app:openExternal', directWaUrl)
+      }
+    } catch {
+      void api('app:openExternal', directWaUrl)
+    } finally {
+      setCreating(false)
+    }
   }
 
+  if (loading && plans.length === 0) return <SkeletonPage rows={6} />
+
+  // Calculate current subscription status details
+  const isLifetime = user?.subscription_plan_code === 'LIFETIME'
+    || (user?.subscription_plan_name || '').toLowerCase().includes('seumur')
+    || (user?.subscription_plan_name || '').toLowerCase().includes('lifetime')
+    || (user?.subscription_expires_at === null && !isDemo && Boolean(user?.subscription_plan_name))
+
+  const isExpired = user?.access_days_remaining !== null && user?.access_days_remaining !== undefined && user.access_days_remaining <= 0 && !isLifetime && !isDemo
+  const isPaidActive = !isDemo && !isExpired && (isLifetime || Boolean(user?.subscription_plan_name) || Boolean(user?.subscription_plan_id))
+
+  const userPlanName = user?.subscription_plan_name || (isDemo ? 'Akun Demo' : isLifetime ? 'Sekali Beli Seumur Hidup' : 'Akses Penuh POS')
+
+  const expiryDisplay = isLifetime
+    ? 'Permanen / Seumur Hidup'
+    : user?.subscription_expires_at
+    ? new Date(user.subscription_expires_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+    : isDemo
+    ? 'Terbatas (Mode Demo)'
+    : 'Aktif'
+
+  const userFlags = (user?.feature_flags as Record<string, boolean>) || {}
+
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-600 text-white">
-          <CreditCard className="h-5 w-5" />
+    <div className="mx-auto max-w-5xl space-y-6 pb-12">
+      {/* ─── Page Header ────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/25 ring-4 ring-violet-500/10">
+            <Crown className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-black text-slate-900 dark:text-white sm:text-2xl">
+                Status Langganan & Lisensi
+              </h1>
+              <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 sm:inline-flex">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                Realtime Sync
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+              Pantau paket aktif, batas kapasitas toko, dan nikmati aktivasi realtime tanpa perlu relog.
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="heading-1">Pembayaran Lisensi</h1>
-          <p className="text-caption">Ajukan aktivasi sekali beli seumur hidup melalui WhatsApp developer.</p>
+
+        <button
+          type="button"
+          onClick={handleSyncNow}
+          disabled={syncing}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+          {syncing ? 'Menyinkronkan...' : 'Sinkronkan Lisensi'}
+        </button>
+      </div>
+
+      {/* ─── Current Active Subscription Card ───────────────────────── */}
+      <div className="relative overflow-hidden rounded-3xl border border-violet-500/20 bg-gradient-to-br from-[#0c1427] via-[#101b33] to-[#0f172a] p-6 text-white shadow-xl shadow-slate-950/20 sm:p-7">
+        <div className="pointer-events-none absolute right-0 top-0 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
+
+        <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
+          {/* Plan Info */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-violet-400">
+                Paket Aktif Saat Ini
+              </span>
+              {isLifetime ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-3 py-0.5 text-xs font-black text-amber-300 ring-1 ring-amber-500/40">
+                  <Star className="h-3 w-3 fill-amber-300" /> SEUMUR HIDUP
+                </span>
+              ) : isPaidActive ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-3 py-0.5 text-xs font-bold text-emerald-300 ring-1 ring-emerald-500/30">
+                  <Zap className="h-3 w-3 fill-emerald-300" /> AKTIF
+                </span>
+              ) : isDemo ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-3 py-0.5 text-xs font-bold text-orange-300 ring-1 ring-orange-500/30">
+                  <AlertTriangle className="h-3 w-3" /> DEMO
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 px-3 py-0.5 text-xs font-bold text-rose-300 ring-1 ring-rose-500/30">
+                  <XCircle className="h-3 w-3" /> EXPIRED
+                </span>
+              )}
+            </div>
+
+            <h2 className="text-2xl font-black text-white sm:text-3xl">
+              {userPlanName}
+            </h2>
+
+            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300">
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-4 w-4 text-violet-400" />
+                <span>Masa Berlaku: <strong className="text-white">{expiryDisplay}</strong></span>
+              </div>
+              {user?.access_days_remaining !== null && user?.access_days_remaining !== undefined && !isLifetime && (
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-amber-400" />
+                  <span>Sisa: <strong className="text-amber-300">{Math.max(0, user.access_days_remaining)} Hari</strong></span>
+                </div>
+              )}
+              {user?.email && (
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <span>Akun: <strong className="text-slate-200">{user.email}</strong></span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Demo usage bar or quick upgrade button */}
+          <div className="flex flex-col items-start gap-3 lg:items-end">
+            {isDemo && (
+              <div className="w-full rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 sm:w-72">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="text-slate-300">Transaksi Demo</span>
+                  <span className="text-amber-400">{demoState.usage_count} / {demoState.usage_limit}</span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
+                    style={{ width: `${Math.min(100, Math.round((demoState.usage_count / Math.max(1, demoState.usage_limit)) * 100))}%` }}
+                  />
+                </div>
+                <p className="mt-1.5 text-[11px] text-slate-400">
+                  Sisa {remainingUsage} transaksi sebelum terkunci.
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('available-plans-section')
+                if (el) el.scrollIntoView({ behavior: 'smooth' })
+              }}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-violet-500/25 transition hover:from-violet-600 hover:to-fuchsia-600"
+            >
+              <Rocket className="h-4 w-4" />
+              {isPaidActive ? 'Perpanjang / Ganti Paket' : 'Beli & Upgrade Paket'}
+            </button>
+          </div>
+        </div>
+
+        {/* ─── Plan Limits & Quotas Grid ────────────────────────────── */}
+        <div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/10 pt-5 sm:grid-cols-4">
+          <div className="rounded-2xl bg-white/5 p-3.5 ring-1 ring-white/5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+              <Laptop className="h-4 w-4 text-violet-400" />
+              Batas Perangkat
+            </div>
+            <p className="mt-1.5 text-base font-extrabold text-white">
+              {!user?.max_devices || user.max_devices === -1 ? 'Unlimited' : `${user.max_devices} Device`}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white/5 p-3.5 ring-1 ring-white/5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+              <CreditCard className="h-4 w-4 text-emerald-400" />
+              Transaksi / Hari
+            </div>
+            <p className="mt-1.5 text-base font-extrabold text-white">
+              {!user?.max_transactions_per_day || user.max_transactions_per_day === -1
+                ? 'Tanpa Batas'
+                : isDemo
+                ? `${demoState.usage_limit} / hari`
+                : `${user.max_transactions_per_day} / hari`}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white/5 p-3.5 ring-1 ring-white/5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+              <Package className="h-4 w-4 text-blue-400" />
+              Batas Produk
+            </div>
+            <p className="mt-1.5 text-base font-extrabold text-white">
+              {!user?.max_products || user.max_products === -1 ? 'Tanpa Batas' : `${user.max_products} Produk`}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white/5 p-3.5 ring-1 ring-white/5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+              <Users className="h-4 w-4 text-amber-400" />
+              Multi-User
+            </div>
+            <p className="mt-1.5 text-base font-extrabold text-white">
+              {!user?.max_users || user.max_users === -1 ? 'Unlimited' : `${user.max_users} Akun`}
+            </p>
+          </div>
+        </div>
+
+        {/* ─── Unlocked Features Grid ───────────────────────────────── */}
+        <div className="mt-6 border-t border-white/10 pt-5">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            Daftar Fitur Operasional Paket Anda
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {ALL_SYSTEM_FEATURES.map((feat) => {
+              const isUnlocked = isPaidActive || isLifetime || (userFlags[feat.key] !== false && !isDemo)
+              return (
+                <div
+                  key={feat.key}
+                  className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs transition ${
+                    isUnlocked
+                      ? 'bg-emerald-500/10 text-emerald-200 ring-1 ring-emerald-500/20'
+                      : 'bg-white/5 text-slate-500 opacity-60'
+                  }`}
+                >
+                  {isUnlocked ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                  ) : (
+                    <Lock className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                  )}
+                  <span className="font-medium truncate">{feat.label}</span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-800 dark:text-white">Paket Sekali Beli</h2>
-            <button
-              onClick={() => window.location.reload()}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
-          </div>
+      {/* ─── Realtime Activation Banner ─────────────────────────────── */}
+      <div className="flex items-center gap-3.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-900 dark:text-emerald-200">
+        <ShieldCheck className="h-6 w-6 shrink-0 text-emerald-500" />
+        <div className="text-xs leading-relaxed sm:text-sm">
+          <strong>Aktivasi Instan Tanpa Relog:</strong> Begitu pembayaran diverifikasi dan disetujui developer di Developer Panel, lisensi aplikasi Anda otomatis aktif seketika tanpa harus logout atau restart aplikasi.
+        </div>
+      </div>
 
-          {loading ? (
-            <p className="py-8 text-center text-sm text-slate-400">Memuat paket...</p>
-          ) : plans.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-400">Belum ada paket aktif dari server.</p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {plans.map(plan => {
-                const active = selectedCode === plan.code
-                return (
-                  <button
-                    key={plan.code}
-                    type="button"
-                    onClick={() => setSelectedCode(plan.code)}
-                    className={`rounded-xl border p-4 text-left transition-colors ${
-                      active
-                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                        : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
+      {/* ─── Available Plans Section ────────────────────────────────── */}
+      <div id="available-plans-section" className="space-y-4 pt-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              Pilihan Paket Langganan & Lisensi
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Pilih paket yang sesuai untuk mengembangkan bisnis toko Anda.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={loadPlans}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            title="Refresh daftar paket"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        </div>
+
+        {plans.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center dark:border-slate-800 dark:bg-slate-900">
+            <p className="text-sm font-semibold text-slate-500">Belum ada paket yang aktif di Developer Panel.</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {plans.map((plan) => {
+              const active = selectedCode === plan.code
+              const isRecommended = Boolean(plan.is_recommended)
+              const isPlanLifetime = plan.duration_days === 0 || plan.code.includes('LIFETIME')
+
+              return (
+                <div
+                  key={plan.code}
+                  onClick={() => setSelectedCode(plan.code)}
+                  className={`relative flex cursor-pointer flex-col justify-between rounded-3xl border p-5 transition hover:-translate-y-1 ${
+                    active
+                      ? 'border-violet-500 bg-violet-50/50 shadow-xl shadow-violet-500/10 ring-2 ring-violet-500 dark:border-violet-400 dark:bg-violet-950/20'
+                      : 'border-slate-200 bg-white shadow-sm hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700'
+                  }`}
+                >
+                  {isRecommended && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 px-3 py-0.5 text-[10px] font-extrabold text-white shadow-md">
+                      ★ REKOMENDASI
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="text-xs font-semibold uppercase text-slate-400">{plan.code}</p>
-                        <h3 className="mt-1 font-bold text-slate-900 dark:text-white">{plan.name}</h3>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          {plan.code}
+                        </span>
+                        <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                          {plan.name}
+                        </h3>
                       </div>
-                      {(plan.is_recommended || isLifetimePlan(plan)) && (
-                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                          Sekali beli
+                      {isPlanLifetime && (
+                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                          Sekali Beli
                         </span>
                       )}
                     </div>
-                    <p className="mt-3 text-xl font-extrabold text-slate-900 dark:text-white">
-                      Rp {Number(plan.price).toLocaleString('id-ID')}
-                    </p>
-                    <p className="text-xs text-slate-500">{plan.duration_days === 0 ? 'Seumur hidup' : `${plan.duration_days} hari`}</p>
-                    {plan.description && <p className="mt-3 text-xs leading-5 text-slate-500">{plan.description}</p>}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </section>
 
-        <aside className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="text-sm font-bold text-slate-800 dark:text-white">Request Manual</h2>
-          <label className="mt-4 block text-xs font-semibold text-slate-500">Email akun pembeli</label>
-          <input
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
-            placeholder="nama@email.com"
-          />
+                    <div className="mt-3">
+                      <span className="text-2xl font-black text-slate-900 dark:text-white">
+                        {formatPlanPrice(plan)}
+                      </span>
+                      <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">
+                        / {getPlanDurationLabel(plan.duration_days)}
+                      </span>
+                    </div>
 
-          {selectedPlan && (
-            <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800">
-              <p className="font-semibold text-slate-800 dark:text-white">{selectedPlan.name}</p>
-              <p className="mt-1 text-slate-500">Rp {Number(selectedPlan.price).toLocaleString('id-ID')}</p>
-            </div>
-          )}
+                    {plan.description && (
+                      <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                        {plan.description}
+                      </p>
+                    )}
+                  </div>
 
-          <button
-            onClick={createInvoice}
-            disabled={creating || !selectedPlan}
-            className="mt-4 w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
-          >
-            {creating ? 'Membuat request...' : 'Chat Developer'}
-          </button>
+                  <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedCode(plan.code)
+                        void handleRequestPayment()
+                      }}
+                      className={`w-full rounded-xl py-2.5 text-xs font-bold transition ${
+                        active
+                          ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/25 hover:bg-violet-700'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      Pilih & Beli via WhatsApp
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
-          <p className="mt-3 text-xs leading-5 text-slate-500">
-            Sistem membuat request `pending` di Supabase, lalu membuka WhatsApp. Developer mengaktifkan lisensi seumur hidup setelah pembayaran dikonfirmasi.
+      {/* ─── Checkout & Request Status Panel ───────────────────────── */}
+      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+        {/* Buyer Info & WhatsApp Action */}
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+            Informasi Akun Pembeli
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Email ini digunakan untuk mengidentifikasi akun toko Anda saat aktivasi lisensi.
           </p>
 
-          {invoice && (
-            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-900/60 dark:bg-green-900/20 dark:text-green-200">
-              <div className="flex items-start gap-2">
-                {invoice.status === 'paid' ? <CheckCircle2 className="mt-0.5 h-4 w-4" /> : <MessageCircle className="mt-0.5 h-4 w-4" />}
+          <div className="mt-4 space-y-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Email / Username Pembeli
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="nama@toko.com"
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              />
+            </div>
+
+            {selectedPlan && (
+              <div className="flex items-center justify-between rounded-2xl bg-violet-50 p-4 dark:bg-violet-950/20">
                 <div>
-                  <p className="font-bold">{invoice.invoice_number || invoice.external_ref}</p>
-                  <p className="mt-1">Status: {invoice.status}</p>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Paket Terpilih</p>
+                  <p className="text-sm font-bold text-violet-900 dark:text-violet-200">{selectedPlan.name}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-extrabold text-violet-900 dark:text-violet-200">
+                    {formatPlanPrice(selectedPlan)}
+                  </p>
+                  <p className="text-[11px] text-slate-500">{getPlanDurationLabel(selectedPlan.duration_days)}</p>
                 </div>
               </div>
-              {invoice.expires_at && <p>Expired: {new Date(invoice.expires_at).toLocaleString('id-ID')}</p>}
-              {invoice.payment_url && (
-                <button
-                  onClick={() => void api('app:openExternal', invoice.payment_url!)}
-                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Chat WhatsApp
-                </button>
-              )}
-            </div>
-          )}
-        </aside>
+            )}
+
+            <button
+              type="button"
+              onClick={handleRequestPayment}
+              disabled={creating || !selectedPlan}
+              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/25 transition hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+              Chat & Beli via WhatsApp Developer
+            </button>
+          </div>
+        </div>
+
+        {/* Invoice / Request Tracker */}
+        <div className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              Status Permintaan Terakhir
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Pantau status konfirmasi invoice Anda.
+            </p>
+
+            {invoice ? (
+              <div className="mt-4 space-y-3 rounded-2xl border border-emerald-500/20 bg-emerald-50/50 p-4 dark:bg-emerald-950/20">
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />
+                  <div className="flex-1">
+                    <p className="font-mono text-xs font-bold text-slate-900 dark:text-white">
+                      {invoice.invoice_number || invoice.external_ref}
+                    </p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">
+                        {invoice.status}
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        Rp {Number(invoice.amount).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {invoice.payment_url && (
+                  <button
+                    type="button"
+                    onClick={() => void api('app:openExternal', invoice.payment_url!)}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Buka WhatsApp Admin
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="mt-6 flex flex-col items-center justify-center py-6 text-center text-slate-400">
+                <CreditCard className="h-8 w-8 opacity-30 mb-2" />
+                <p className="text-xs">Belum ada request pembayaran yang aktif.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 rounded-2xl bg-slate-50 p-3.5 text-[11px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <p className="font-semibold text-slate-700 dark:text-slate-200">Butuh Bantuan Lisensi?</p>
+            <p className="mt-0.5">Hubungi Developer POS kapan saja untuk panduan migrasi, custom paket, atau setup multi-cabang.</p>
+          </div>
+        </div>
       </div>
     </div>
   )

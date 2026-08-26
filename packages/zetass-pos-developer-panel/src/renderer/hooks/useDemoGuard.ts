@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * useDemoGuard — Enhanced hook with pricing popup trigger integration
- * ═══════════════════════════════════════════════════════════════════════
  *
  * Layer 1: UX feedback (toast) — existing behavior preserved
  * Layer 2: Pricing popup trigger — smart conversion prompts

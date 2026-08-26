@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Save } from 'lucide-react'
+import { Eye, Save } from 'lucide-react'
 import { api } from '../../utils/api'
 import { useToast } from '../../contexts/ToastContext'
 import { SkeletonPage } from '../../components/Skeleton'
@@ -137,6 +137,25 @@ function PopupCard({ popup, onSaved }: { popup: PopupRow; onSaved: () => void })
         <button onClick={save} disabled={saving}
           className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-xl px-4 py-2 text-sm font-medium">
           <Save className="w-4 h-4" />{saving ? 'Menyimpan…' : 'Simpan'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('license:remote-popup', {
+              detail: {
+                popup: {
+                  ...form,
+                  cta_text: form.cta_text || 'Upgrade Sekarang',
+                  severity: form.severity || 'warning',
+                  dismissible: form.dismissible !== false && form.dismissible !== 0,
+                },
+                force: false,
+              },
+            }))
+          }}
+          className="flex items-center gap-2 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl px-4 py-2 text-sm font-medium transition"
+        >
+          <Eye className="w-4 h-4" /> Preview Popup
         </button>
         {saved && <span className="text-xs text-green-600 dark:text-green-400 font-medium">✓ Tersimpan</span>}
       </div>

@@ -689,9 +689,6 @@ export default function Transaksi() {
   return (
     <div className="flex flex-col gap-3 lg:h-[calc(100vh-7rem)] lg:flex-row select-none">
       
-      {/* ════════════════════════════════════════════════════════════════
-         LEFT PANEL — PRODUCT CATALOG GRID & QUICK SEARCH
-         ════════════════════════════════════════════════════════════════ */}
       <div className="flex min-w-0 flex-none lg:flex-1 flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm lg:p-5 lg:min-h-0 lg:max-h-none lg:overflow-y-auto">
         
         {/* Shift Warning Banner */}
@@ -811,9 +808,6 @@ export default function Transaksi() {
 
       </div>
 
-      {/* ════════════════════════════════════════════════════════════════
-         RIGHT PANEL — CHECKOUT CART & PAYMENT SUMMARY
-         ════════════════════════════════════════════════════════════════ */}
       <div className="flex flex-none w-full shrink-0 flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm lg:w-[26rem] xl:w-[28rem] lg:shrink">
         
         {/* Customer Selector Bar */}
@@ -1117,10 +1111,6 @@ export default function Transaksi() {
 
       </div>
 
-      {/* ════════════════════════════════════════════════════════════════
-         MODALS (QRIS, Struk, Camera Scanner, Hold Carts, Shortcuts, Clear Cart)
-         ════════════════════════════════════════════════════════════════ */}
-      
       {/* QRIS Modal */}
       <Modal
         open={showQris}

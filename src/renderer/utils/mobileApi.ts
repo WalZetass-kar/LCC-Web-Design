@@ -96,6 +96,7 @@ interface MobileStore {
   stockOpnameItems: Record<string, AnyRecord[]>
   productImages: AnyRecord[]
   plans: AnyRecord[]
+  popupRules?: AnyRecord[]
   tutorials: AnyRecord[]
   hppHistory: AnyRecord[]
   currencies: AnyRecord[]
@@ -1284,9 +1285,7 @@ function isMobileLifetimePlan(plan: AnyRecord) {
 }
 
 function getMobileBuyerVisiblePlans<T extends AnyRecord>(plans: T[]) {
-  const activePlans = plans.filter(plan => plan.is_active !== false && plan.is_active !== 0)
-  const lifetimePlans = activePlans.filter(isMobileLifetimePlan)
-  return lifetimePlans.length > 0 ? lifetimePlans : activePlans
+  return plans.filter(plan => plan.is_active !== false && plan.is_active !== 0)
 }
 
 function planIdFromMobileRemote(store: MobileStore, plan: AnyRecord | null | undefined): number | null {
@@ -1500,7 +1499,23 @@ async function mobileRegisterTrialCustomer(data: {
 async function mobileCheckBuyerLicense(store: MobileStore, username: string, deviceInfo?: unknown): Promise<IpcResponse<any>> {
   const user = store.users.find(item => item.nama_pengguna === username)
   if (!user?.is_buyer || !user.email) {
-    return ok({ skipped: true, reason: 'not_remote_buyer' })
+    const localPlan = store.plans.find(p => p.id === user?.subscription_plan_id)
+    return ok({
+      subscription: {
+        id: user?.subscription_plan_id,
+        status: user?.status_user === 'Aktif' ? 'ACTIVE' : 'INACTIVE',
+        expires_at: user?.subscription_expires_at,
+        plan: localPlan ? {
+          id: localPlan.id,
+          code: localPlan.code,
+          name: localPlan.name,
+          duration_days: localPlan.duration_days,
+          features: localPlan.features,
+          feature_flags: localPlan.feature_flags,
+        } : undefined,
+      },
+      synced_at: now(),
+    })
   }
 
   const result = await mobileLicenseRequest<AnyRecord>('POST', '/check-license', {
@@ -1920,14 +1935,21 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
 
     case 'license:getPublicPlans': {
       const result = await mobileLicenseRequest<AnyRecord[]>('GET', '/plans')
-      if (!result.success || !Array.isArray(result.data)) return result as IpcResponse<T>
-      return { ...result, data: getMobileBuyerVisiblePlans(result.data) as T }
+      if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+        return { ...result, data: getMobileBuyerVisiblePlans(result.data) as T }
+      }
+      const localActive = (store.plans || []).filter((p: any) => p.is_active !== false && p.is_active !== 0)
+      return ok(localActive as T, 'Paket lokal')
     }
 
     case 'license:getPublicPopup': {
       const code = String(args[0] ?? '').trim()
       if (!code) return fail('Kode popup tidak valid')
-      return mobileLicenseRequest<T>('GET', `/popup/${encodeURIComponent(code)}`)
+      const remote = await mobileLicenseRequest<T>('GET', `/popup/${encodeURIComponent(code)}`)
+      if (remote.success && remote.data) return remote
+      const local = (store.popupRules || []).find((p: any) => p.code === code)
+      if (local) return ok(local as T)
+      return fail('Popup tidak ditemukan')
     }
 
     case 'license:getUsers': {

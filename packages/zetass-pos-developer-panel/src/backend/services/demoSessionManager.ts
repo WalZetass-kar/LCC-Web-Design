@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * DEMO SESSION MANAGER — Server-Side Session Role Tracking
- * ═══════════════════════════════════════════════════════════════════════
  * 
  * This is the SINGLE SOURCE OF TRUTH for the current user's role.
  * It lives in the main process memory — the renderer CANNOT modify it.

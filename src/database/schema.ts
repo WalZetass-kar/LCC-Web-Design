@@ -399,10 +399,6 @@ export const auditTrail = sqliteTable('mediasoft_audit_trail', {
   created_at: text('created_at').notNull(),
 })
 
-// ═══════════════════════════════════════════════════════════════════════
-// NEW FEATURE TABLES
-// ═══════════════════════════════════════════════════════════════════════
-
 // ─── HR & EMPLOYEE ───────────────────────────────────────────────────
 
 export const employees = sqliteTable('mediasoft_employees', {

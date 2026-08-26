@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * WHATSAPP HELPER — Reusable WhatsApp redirect utility
- * ═══════════════════════════════════════════════════════════════════════
  *
  * Centralized handler for opening WhatsApp with pre-filled messages.
  * Used by the pricing popup to direct demo users to the admin/owner.

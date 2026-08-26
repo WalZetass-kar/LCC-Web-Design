@@ -1,20 +1,6 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * PRELOAD BRIDGE — Channel Whitelist Security (Layer 3)
- * ═══════════════════════════════════════════════════════════════════════
- * 
- * SECURITY: Only whitelisted IPC channels are exposed to the renderer.
- * This prevents attackers from invoking arbitrary channels even if they
- * manage to access the window.api object through DevTools.
- * 
- * The renderer is UNTRUSTED — it can only call channels listed here.
- */
-
 const { contextBridge, ipcRenderer } = require('electron')
 
-// Only log during development
-const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev')
-if (isDev) console.log('🔧 Preload script is running...')
+const isDev = process.env.NODE_ENV !== 'production'
 
 /**
  * EXHAUSTIVE whitelist of all allowed IPC channels.
@@ -25,6 +11,7 @@ const ALLOWED_CHANNELS = new Set([
   'app:openExternal',
 
   // Auth
+  'auth:init',
   'auth:hasUsers',
   'auth:createInitialAdmin',
   'auth:registerTrial',

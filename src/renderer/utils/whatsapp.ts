@@ -1,18 +1,3 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * WHATSAPP HELPER — Reusable WhatsApp redirect utility
- * ═══════════════════════════════════════════════════════════════════════
- *
- * Centralized handler for opening WhatsApp with pre-filled messages.
- * Used by the pricing popup to direct demo users to the admin/owner.
- *
- * Format: https://wa.me/<number>?text=<encoded_text>
- *
- * Subscription upgrade target is fixed to the official admin number.
- * Other WhatsApp flows can still pass a custom number.
- */
-
-/** Official WhatsApp target for subscription package upgrades. */
 export const SUBSCRIPTION_UPGRADE_WA_NUMBER = '08988098238'
 
 /** Fallback WhatsApp number if a custom number is missing or invalid. */

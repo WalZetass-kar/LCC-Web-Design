@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Sun, Moon, Bell, Menu, ChevronRight, Home, Check, CheckCheck, Trash2 } from 'lucide-react'
+import { Sun, Moon, Bell, Menu, ChevronRight, Home, Check, CheckCheck, Trash2, Crown } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../utils/api'
@@ -26,7 +26,9 @@ const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   '/laporan': { label: 'Laporan', parent: 'Keuangan' },
   '/users': { label: 'Pengguna', parent: 'Administrasi' },
   '/license-admin': { label: 'Developer Panel', parent: 'Administrasi' },
-  '/payment': { label: 'Pembayaran Lisensi', parent: 'Keuangan' },
+  '/payment': { label: 'Status & Langganan', parent: 'Keuangan' },
+  '/subscription': { label: 'Status & Langganan', parent: 'Keuangan' },
+  '/my-subscription': { label: 'Status & Langganan', parent: 'Keuangan' },
   '/activity-log': { label: 'Activity Log', parent: 'Administrasi' },
   '/security': { label: 'Keamanan', parent: 'Administrasi' },
   '/ecommerce-api': { label: 'E-commerce API', parent: 'Administrasi' },
@@ -195,11 +197,25 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">{storeName}</span>
         </div>
 
-        {isDemoMode() && (
-          <div className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-primary-500 to-primary-400 text-white text-xs font-bold shadow-lg shadow-primary-500/30 animate-pulse">
+        {/* Plan & Subscription Badge */}
+        {isDemoMode() ? (
+          <button
+            onClick={() => navigate('/payment')}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold shadow-md shadow-orange-500/20 animate-pulse hover:opacity-90 transition"
+            title="Klik untuk lihat status langganan & upgrade"
+          >
             DEMO
-          </div>
-        )}
+          </button>
+        ) : user?.subscription_plan_name ? (
+          <button
+            onClick={() => navigate('/payment')}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-700 dark:text-violet-300 text-xs font-bold hover:bg-violet-500/20 transition"
+            title="Status Langganan Aktif - Klik untuk detail"
+          >
+            <Crown size={13} className="text-violet-500" />
+            <span className="truncate max-w-[120px]">{user.subscription_plan_name}</span>
+          </button>
+        ) : null}
 
         <button onClick={toggleMode} aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title="Toggle dark mode">
           {mode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}

@@ -1,15 +1,3 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * API WRAPPER — Pre-flight demo block + typed IPC invocation
- * ═══════════════════════════════════════════════════════════════════════
- * 
- * This is the renderer-side API layer with demo mode pre-filtering.
- * 
- * SECURITY NOTE: This pre-flight block is a UX optimization only.
- * Even if bypassed (e.g., by calling window.api.invoke directly from DevTools),
- * the main process IPC guard will still block the mutation.
- */
-
 import type { IpcResponse } from '../../shared/types'
 import { isDemoMode, getDemoBlockedMessage } from './demo'
 import { mobileApi } from './mobileApi'

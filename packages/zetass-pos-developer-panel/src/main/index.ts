@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * MAIN PROCESS — Electron Entry Point with DEMO MODE Hardening
- * ═══════════════════════════════════════════════════════════════════════
  * 
  * Security hardening applied:
  * 1. contextIsolation: true (already set)
@@ -107,9 +105,7 @@ function createWindow() {
     flushPendingDeepLink(win)
   })
 
-  // ═══════════════════════════════════════════════════════════════════
   // DEMO MODE HARDENING: Disable DevTools for demo users
-  // ═══════════════════════════════════════════════════════════════════
   win.webContents.on('devtools-opened', () => {
     if (!isDev || demoSession.isDemoMode()) {
       console.warn('🚫 DevTools blocked')

@@ -1,7 +1,5 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════
  * DATABASE WRITE GUARD — Last Line of Defense (Layer 4)
- * ═══════════════════════════════════════════════════════════════════════
  * 
  * This is the DOUBLE LOCK on the database layer.
  * Even if all IPC guards somehow fail, this blocks writes for demo users.

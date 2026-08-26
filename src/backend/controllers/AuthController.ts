@@ -114,6 +114,17 @@ function toSession(user: AuthUserRecord, auth?: {
   remote_registration_message?: string | null
 }) {
   const expiresAt = getEffectiveAccessExpiresAt(user)
+  let plan: any = null
+  if (user.subscription_plan_id) {
+    try {
+      plan = sqlite.prepare('SELECT * FROM mediasoft_subscription_plans WHERE id = ? LIMIT 1').get(user.subscription_plan_id)
+    } catch {}
+  }
+  let parsedFlags: Record<string, boolean> = {}
+  if (plan?.feature_flags) {
+    try { parsedFlags = JSON.parse(plan.feature_flags) } catch {}
+  }
+
   return {
     nama_pengguna: user.nama_pengguna,
     nama_lengkap: user.nama_lengkap,
@@ -122,7 +133,14 @@ function toSession(user: AuthUserRecord, auth?: {
     access_expires_at: expiresAt,
     access_days_remaining: getAccessDaysRemaining(expiresAt),
     subscription_plan_id: user.subscription_plan_id ?? null,
+    subscription_plan_name: plan?.name ?? (user.hak_akses === 'demo' ? 'Akun Demo' : (hasUnlimitedAccessRole(user.hak_akses) ? 'Developer Full Access' : null)),
+    subscription_plan_code: plan?.code ?? (user.hak_akses === 'demo' ? 'DEMO' : null),
     subscription_expires_at: user.subscription_expires_at ?? null,
+    max_devices: plan?.max_devices ?? (hasUnlimitedAccessRole(user.hak_akses) ? -1 : 1),
+    max_transactions_per_day: plan?.max_transactions_per_day ?? -1,
+    max_products: plan?.max_products ?? -1,
+    max_users: plan?.max_users ?? (hasUnlimitedAccessRole(user.hak_akses) ? -1 : 1),
+    feature_flags: parsedFlags,
     must_change_password: !!user.must_change_password,
     session_token: auth?.token,
     session_expires_at: auth?.expires_at,
@@ -1199,7 +1217,7 @@ export class AuthController {
     if (user.is_buyer) {
       const remote = await LicenseController.syncBuyerLicense(username, device)
       const code = String((remote.data as any)?.error_code ?? '').toUpperCase()
-      if (!remote.success && ['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED', 'DEVICE_LIMIT', 'NOT_FOUND'].includes(code)) {
+      if (!remote.success && ['BLOCKED', 'SUSPENDED', 'DEVICE_BLOCKED'].includes(code)) {
         ActivityLogModel.create({
           username,
           aktivitas: 'SESSION_RESTORE_REMOTE_BLOCKED',

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import { CheckCircle, XCircle, Info, X } from 'lucide-react'
 
 type ToastType = 'success' | 'error' | 'info'
@@ -25,6 +25,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts(prev => [...prev, { id, type, message }])
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
   }, [])
+
+  useEffect(() => {
+    const onToast = (event: Event) => {
+      const detail = (event as CustomEvent).detail ?? {}
+      if (detail.message) {
+        toast(detail.message, detail.type || 'success')
+      }
+    }
+    window.addEventListener('toast:show', onToast)
+    return () => window.removeEventListener('toast:show', onToast)
+  }, [toast])
 
   const remove = (id: number) => setToasts(prev => prev.filter(t => t.id !== id))
 

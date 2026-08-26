@@ -659,6 +659,10 @@ runMigrations()
   sqlite.exec(`UPDATE mediasoft_auth_sessions SET is_revoked = 0 WHERE is_revoked IS NULL`)
 
   // mediasoft_subscription_plans
+  addCol('mediasoft_subscription_plans', 'code', 'TEXT DEFAULT NULL')
+  addCol('mediasoft_subscription_plans', 'description', 'TEXT DEFAULT NULL')
+  addCol('mediasoft_subscription_plans', 'currency', "TEXT DEFAULT 'IDR'")
+  addCol('mediasoft_subscription_plans', 'sort_order', 'INTEGER DEFAULT 0')
   addCol('mediasoft_subscription_plans', 'max_devices', 'INTEGER DEFAULT 1')
   addCol('mediasoft_subscription_plans', 'max_transactions_per_day', 'INTEGER DEFAULT -1')
   addCol('mediasoft_subscription_plans', 'max_products', 'INTEGER DEFAULT -1')
@@ -877,6 +881,11 @@ runMigrations()
       updated_at      TEXT DEFAULT (datetime('now'))
     )
   `)
+  addCol('mediasoft_popup_rules', 'image_url', 'TEXT DEFAULT NULL')
+  addCol('mediasoft_popup_rules', 'severity', "TEXT DEFAULT 'warning'")
+  addCol('mediasoft_popup_rules', 'dismissible', 'INTEGER DEFAULT 1')
+  addCol('mediasoft_popup_rules', 'force_popup', 'INTEGER DEFAULT 0')
+  addCol('mediasoft_popup_rules', 'force_popup_until', 'TEXT DEFAULT NULL')
 
   // Seed popup rules
   const popups = [
@@ -964,9 +973,7 @@ runMigrations()
   }
 })()
 
-// ═══════════════════════════════════════════════════════════════════════
-// NEW FEATURE TABLES MIGRATION
-// ═══════════════════════════════════════════════════════════════════════
+// Feature Tables Migration
 ;(function migrateNewFeatureTables() {
   // ─── HR & EMPLOYEE ──────────────────────────────────────────────
   sqlite.exec(`

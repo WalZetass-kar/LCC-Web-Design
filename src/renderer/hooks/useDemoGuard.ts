@@ -1,15 +1,3 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════
- * useDemoGuard — Enhanced hook with pricing popup trigger integration
- * ═══════════════════════════════════════════════════════════════════════
- *
- * Layer 1: UX feedback (toast) — existing behavior preserved
- * Layer 2: Pricing popup trigger — smart conversion prompts
- * Layer 3: Usage tracking — increments transaction counter
- *
- * Security note: This is UX only. Real security is in main process.
- */
-
 import { useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'

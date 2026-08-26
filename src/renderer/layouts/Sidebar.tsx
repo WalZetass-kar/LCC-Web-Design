@@ -105,7 +105,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       { to: '/bank-account', icon: Landmark, label: 'Rekening Bank', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
       { to: '/fixed-asset', icon: Hammer, label: 'Aset Tetap', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
       { to: '/budget', icon: PiggyBank, label: 'Anggaran', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
-      { to: '/payment', icon: DollarSign, label: 'Pembayaran Lisensi', code: 'nav_plans' },
+      { to: '/payment', icon: Crown, label: 'Status & Langganan', code: 'nav_plans' },
       { to: '/payment-automation', icon: CreditCard, label: 'Pembayaran Digital', code: 'nav_pembelian', roles: ['developer', 'super_admin', 'admin'] },
       { to: '/returns', icon: RotateCcw, label: 'Return', code: 'nav_penjualan', feature: 'return_refund' },
       { to: '/promo', icon: Gift, label: 'Promo', code: 'nav_promo' },
