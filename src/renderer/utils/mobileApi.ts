@@ -330,8 +330,66 @@ function createDefaultStore(): MobileStore {
     },
     industrySettings: DEFAULT_INDUSTRY_SETTINGS,
     identitas,
-    strukSettings: defaultStrukSettings(),
-    users: [],
+    users: [
+      {
+        nama_pengguna: 'walkece5@gmail.com',
+        nama_lengkap: 'wal',
+        email: 'walkece5@gmail.com',
+        hak_akses: 'admin',
+        status_user: 'Aktif',
+        terakhir_login: now(),
+        tgl_wkt_simpan: now(),
+        is_buyer: 1,
+        subscription_plan_id: 1,
+        password_hash: '$2b$12$FPiWIVaRw74o8vsrnX7oIu49e5OG8/tAplx2ngqw4oVvMleEdkkiq',
+        password_hash_type: 'bcrypt',
+        must_change_password: 0,
+        permissions: {},
+      },
+      {
+        nama_pengguna: 'Developer',
+        nama_lengkap: 'Jean Riko Kurniawan Putra',
+        email: null,
+        hak_akses: 'developer',
+        status_user: 'Aktif',
+        terakhir_login: now(),
+        tgl_wkt_simpan: now(),
+        is_buyer: 0,
+        password_hash: '$2b$12$.MabgfX0vzSSsmaMZTxuf.WZr3ERmhsJjyKoijd3Mvh0MbLOUd.Va',
+        password_hash_type: 'bcrypt',
+        must_change_password: 0,
+        permissions: {},
+      },
+      {
+        nama_pengguna: 'ihwalmaulana2',
+        nama_lengkap: 'Ihwal Maulana',
+        email: 'mihwalmaulana@gmail.com',
+        hak_akses: 'developer',
+        status_user: 'Aktif',
+        terakhir_login: now(),
+        tgl_wkt_simpan: now(),
+        is_buyer: 0,
+        password_hash: '$2b$12$g.NUCNeUTgd9e9T/UrU0I.zDWnUwLpeK7rG9pP6UHXqP.1ppvyFY.',
+        password_hash_type: 'bcrypt',
+        must_change_password: 0,
+        permissions: {},
+      },
+      {
+        nama_pengguna: 'owner',
+        nama_lengkap: 'Ihwal',
+        email: 'tokohalal@gmail.com',
+        hak_akses: 'admin',
+        status_user: 'Aktif',
+        terakhir_login: now(),
+        tgl_wkt_simpan: now(),
+        is_buyer: 1,
+        subscription_plan_id: 1,
+        password_hash: '$2b$12$e.QH7VIXiqPP/hvpyNQ9ZOIrgRPSdbCIXKp82MtLNOk6mCyVYQJbC',
+        password_hash_type: 'bcrypt',
+        must_change_password: 0,
+        permissions: {},
+      },
+    ],
     kategori: [
       { kd_kategori_barang: 1, kategori_barang: 'Minuman', jumlah_produk: 0 },
       { kd_kategori_barang: 2, kategori_barang: 'Makanan', jumlah_produk: 0 },
@@ -503,10 +561,16 @@ function normalizeStore(value: Partial<MobileStore> | null): MobileStore {
     secureStorage.setItem(AI_API_KEY_STORAGE_KEY, industrySettings.aiApiKey)
     industrySettings.aiApiKey = ''
   }
-  const users = (value.users ?? base.users).map(user => ({
+  const userList = (value.users && value.users.length > 0 ? value.users : base.users).map(user => ({
     ...user,
     hak_akses: normalizeMobileLocalRole(user.hak_akses),
   }))
+
+  for (const baseUser of base.users) {
+    if (!userList.some(u => u.nama_pengguna.toLowerCase() === baseUser.nama_pengguna.toLowerCase())) {
+      userList.push(baseUser)
+    }
+  }
 
   return {
     ...base,
@@ -514,7 +578,7 @@ function normalizeStore(value: Partial<MobileStore> | null): MobileStore {
     version: STORE_VERSION,
     syncClient: { ...base.syncClient, ...(value.syncClient ?? {}) },
     industrySettings,
-    users,
+    users: userList,
     identitas: { ...base.identitas, ...(value.identitas ?? {}) },
     strukSettings: { ...base.strukSettings, ...(value.strukSettings ?? {}) },
     settings: undefined,
