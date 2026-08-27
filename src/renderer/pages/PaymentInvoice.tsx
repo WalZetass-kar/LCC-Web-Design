@@ -804,78 +804,95 @@ export default function PaymentInvoice() {
 
       {/* ─── Midtrans Active Payment Modal ───────────────────────── */}
       {midtransModalOpen && midtransOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-violet-600 text-white flex items-center justify-center shadow-md">
-                  <CreditCard size={18} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 overflow-hidden">
+            {/* Ambient Background Glow */}
+            <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-violet-600/15 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-20 -left-20 h-56 w-56 rounded-full bg-indigo-600/15 blur-3xl" />
+
+            <div className="relative flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-violet-600/30">
+                  <CreditCard size={22} />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white">Pembayaran Lisensi</h3>
-                  <p className="text-xs text-slate-400">Midtrans Payment Gateway</p>
+                  <h3 className="font-black text-lg text-slate-900 dark:text-white tracking-tight">Checkout Lisensi</h3>
+                  <p className="text-xs font-semibold text-slate-400">Midtrans Automated Gateway</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setMidtransModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
               >
-                <XCircle size={20} />
+                <XCircle size={22} />
               </button>
             </div>
 
-            {/* Order Details */}
-            <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-              <div className="flex justify-between text-xs text-slate-500">
+            {/* Order Details Luxury Card */}
+            <div className="relative bg-slate-50 dark:bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800/80 space-y-2.5 shadow-inner">
+              <div className="flex justify-between text-xs text-slate-500 font-medium">
                 <span>Order ID</span>
                 <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{midtransOrder.orderId}</span>
               </div>
-              <div className="flex justify-between text-xs text-slate-500">
-                <span>Paket</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">{midtransOrder.plan.name}</span>
+              <div className="flex justify-between text-xs text-slate-500 font-medium">
+                <span>Paket Langganan</span>
+                <span className="font-extrabold text-violet-600 dark:text-violet-400">{midtransOrder.plan.name}</span>
               </div>
-              <div className="flex justify-between text-xs pt-2 border-t border-slate-200 dark:border-slate-800 font-bold">
-                <span className="text-slate-800 dark:text-white">Total Tagihan</span>
-                <span className="text-base text-violet-600 dark:text-violet-400 font-black">
+              <div className="flex justify-between text-xs text-slate-500 font-medium">
+                <span>Metode Tersedia</span>
+                <span className="font-bold text-slate-700 dark:text-slate-300">QRIS / VA / CC / E-Wallet</span>
+              </div>
+              <div className="flex justify-between items-center text-xs pt-3 border-t border-slate-200 dark:border-slate-800 font-bold">
+                <span className="text-slate-800 dark:text-white font-extrabold">Total Tagihan</span>
+                <span className="text-xl text-slate-900 dark:text-white font-black">
                   {formatPlanPrice(midtransOrder.plan)}
                 </span>
               </div>
             </div>
 
-            {/* Status Alert */}
-            <div className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center gap-2.5 ${
+            {/* Status Alert Bar */}
+            <div className={`p-4 rounded-2xl border text-xs font-extrabold flex items-center gap-3 shadow-sm ${
               midtransSuccess
-                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                : 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/20 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-800'
             }`}>
               {midtransSuccess ? (
-                <CheckCircle2 size={20} className="shrink-0 text-emerald-500" />
+                <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow">
+                  <CheckCircle2 size={18} />
+                </div>
               ) : (
-                <Clock size={20} className="shrink-0 text-amber-500 animate-pulse" />
+                <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0">
+                  <Clock size={18} className="animate-spin" />
+                </div>
               )}
-              <span>{midtransStatusText}</span>
+              <div className="flex-1">
+                <p className="leading-snug">{midtransStatusText}</p>
+                {!midtransSuccess && (
+                  <p className="text-[10px] font-medium text-slate-400 mt-0.5">Sistem memantau pembayaran otomatis tiap 3 detik</p>
+                )}
+              </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="space-y-2 pt-2">
+            <div className="space-y-2.5 pt-1">
               {!midtransSuccess && midtransOrder.redirectUrl && (
                 <button
                   type="button"
                   onClick={() => void api('app:openExternal', midtransOrder.redirectUrl)}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold shadow-md shadow-violet-600/20 transition"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-xs font-black shadow-xl shadow-violet-600/30 transition transform active:scale-[0.98]"
                 >
-                  <ExternalLink size={15} />
-                  Buka Jendela Pembayaran Midtrans
+                  <ExternalLink size={16} />
+                  Buka Jendela Pembayaran Midtrans (Snap)
                 </button>
               )}
 
               <button
                 type="button"
                 onClick={() => setMidtransModalOpen(false)}
-                className="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                className="w-full py-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-extrabold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
               >
-                {midtransSuccess ? 'Selesai' : 'Tutup'}
+                {midtransSuccess ? 'Selesai & Lanjutkan' : 'Tutup Dialog'}
               </button>
             </div>
           </div>

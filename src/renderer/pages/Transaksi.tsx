@@ -1515,181 +1515,233 @@ Terima kasih atas kunjungan Anda! 🙏`
         )}
       </AnimatePresence>
 
-      {/* QRIS Modal */}
+      {/* QRIS Modal - Ultra Premium Glass Showcase */}
       <Modal
         open={showQris}
         onClose={cancelQrisPayment}
-        title="Pembayaran QRIS Pembeli"
+        title="Pembayaran QRIS Dinamis"
         size="md"
         footer={
-          <div className="flex flex-wrap gap-2.5 w-full justify-end">
-            {isStaticQrisPayment ? (
-              <Button
-                variant="success"
-                onClick={completeQrisSale}
-                loading={qrisCompleting}
-                disabled={!qrisPayment}
-                className="w-full sm:w-auto font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                Konfirmasi Dibayar
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                onClick={checkQrisStatus}
-                loading={qrisChecking}
-                disabled={!qrisPayment || qrisCompleting}
-                className="w-full sm:w-auto font-bold"
-              >
-                Cek Status Manual
-              </Button>
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-3 w-full pt-1 border-t border-slate-100 dark:border-slate-800/80">
             <Button
               variant="danger"
               onClick={cancelQrisPayment}
               disabled={qrisCompleting}
-              className="w-full sm:w-auto font-bold"
+              className="w-full sm:w-auto font-bold rounded-xl border border-red-200 dark:border-red-900/60 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 shadow-sm"
             >
-              Batalkan QRIS
+              Batalkan
             </Button>
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              {isStaticQrisPayment ? (
+                <Button
+                  variant="success"
+                  onClick={completeQrisSale}
+                  loading={qrisCompleting}
+                  disabled={!qrisPayment}
+                  className="w-full sm:w-auto font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl shadow-lg shadow-emerald-600/30 px-6 py-2.5"
+                >
+                  Konfirmasi Pembayaran Selesai
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  onClick={checkQrisStatus}
+                  loading={qrisChecking}
+                  disabled={!qrisPayment || qrisCompleting}
+                  className="w-full sm:w-auto font-extrabold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 px-5 py-2.5"
+                >
+                  Cek Status Sekarang
+                </Button>
+              )}
+            </div>
           </div>
         }
       >
         <div className="space-y-4">
-          {/* Header Summary */}
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/40 dark:to-orange-950/20 border border-red-200 dark:border-red-900/40 shadow-sm">
-            <div>
-              <span className="text-[11px] font-bold text-red-700 dark:text-red-300 uppercase tracking-wider block">
-                Total Tagihan QRIS
-              </span>
-              <span className="text-2xl sm:text-3xl font-black text-red-600 dark:text-red-400 mt-0.5">
-                {formatRupiah(totalBayar)}
-              </span>
-            </div>
-            <div className="text-right text-[11px] text-slate-500 font-medium">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 font-bold">
-                <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
-                Live QRIS
-              </span>
-              {qrisPayment?.orderId && (
-                <p className="mt-1 font-mono text-[10px] text-slate-400 truncate max-w-[150px]">
-                  {qrisPayment.orderId}
-                </p>
-              )}
+          {/* Hero Tagihan Banner */}
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-red-950 to-slate-950 p-5 text-white shadow-2xl border border-red-900/50">
+            <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-red-600/20 blur-2xl" />
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-red-300/80 block">
+                  Total Tagihan Pembayaran
+                </span>
+                <span className="text-3xl sm:text-4xl font-black text-white tracking-tight drop-shadow-md">
+                  {formatRupiah(totalBayar)}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 text-xs font-bold shadow-inner">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  Live QRIS
+                </span>
+                {qrisPayment?.orderId && (
+                  <p className="mt-1 font-mono text-[10px] text-slate-400 truncate max-w-[140px]">
+                    {qrisPayment.orderId}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* QR Code Container */}
-          <div className="flex flex-col items-center justify-center p-5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+          {/* QR Code Presentation Box */}
+          <div className="flex flex-col items-center justify-center p-6 bg-slate-100 dark:bg-slate-900/90 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-inner">
             {qrisPayment?.qrImageUrl ? (
-              <div className="p-4 bg-white rounded-2xl shadow-xl border border-slate-200">
-                <img
-                  src={qrisPayment.qrImageUrl}
-                  alt="QRIS Pembayaran"
-                  className="h-64 w-64 sm:h-72 sm:w-72 object-contain"
-                />
+              <div className="relative p-4 bg-white rounded-3xl shadow-2xl ring-4 ring-red-600/10 border border-slate-100 flex flex-col items-center">
+                {/* Official QRIS Header */}
+                <div className="w-full flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+                  <span className="text-xs font-black tracking-tighter text-red-600">QRIS</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Pembayaran Nasional</span>
+                </div>
+
+                {/* Target Corners Frame */}
+                <div className="relative">
+                  <div className="absolute -top-2 -left-2 w-6 h-6 border-t-4 border-l-4 border-red-600 rounded-tl-lg" />
+                  <div className="absolute -top-2 -right-2 w-6 h-6 border-t-4 border-r-4 border-red-600 rounded-tr-lg" />
+                  <div className="absolute -bottom-2 -left-2 w-6 h-6 border-b-4 border-l-4 border-red-600 rounded-bl-lg" />
+                  <div className="absolute -bottom-2 -right-2 w-6 h-6 border-b-4 border-r-4 border-red-600 rounded-br-lg" />
+
+                  <img
+                    src={qrisPayment.qrImageUrl}
+                    alt="QRIS Pembayaran"
+                    className="h-60 w-60 sm:h-64 sm:w-64 object-contain rounded-xl"
+                  />
+                </div>
+
+                <p className="mt-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  NMID: {qrisPayment.orderId?.slice(-12) || 'ZETASS-POS'}
+                </p>
               </div>
             ) : qrisPayment?.qrString ? (
               <textarea
                 readOnly
                 value={qrisPayment.qrString}
-                className="h-32 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 text-xs text-slate-900 dark:text-white font-mono"
+                className="h-32 w-full resize-none rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 text-xs text-slate-900 dark:text-white font-mono"
               />
             ) : (
-              <div className="flex h-64 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-slate-400">
-                <QrCode size={48} className="mb-2 text-red-500 animate-pulse" />
-                <p className="text-xs font-bold text-slate-600 dark:text-slate-300">Membuat Kode QRIS Midtrans...</p>
-                <p className="text-[11px] text-slate-400 mt-1">Menghubungi payment gateway</p>
+              <div className="flex h-64 w-full flex-col items-center justify-center rounded-3xl border-2 border-dashed border-red-300 dark:border-red-900/60 bg-red-50/20 dark:bg-red-950/10 text-slate-400">
+                <QrCode size={52} className="mb-2 text-red-500 animate-pulse" />
+                <p className="text-sm font-extrabold text-slate-800 dark:text-white">Menyiapkan QRIS...</p>
+                <p className="text-xs text-slate-400 mt-0.5">Menghubungkan payment gateway</p>
               </div>
             )}
-            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-3 text-center">
-              Pindai QR menggunakan GoPay, OVO, Dana, ShopeePay, BCA, atau Mobile Banking apa saja
-            </p>
+
+            {/* Supported Wallets Pill Grid */}
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5">
+              {['BCA', 'GoPay', 'OVO', 'Dana', 'ShopeePay', 'LinkAja', 'Mobile Banking'].map(w => (
+                <span
+                  key={w}
+                  className="px-2.5 py-0.5 rounded-full bg-white dark:bg-slate-800 text-[10px] font-extrabold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm"
+                >
+                  {w}
+                </span>
+              ))}
+            </div>
           </div>
 
-          {/* Status Bar */}
-          <div className={`rounded-xl px-4 py-3 text-xs font-bold flex items-center gap-2.5 ${
+          {/* Real-time Status Alert Bar */}
+          <div className={`rounded-2xl px-4 py-3 text-xs font-bold flex items-center gap-3 ${
             qrisCompleting
-              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+              ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 shadow-sm'
               : qrisStatus.includes('gagal') || qrisStatus.includes('dibatalkan')
-                ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-800'
-                : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                ? 'bg-red-50 text-red-800 dark:bg-red-950/50 dark:text-red-200 border border-red-300 dark:border-red-800 shadow-sm'
+                : 'bg-amber-50 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200 border border-amber-300 dark:border-amber-800 shadow-sm'
           }`}>
-            <span className="w-2 h-2 rounded-full bg-current animate-pulse shrink-0" />
-            <span>{qrisStatus}</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-current animate-ping shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="truncate">{qrisStatus}</p>
+            </div>
           </div>
         </div>
       </Modal>
 
-      {/* Struk Print Modal */}
+      {/* Struk Print Modal - Ultra-Clean Celebration & Receipt Showcase */}
       <Modal
         open={showStruk}
         onClose={resetTransaksi}
-        title="Transaksi Berhasil Disimpan"
+        title="Transaksi Berhasil Selesai"
         size="md"
         footer={
-          <div className="flex flex-wrap gap-2.5 w-full justify-end">
-            <Button
-              variant="secondary"
-              icon={<MessageCircle size={16} className="text-emerald-500" />}
-              onClick={sendWhatsAppReceipt}
-              className="flex-1 sm:flex-initial font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800"
-            >
-              Kirim WA
-            </Button>
-            <Button
-              variant="secondary"
-              icon={<Printer size={16} />}
-              onClick={handlePrint}
-              className="flex-1 sm:flex-initial font-bold"
-            >
-              Cetak Struk
-            </Button>
+          <div className="flex flex-wrap gap-2.5 w-full justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/80">
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button
+                variant="secondary"
+                icon={<MessageCircle size={16} className="text-emerald-500" />}
+                onClick={sendWhatsAppReceipt}
+                className="flex-1 sm:flex-initial font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 rounded-xl"
+              >
+                Kirim WA
+              </Button>
+              <Button
+                variant="secondary"
+                icon={<Printer size={16} />}
+                onClick={handlePrint}
+                className="flex-1 sm:flex-initial font-bold rounded-xl border border-slate-300 dark:border-slate-700"
+              >
+                Cetak Struk
+              </Button>
+            </div>
             <Button
               onClick={resetTransaksi}
-              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0 shadow-md shadow-red-600/20 px-5"
+              className="w-full sm:w-auto bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-black border-0 shadow-lg shadow-red-600/30 px-6 py-2.5 rounded-xl transition"
             >
-              Transaksi Baru (Enter)
+              Transaksi Baru (Enter) ➔
             </Button>
           </div>
         }
       >
-        <div className="space-y-3.5">
-          {/* Total & Kembalian Quick Highlight Card */}
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800/60 shadow-sm">
+        <div className="space-y-4">
+          {/* Grand Total & Kembalian Luxury Card */}
+          <div className="grid grid-cols-2 gap-3 p-4 rounded-3xl bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-100/40 dark:from-emerald-950/50 dark:via-slate-900 dark:to-teal-950/40 border border-emerald-300/80 dark:border-emerald-800/60 shadow-md">
             <div>
-              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider block">
-                Total Belanja
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 block mb-0.5">
+                Total Belanja ({cart.length} item)
               </span>
-              <span className="text-xl sm:text-2xl font-black text-emerald-900 dark:text-emerald-100">
+              <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                 {formatRupiah(totalBayar)}
               </span>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
+                Metode: <strong className="text-slate-800 dark:text-slate-200">{jenisBayar}</strong>
+              </p>
             </div>
-            <div className="text-right">
-              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider block">
-                Kembalian
+
+            <div className="text-right border-l border-emerald-200 dark:border-emerald-800/60 pl-3">
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 block mb-0.5">
+                Uang Kembalian
               </span>
-              <span className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
+              <span className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 drop-shadow-sm">
                 {formatRupiah(kembalian)}
               </span>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
+                Bayar: {formatRupiah(paidAmount)}
+              </p>
             </div>
           </div>
 
-          {/* Quick WhatsApp Recipient Input */}
-          <div className="flex items-center gap-2.5 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-            <MessageCircle size={18} className="text-emerald-500 shrink-0" />
+          {/* Quick WhatsApp Input Bar */}
+          <div className="flex items-center gap-2 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm focus-within:ring-2 focus-within:ring-emerald-500/30">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center shrink-0">
+              <MessageCircle size={16} />
+            </div>
             <input
               type="tel"
               value={manualWaPhone || selectedCustomer?.no_telp || ''}
               onChange={e => setManualWaPhone(e.target.value)}
-              placeholder="No. WhatsApp Pembeli (cth: 08123456789)..."
-              className="w-full text-xs bg-transparent text-slate-900 dark:text-white outline-none placeholder:text-slate-400 font-semibold"
+              placeholder="Masukkan nomor WhatsApp pembeli (cth: 08123456789)..."
+              className="w-full text-xs bg-transparent text-slate-900 dark:text-white outline-none placeholder:text-slate-400 font-bold"
             />
+            <button
+              type="button"
+              onClick={sendWhatsAppReceipt}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold shrink-0 shadow transition"
+            >
+              Kirim
+            </button>
           </div>
 
-          {/* Struk Paper Preview Container */}
-          <div className="max-h-[52vh] overflow-y-auto flex justify-center bg-slate-100 dark:bg-slate-950/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-inner scrollbar-thin">
-            <div ref={strukRef} className="shadow-lg rounded-lg overflow-hidden">
+          {/* Struk Paper Preview Container with realistic paper shadow */}
+          <div className="max-h-[50vh] overflow-y-auto flex justify-center bg-slate-200/80 dark:bg-slate-950 p-4 rounded-3xl border border-slate-300 dark:border-slate-800 shadow-inner scrollbar-thin">
+            <div ref={strukRef} className="shadow-2xl rounded-2xl overflow-hidden border border-slate-200/80 bg-white">
               <Struk
                 cart={cart}
                 subTotal={subTotal}
