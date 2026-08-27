@@ -1,6 +1,6 @@
 {
   "name": "zetass-pos",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Zetass Pos - Desktop Point of Sale Application",
   "type": "module",
   "main": "dist-electron/main/index.js",
