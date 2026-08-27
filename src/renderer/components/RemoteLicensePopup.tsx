@@ -374,333 +374,209 @@ export default function RemoteLicensePopup() {
 
   return (
     <div
-      className="fixed inset-0 z-[12000] flex items-center justify-center overflow-y-auto bg-slate-950/85 p-3 sm:p-4 backdrop-blur-xl animate-in fade-in duration-200"
+      className="fixed inset-0 z-[12000] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-3 sm:p-4 backdrop-blur-md animate-in fade-in duration-200"
       onClick={close}
     >
       <div
-        className="relative my-auto max-h-[95vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-white/10 bg-[#090e1c] p-6 text-white shadow-2xl shadow-violet-950/70 ring-1 ring-white/10 sm:p-8"
+        className="relative my-auto w-full max-w-3xl overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900 text-white shadow-2xl ring-1 ring-white/10 p-6 sm:p-7"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Soft Radial Ambient Glow */}
-        <div className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-violet-600/15 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-fuchsia-600/10 blur-3xl" />
-
         {/* Close Button */}
         {!isBlocking && (
           <button
             onClick={close}
-            className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-slate-400 transition hover:bg-white/15 hover:text-white"
+            className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white transition"
             aria-label="Tutup"
           >
             <X className="h-4 w-4" />
           </button>
         )}
 
-        <div className="relative space-y-6">
-          {/* ─── Header: Modern & Sederhana ──────────────────────────── */}
-          <div className="text-center space-y-2.5">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-xl shadow-violet-500/25 ring-4 ring-violet-500/20">
-              <HeaderIcon className="h-7 w-7" />
+        <div className="space-y-5">
+          {/* ─── 1. Header Sederhana & Ramah ─────────────────────────── */}
+          <div className="text-center space-y-1.5">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 shadow-lg mb-1">
+              <Crown className="h-6 w-6" />
             </div>
-
-            <h2 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
-              {popup.title || 'Upgrade Paket Lisensi POS'}
+            <h2 className="text-2xl font-extrabold tracking-tight text-white sm:text-2xl">
+              {popup.title || 'Pilih Paket Lisensi POS'}
             </h2>
-
-            {popup.description && (
-              <p className="mx-auto max-w-xl text-xs text-slate-300 sm:text-sm leading-relaxed">
-                {popup.description}
-              </p>
-            )}
-
-            {popup.code && (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-violet-500/10 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-400 ring-1 ring-violet-500/20">
-                <Sparkles className="h-3 w-3" />
-                {popup.code}
-              </div>
-            )}
+            <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto leading-normal">
+              {popup.description || 'Aktifkan akses penuh kasir, kelola stok akurat, dan ekspor laporan keuangan toko tanpa batas.'}
+            </p>
           </div>
 
-          {/* Banner Image from Developer Panel */}
-          {popup.image_url && (
-            <div className="flex justify-center">
-              <img
-                src={popup.image_url}
-                alt=""
-                className="max-h-44 w-full max-w-xl rounded-2xl border border-white/10 object-cover shadow-lg"
-              />
-            </div>
-          )}
-
-          {/* Custom Pricing HTML from Developer Panel */}
-          {popup.pricing_html && (
-            <div
-              className="rounded-2xl border border-violet-500/30 bg-violet-950/20 p-4 text-xs leading-relaxed text-slate-200 shadow-inner"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(popup.pricing_html) }}
-            />
-          )}
-
-          {/* Demo Usage Progress Bar */}
+          {/* ─── 2. Demo Warning (Jika Akun Demo) ────────────────────── */}
           {demoState.is_demo && (
-            <div className="mx-auto max-w-md rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-slate-300">Penggunaan Transaksi Demo</span>
-                <span className="text-amber-400">{usageCount} / {usageLimit} Transaksi</span>
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                <span>Batas Penggunaan Demo: <strong>{remainingUsage} transaksi tersisa</strong></span>
               </div>
-              <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-800">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-300"
-                  style={{ width: `${usagePercent}%` }}
-                />
-              </div>
-              <p className="mt-2 text-center text-[11px] text-slate-400">
-                Sisa <strong>{remainingUsage} transaksi</strong>. Pilih paket di bawah untuk mengaktifkan akses penuh tanpa batas.
-              </p>
+              <span className="text-[11px] text-amber-200/80">Upgrade untuk akses tak terbatas</span>
             </div>
           )}
 
-          {/* ─── Pilihan Paket (Plan Selector Cards) ──────────────────── */}
+          {/* ─── 3. Kartu Pilihan Paket (Simpel & Menjelaskan) ────────── */}
           {showPlans && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Pilih Paket Sesuai Kebutuhan Toko
-                </span>
-                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-emerald-400">
-                  <ShieldCheck className="h-3.5 w-3.5" /> Aktivasi Realtime Tanpa Relog
-                </span>
-              </div>
-
+            <div className="space-y-3">
               {plansLoading ? (
-                <div className="flex items-center justify-center gap-2 py-10 text-xs text-slate-400">
-                  <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
-                  Memuat daftar paket dari developer panel...
+                <div className="flex items-center justify-center gap-2 py-8 text-xs text-slate-400">
+                  <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                  Memuat paket...
                 </div>
               ) : plans.length === 0 ? (
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-xs text-slate-400">
-                  Belum ada paket aktif. Hubungi admin WhatsApp untuk aktivasi.
+                  Belum ada paket aktif. Hubungi WhatsApp admin untuk info lisensi.
                 </div>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-3">
                   {plans.map((plan, index) => {
                     const active = selectedPlanCode === plan.code
                     const isRecommended = Boolean(plan.is_recommended)
-                    const visual = getPlanIconAndColor(plan, index)
-                    const PlanIcon = visual.Icon
-                    const daily = getDailyPriceText(plan)
+                    const isLifetime = plan.duration_days === 0
+                    const benefits = [
+                      'Transaksi Kasir Tanpa Batas',
+                      'Laporan Penjualan & Laba Rugi',
+                      'Cetak Struk & Kirim WhatsApp',
+                      isLifetime ? 'Sekali Bayar Seumur Hidup' : 'Update Fitur Terbaru',
+                    ]
 
                     return (
                       <div
                         key={plan.code || plan.id}
                         onClick={() => setSelectedPlanCode(plan.code)}
-                        className={`relative flex cursor-pointer flex-col justify-between rounded-2xl border p-4.5 transition-all duration-200 ${
+                        className={`relative flex flex-col justify-between rounded-2xl p-4.5 cursor-pointer transition-all duration-200 border ${
                           active
-                            ? 'border-violet-400 bg-violet-950/40 shadow-xl shadow-violet-900/40 ring-2 ring-violet-500/50'
-                            : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
+                            ? 'border-amber-400 bg-amber-500/10 shadow-lg shadow-amber-500/10 ring-2 ring-amber-400/60'
+                            : 'border-slate-800 bg-slate-800/60 hover:bg-slate-800 hover:border-slate-700'
                         }`}
                       >
                         {isRecommended && (
-                          <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-amber-500 px-3 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-md">
-                            ★ REKOMENDASI
+                          <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-amber-500 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-950 shadow">
+                            ★ Rekomendasi
                           </div>
                         )}
 
                         <div>
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <div className={`flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br ${visual.gradient} text-white shadow-md`}>
-                                <PlanIcon className="h-4 w-4" />
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{plan.code}</p>
-                                <h4 className="text-sm font-extrabold text-white leading-snug">{plan.name}</h4>
-                              </div>
-                            </div>
-
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${visual.badgeBg}`}>
+                          {/* Nama & Durasi */}
+                          <div className="flex items-center justify-between gap-1">
+                            <h4 className="text-sm font-extrabold text-white">{plan.name}</h4>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-slate-300">
                               {getPlanPeriodLabel(plan)}
                             </span>
                           </div>
 
-                          <div className="mt-3.5">
-                            <div className="text-xl font-black text-white">
+                          {/* Harga */}
+                          <div className="mt-3">
+                            <span className="text-xl font-black text-white">
                               {formatPlanPrice(plan)}
-                            </div>
-                            {daily && (
-                              <p className="mt-0.5 text-[11px] font-medium text-slate-400">
-                                {daily}
-                              </p>
+                            </span>
+                            {plan.duration_days > 1 && (
+                              <span className="text-[11px] text-slate-400 font-medium block">
+                                / {getPlanPeriodLabel(plan)}
+                              </span>
                             )}
                           </div>
+
+                          {/* Fitur Utama Singkat */}
+                          <ul className="mt-3.5 space-y-1.5 border-t border-white/10 pt-3">
+                            {benefits.map((b, bIdx) => (
+                              <li key={bIdx} className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                                <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                <span>{b}</span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
 
-                        <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-semibold">
-                          <span className={active ? 'text-violet-300' : 'text-slate-400'}>
-                            {active ? '● Paket Terpilih' : 'Klik untuk memilih'}
+                        {/* Indikator Pilih */}
+                        <div className="mt-4 pt-2.5 border-t border-white/5 text-center">
+                          <span className={`text-[11px] font-bold ${active ? 'text-amber-400' : 'text-slate-500'}`}>
+                            {active ? '✓ Dipilih' : 'Klik untuk Pilih'}
                           </span>
-                          <ChevronRight className={`h-4 w-4 transition ${active ? 'text-violet-400 translate-x-0.5' : 'text-slate-500'}`} />
                         </div>
                       </div>
                     )
                   })}
                 </div>
               )}
-
-              {/* ─── Detail Penjelasan: Apa Saja Yang Didapatkan ──────── */}
-              {selectedPlan && (
-                <div className="rounded-2xl border border-violet-500/30 bg-gradient-to-br from-violet-950/30 via-slate-900/60 to-slate-950/60 p-5 ring-1 ring-violet-500/20">
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between border-b border-white/10 pb-3">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-violet-400" />
-                      <h3 className="text-sm font-black text-white">
-                        Apa Saja Yang Didapatkan Pada Paket <span className="text-violet-300">{selectedPlan.name}</span>:
-                      </h3>
-                    </div>
-                    <span className="text-xs font-bold text-emerald-400">
-                      {formatPlanPrice(selectedPlan)} / {getPlanPeriodLabel(selectedPlan)}
-                    </span>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {selectedBenefits.map((item, idx) => (
-                      <div key={idx} className="flex items-start gap-2.5 rounded-xl bg-white/[0.02] p-2.5 ring-1 ring-white/5">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                        <div>
-                          <p className="text-xs font-bold text-white leading-snug">{item.title}</p>
-                          <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">{item.subtitle}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Limits summary if configured */}
-                  <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/5 pt-3 text-[11px] text-slate-400">
-                    <div className="flex items-center gap-1.5">
-                      <Laptop className="h-3.5 w-3.5 text-violet-400" />
-                      <span>Device: <strong className="text-white">{selectedPlan.max_devices && selectedPlan.max_devices > 0 ? `${selectedPlan.max_devices} Perangkat` : 'Unlimited'}</strong></span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <CreditCard className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>Transaksi: <strong className="text-white">{selectedPlan.max_transactions_per_day && selectedPlan.max_transactions_per_day > 0 ? `${selectedPlan.max_transactions_per_day}/hari` : 'Tanpa Batas'}</strong></span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Package className="h-3.5 w-3.5 text-blue-400" />
-                      <span>Produk: <strong className="text-white">{selectedPlan.max_products && selectedPlan.max_products > 0 ? `${selectedPlan.max_products} Item` : 'Tanpa Batas'}</strong></span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Users className="h-3.5 w-3.5 text-amber-400" />
-                      <span>User Kasir: <strong className="text-white">{selectedPlan.max_users && selectedPlan.max_users > 0 ? `${selectedPlan.max_users} Pengguna` : 'Multi-User'}</strong></span>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
-          {/* ─── Feedback / Invoice Alert ─────────────────────────────── */}
-          {(paymentMessage || invoice) && (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs text-emerald-100 shadow-lg">
-              <div className="flex items-start gap-2.5">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                <div className="flex-1 space-y-1">
-                  <p className="font-semibold">{paymentMessage}</p>
-                  {invoice?.invoice_number && (
-                    <p className="font-mono text-[11px] text-emerald-300">Invoice: {invoice.invoice_number}</p>
-                  )}
-                  {invoice?.payment_url && (
-                    <button
-                      type="button"
-                      onClick={() => openUrl(invoice.payment_url!)}
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow hover:bg-emerald-700"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      Buka Chat WhatsApp Developer
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ─── Action Buttons & Payment Mode Selector ────────────────── */}
-          <div className="border-t border-white/10 pt-4 space-y-3">
-            {/* Payment Method Switcher */}
-            {selectedPlan && (
-              <div className="flex items-center justify-between gap-2 p-1.5 rounded-2xl bg-white/[0.03] border border-white/10">
+          {/* ─── 4. Metode Pembayaran & Tombol Beli ────────────────────── */}
+          {selectedPlan && (
+            <div className="space-y-3 pt-1 border-t border-slate-800">
+              {/* Switcher Metode */}
+              <div className="flex items-center justify-center gap-2 p-1 rounded-2xl bg-slate-950/60 border border-slate-800">
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('midtrans')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition ${
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                     paymentMethod === 'midtrans'
-                      ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <Zap size={14} className="text-amber-400 fill-amber-400" />
-                  <span>Bayar Otomatis (Midtrans)</span>
+                  <Zap size={14} className="fill-current" />
+                  <span>Bayar Otomatis (QRIS / VA / E-Wallet)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('whatsapp')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition ${
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                     paymentMethod === 'whatsapp'
-                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-emerald-600 text-white shadow-md font-black'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <MessageCircle size={14} className="text-white" />
-                  <span>Manual (WhatsApp)</span>
+                  <MessageCircle size={14} />
+                  <span>Manual via WhatsApp</span>
                 </button>
               </div>
-            )}
 
-            <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                {!isBlocking && (
-                  <button
-                    type="button"
-                    onClick={close}
-                    className="w-full sm:w-auto rounded-xl border border-white/15 px-4 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
-                  >
-                    Nanti Saja
-                  </button>
-                )}
-                {force && (
-                  <button
-                    type="button"
-                    onClick={logout}
-                    className="w-full sm:w-auto rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
-                  >
-                    Keluar Akun
-                  </button>
-                )}
-              </div>
+              {/* Status Message */}
+              {paymentMessage && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-400" />
+                  <span>{paymentMessage}</span>
+                </div>
+              )}
 
-              {selectedPlan && (
+              {/* Tombol Aksi Bawah */}
+              <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={close}
+                  className="w-full sm:w-auto text-xs text-slate-400 hover:text-white px-3 py-2 transition"
+                >
+                  Nanti Saja
+                </button>
+
                 <button
                   type="button"
                   onClick={() => handleCheckout(selectedPlan)}
                   disabled={creatingPlan === selectedPlan.code}
-                  className={`inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-extrabold text-white shadow-xl transition disabled:opacity-50 ${
+                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-7 py-3 rounded-2xl text-sm font-black transition shadow-lg ${
                     paymentMethod === 'midtrans'
-                      ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-violet-950/40'
-                      : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-emerald-950/40'
+                      ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 shadow-amber-500/20'
+                      : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-600/20'
                   }`}
                 >
                   {creatingPlan === selectedPlan.code ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : paymentMethod === 'midtrans' ? (
-                    <Zap className="h-4 w-4 fill-white" />
+                    <Zap className="h-4 w-4 fill-current" />
                   ) : (
                     <MessageCircle className="h-4 w-4" />
                   )}
                   {paymentMethod === 'midtrans'
-                    ? `Bayar Otomatis ${selectedPlan.name} (Midtrans)`
-                    : `Beli Paket ${selectedPlan.name} via WhatsApp`}
+                    ? `Beli ${selectedPlan.name} • ${formatPlanPrice(selectedPlan)}`
+                    : `Beli via WhatsApp (${selectedPlan.name})`}
                 </button>
-              )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
