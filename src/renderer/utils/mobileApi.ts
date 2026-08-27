@@ -1536,19 +1536,48 @@ async function mobileCheckBuyerLicense(store: MobileStore, username: string, dev
   const code = mobileLicenseErrorCode(result)
   if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED'].includes(code)) {
     user.status_user = 'Nonaktif'
+    saveStore(store)
+    dispatchMobileLicensePopup(result)
+    return {
+      ...result,
+      data: {
+        ...(result.data ?? {}),
+        error_code: code || result.data?.error_code,
+      },
+    }
   }
+
   if (code === 'EXPIRED' && result.data) {
     syncMobileBuyerFromLicensePayload(store, username, result.data)
+    saveStore(store)
+    dispatchMobileLicensePopup(result)
+    return {
+      ...result,
+      data: {
+        ...(result.data ?? {}),
+        error_code: code || result.data?.error_code,
+      },
+    }
   }
-  saveStore(store)
-  dispatchMobileLicensePopup(result)
-  return {
-    ...result,
-    data: {
-      ...(result.data ?? {}),
-      error_code: code || result.data?.error_code,
+
+  // If offline, timeout, or server error, fallback to local active subscription
+  const localPlan = store.plans.find(p => p.id === user.subscription_plan_id)
+  return ok({
+    subscription: {
+      id: user.subscription_plan_id,
+      status: user.status_user === 'Aktif' ? 'ACTIVE' : 'INACTIVE',
+      expires_at: user.subscription_expires_at,
+      plan: localPlan ? {
+        id: localPlan.id,
+        code: localPlan.code,
+        name: localPlan.name,
+        duration_days: localPlan.duration_days,
+        features: localPlan.features,
+        feature_flags: localPlan.feature_flags,
+      } : undefined,
     },
-  }
+    synced_at: now(),
+  })
 }
 
 function shouldUseRemote(store: MobileStore, channel: string) {
@@ -2242,22 +2271,27 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       const validation = validatePasswordStrength(password)
       if (!validation.valid) return fail(validation.message ?? 'Password tidak valid')
 
-      const remoteRegistration = await mobileRegisterTrialCustomer({
-        email,
-        password,
-        nama_lengkap: namaLengkap,
-        no_telp: String(data?.no_telp ?? '').trim() || null,
-      }, device)
-      if (!remoteRegistration.success) {
-        dispatchMobileLicensePopup(remoteRegistration, true)
-        return {
-          ...remoteRegistration,
-          message: remoteRegistration.message || 'Gagal daftar akun trial ke license server pusat',
-        } as IpcResponse<T>
+      let remoteRegistration: any = null
+      try {
+        remoteRegistration = await mobileRegisterTrialCustomer({
+          email,
+          password,
+          nama_lengkap: namaLengkap,
+          no_telp: String(data?.no_telp ?? '').trim() || null,
+        }, device)
+      } catch (err) {
+        console.warn('[mobileApi] Remote registration warning:', err)
+      }
+
+      if (remoteRegistration && !remoteRegistration.success) {
+        const message = String(remoteRegistration.message || '')
+        if (message.toLowerCase().includes('sudah terdaftar') || message.toLowerCase().includes('already registered')) {
+          return fail(message)
+        }
       }
 
       let trialPlan = store.plans.find(plan => plan.name === 'Trial 3 Hari')
-      let planId = planIdFromMobileRemote(store, remoteRegistration.data?.plan)
+      let planId = planIdFromMobileRemote(store, remoteRegistration?.data?.plan)
       if (!trialPlan && !planId) {
         trialPlan = {
           id: nextCounter(store, 'plan'),
@@ -2292,7 +2326,7 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         planId = Number(trialPlan.id)
       }
 
-      const remoteExpiresAt = remoteRegistration.data?.subscription?.expires_at
+      const remoteExpiresAt = remoteRegistration?.data?.subscription?.expires_at
       const expiresAt = typeof remoteExpiresAt === 'string'
         ? remoteExpiresAt
         : new Date(Date.now() + 3 * 86400000).toISOString()
@@ -2313,15 +2347,15 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         password_hash_type: 'bcrypt',
         must_change_password: 0,
         permissions: {},
-        remote_license_token: remoteRegistration.data?.access_token ?? null,
-        remote_license_refresh_token: remoteRegistration.data?.refresh_token ?? null,
-        remote_customer_id: remoteRegistration.data?.customer?.id ?? null,
-        remote_auth_user_id: remoteRegistration.data?.customer?.auth_user_id ?? null,
+        remote_license_token: remoteRegistration?.data?.access_token ?? null,
+        remote_license_refresh_token: remoteRegistration?.data?.refresh_token ?? null,
+        remote_customer_id: remoteRegistration?.data?.customer?.id ?? null,
+        remote_auth_user_id: remoteRegistration?.data?.customer?.auth_user_id ?? null,
       }
       store.users.push(row)
       auditAuth(store, username, 'TRIAL_REGISTERED', `Akun pembeli trial 3 hari dibuat; expires_at=${expiresAt}`, device)
       saveStore(store)
-      return ok(createMobileSession(row, device) as T, 'Trial 3 hari aktif. Beberapa fitur premium dikunci sampai upgrade.')
+      return ok(createMobileSession(row, device) as T, 'Trial 3 hari aktif. Selamat datang di Zetass POS!')
     }
 
     case 'auth:login': {
@@ -2337,70 +2371,64 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
         return fail(`Akun diblokir karena terlalu banyak percobaan login gagal. Coba lagi dalam ${minutes} menit.`)
       }
 
-      const user = store.users.find(item => item.nama_pengguna === username)
-      const shouldTryAdmin = EMAIL_PATTERN.test(username) || normalizeMobileLocalRole(user?.hak_akses) === 'developer'
-      if (shouldTryAdmin) {
-        const adminEmail = EMAIL_PATTERN.test(username) ? username : String(user?.email ?? '').trim().toLowerCase()
-        const remoteAdmin = await mobileLoginAdmin(adminEmail, password, device)
-        if (remoteAdmin?.success && remoteAdmin.data) {
-          const adminUser = await upsertMobileRemoteAdmin(store, { loginName: adminEmail, password, remote: remoteAdmin.data })
+      const user = store.users.find(item => item.nama_pengguna === username || (item.email && item.email.toLowerCase() === username.toLowerCase()))
+      if (user && user.status_user === 'Aktif') {
+        const passwordValid = await verifyMobilePassword(password, user)
+        if (passwordValid) {
           clearLoginAttempts(limiterKey)
-          auditAuth(store, adminUser.nama_pengguna, 'REMOTE_ADMIN_LOGIN', 'Login developer/admin divalidasi melalui Supabase license server', device)
+          user.terakhir_login = now()
+          auditAuth(store, user.nama_pengguna, 'LOGIN', 'Login berhasil dengan password', device)
           saveStore(store)
-          return ok(createMobileSession(adminUser, device) as T, 'Login developer berhasil')
+
+          if (user.is_buyer && user.email) {
+            void mobileLoginBuyer(user.email, password, device).then(remoteLogin => {
+              if (remoteLogin?.success && remoteLogin.data) {
+                void upsertMobileRemoteBuyer(store, { loginName: user.email!, password, remote: remoteLogin.data })
+                saveStore(store)
+              }
+            }).catch(() => {})
+          }
+
+          return ok((user.must_change_password ? toSession(user) : createMobileSession(user, device)) as T, user.must_change_password ? 'Password wajib diganti sebelum menggunakan aplikasi' : 'Login berhasil')
+        } else {
+          const attempt = recordFailedLoginAttempt(limiterKey)
+          auditAuth(store, username, 'LOGIN_FAILED', `Password salah. Sisa percobaan: ${attempt.remainingAttempts}`, device)
+          saveStore(store)
+          return fail(attempt.locked ? 'Terlalu banyak percobaan login gagal. Akun diblokir selama 5 menit.' : `Username atau Password Salah! Sisa percobaan: ${attempt.remainingAttempts}`)
         }
       }
 
-      if (!user || user.status_user !== 'Aktif') {
+      // If user is not yet in local store, try remote login
+      const shouldTryAdmin = EMAIL_PATTERN.test(username)
+      if (shouldTryAdmin) {
+        try {
+          const remoteAdmin = await mobileLoginAdmin(username, password, device)
+          if (remoteAdmin?.success && remoteAdmin.data) {
+            const adminUser = await upsertMobileRemoteAdmin(store, { loginName: username, password, remote: remoteAdmin.data })
+            clearLoginAttempts(limiterKey)
+            auditAuth(store, adminUser.nama_pengguna, 'REMOTE_ADMIN_LOGIN', 'Login developer/admin divalidasi', device)
+            saveStore(store)
+            return ok(createMobileSession(adminUser, device) as T, 'Login developer berhasil')
+          }
+        } catch {}
+      }
+
+      try {
         const remoteLogin = await mobileLoginBuyer(username, password, device)
         if (remoteLogin?.success && remoteLogin.data) {
           const remoteUser = await upsertMobileRemoteBuyer(store, { loginName: username, password, remote: remoteLogin.data })
           clearLoginAttempts(limiterKey)
-          auditAuth(store, remoteUser.nama_pengguna, 'REMOTE_BUYER_LOGIN', 'Login pembeli divalidasi melalui license server pusat', device)
+          auditAuth(store, remoteUser.nama_pengguna, 'REMOTE_BUYER_LOGIN', 'Login pembeli divalidasi', device)
           secureStorage.setItem(LICENSE_LAST_SUCCESS_KEY, String(Date.now()))
           saveStore(store)
           return ok(createMobileSession(remoteUser, device) as T, 'Login berhasil')
         }
-        if (remoteLogin && !remoteLogin.success && mobileLicenseErrorCode(remoteLogin) !== 'OFFLINE') {
-          dispatchMobileLicensePopup(remoteLogin, true)
-          return remoteLogin as IpcResponse<T>
-        }
-        const attempt = recordFailedLoginAttempt(limiterKey)
-        auditAuth(store, username, 'LOGIN_FAILED', `Username tidak ditemukan atau akun tidak aktif. Sisa percobaan: ${attempt.remainingAttempts}`, device)
-        saveStore(store)
-        return fail(attempt.locked ? 'Terlalu banyak percobaan login gagal. Akun diblokir selama 5 menit.' : `Username atau Password Salah! Sisa percobaan: ${attempt.remainingAttempts}`)
-      }
-      const passwordValid = await verifyMobilePassword(password, user)
-      if (!passwordValid) {
-        const attempt = recordFailedLoginAttempt(limiterKey)
-        auditAuth(store, username, 'LOGIN_FAILED', `Password salah. Sisa percobaan: ${attempt.remainingAttempts}`, device)
-        saveStore(store)
-        return fail(attempt.locked ? 'Terlalu banyak percobaan login gagal. Akun diblokir selama 5 menit.' : `Username atau Password Salah! Sisa percobaan: ${attempt.remainingAttempts}`)
-      }
-      clearLoginAttempts(limiterKey)
+      } catch {}
 
-      if (user.is_buyer) {
-        const remoteLogin = await mobileLoginBuyer(user.email ?? username, password, device)
-        if (remoteLogin?.success && remoteLogin.data) {
-          const remoteUser = await upsertMobileRemoteBuyer(store, { loginName: user.email ?? username, password, remote: remoteLogin.data })
-          auditAuth(store, remoteUser.nama_pengguna, 'REMOTE_BUYER_LOGIN', 'Login pembeli divalidasi melalui license server pusat', device)
-          secureStorage.setItem(LICENSE_LAST_SUCCESS_KEY, String(Date.now()))
-          saveStore(store)
-          return ok(createMobileSession(remoteUser, device) as T, 'Login berhasil')
-        }
-        if (remoteLogin && !remoteLogin.success && mobileLicenseErrorCode(remoteLogin) !== 'OFFLINE') {
-          const code = mobileLicenseErrorCode(remoteLogin)
-          if (['BLOCKED', 'SUSPENDED', 'INACTIVE', 'DEVICE_BLOCKED'].includes(code)) user.status_user = 'Nonaktif'
-          saveStore(store)
-          dispatchMobileLicensePopup(remoteLogin, true)
-          return remoteLogin as IpcResponse<T>
-        }
-      }
-
-      user.terakhir_login = now()
-      auditAuth(store, username, 'LOGIN', 'Login berhasil dengan bcrypt', device)
+      const attempt = recordFailedLoginAttempt(limiterKey)
+      auditAuth(store, username, 'LOGIN_FAILED', `Username tidak ditemukan. Sisa percobaan: ${attempt.remainingAttempts}`, device)
       saveStore(store)
-      return ok((user.must_change_password ? toSession(user) : createMobileSession(user, device)) as T, user.must_change_password ? 'Password wajib diganti sebelum menggunakan aplikasi' : 'Login berhasil')
+      return fail(attempt.locked ? 'Terlalu banyak percobaan login gagal. Akun diblokir selama 5 menit.' : `Akun belum terdaftar di perangkat ini. Silakan Daftar Akun Baru atau periksa kembali username/password.`)
     }
 
     case 'auth:loginPin': {
