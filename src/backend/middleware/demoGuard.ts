@@ -30,7 +30,7 @@ export function demoGuard<T>(
       if (userRole === 'demo') {
         return {
           success: false,
-          message: '🔒 Mode Demo: Anda tidak dapat melakukan perubahan data. Silakan login dengan akun biasa untuk menggunakan fitur ini.'
+          message: ' Mode Demo: Anda tidak dapat melakukan perubahan data. Silakan login dengan akun biasa untuk menggunakan fitur ini.'
         } as IpcResponse<T>
       }
     }

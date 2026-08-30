@@ -64,7 +64,7 @@ export async function requireAuth(): Promise<IpcResponse | null> {
   if (!role) {
     return {
       success: false,
-      message: '🔒 Anda harus login untuk mengakses fitur ini.',
+      message: ' Anda harus login untuk mengakses fitur ini.',
     };
   }
   return null;
@@ -82,13 +82,13 @@ export function requireMinRole(
   if (!role) {
     return {
       success: false,
-      message: '🔒 Silakan login terlebih dahulu.',
+      message: ' Silakan login terlebih dahulu.',
     };
   }
   if (!hasMinRole(role, minRole)) {
     return {
       success: false,
-      message: `⛔ Anda tidak memiliki izin untuk mengakses fitur ini. Minimal role: ${minRole}.`,
+      message: ` Anda tidak memiliki izin untuk mengakses fitur ini. Minimal role: ${minRole}.`,
     };
   }
   return null;
@@ -112,7 +112,7 @@ export function requireChannelAccess(
 ): IpcResponse | null {
   const authErr = role ? null : {
     success: false,
-    message: '🔒 Silakan login terlebih dahulu.',
+    message: ' Silakan login terlebih dahulu.',
   } as IpcResponse;
   if (authErr) return authErr;
 

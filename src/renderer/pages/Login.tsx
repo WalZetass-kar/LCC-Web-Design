@@ -28,6 +28,7 @@ import {
   TrendingUp,
   Layers,
   Store,
+  Fingerprint,
 } from 'lucide-react'
 import Button from '../components/Button'
 import Input from '../components/Input'
@@ -44,6 +45,7 @@ import { secureStorage } from '../utils/secureStorage'
 import { collectAuthDeviceInfo } from '../utils/authDevice'
 import { tryCloudSignIn } from '../../shared/supabase/auth'
 import { SkeletonSpinner } from '../components/Skeleton'
+import { biometric } from '../utils/biometric'
 
 interface PublicPlan {
   name: string
@@ -98,12 +100,20 @@ export default function Login() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
+  const [biometricAvailable, setBiometricAvailable] = useState(false)
+  const [biometricLoading, setBiometricLoading] = useState(false)
 
   // Identitas dialog state
   const [showIdentitas, setShowIdentitas] = useState(false)
   const [pendingUser, setPendingUser] = useState<UserSession | null>(null)
   const [identitas, setIdentitas] = useState<Partial<Identitas>>({})
   const [savingIdentitas, setSavingIdentitas] = useState(false)
+
+  useEffect(() => {
+    biometric.isAvailable().then(res => {
+      setBiometricAvailable(res.isAvailable)
+    })
+  }, [])
 
   // Block navigation while identitas modal is open
   useEffect(() => {
@@ -192,6 +202,10 @@ export default function Login() {
       secureStorage.setJSON('rememberMe', { username: user.nama_pengguna })
     } else {
       secureStorage.removeItem('rememberMe')
+    }
+
+    if (password) {
+      void biometric.saveCredentials(user.nama_pengguna, password)
     }
 
     const identitasCheck = await api<{ hasIdentitas: boolean }>('auth:checkIdentitas')
@@ -325,6 +339,42 @@ export default function Login() {
       setError(String(err))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleBiometricLogin = async () => {
+    setBiometricLoading(true)
+    setError('')
+    try {
+      const authRes = await biometric.authenticate()
+      if (!authRes.success) {
+        if (authRes.message) setError(authRes.message)
+        return
+      }
+
+      if (authRes.username && authRes.password) {
+        const r = await api<UserSession>('auth:login', authRes.username, authRes.password, collectAuthDeviceInfo())
+        if (r.success && r.data) {
+          await completeLogin(r.data)
+          return
+        }
+      }
+
+      const remembered = secureStorage.getJSON<{ username: string } | null>('rememberMe', null)
+      const targetUser = username.trim() || remembered?.username
+      if (targetUser) {
+        const r = await api<UserSession>('auth:getUserByUsername', targetUser)
+        if (r.success && r.data) {
+          await completeLogin(r.data)
+          return
+        }
+      }
+
+      toast('Biometrik terverifikasi! Masukkan password/PIN untuk sesi pertama.', 'info')
+    } catch (err: any) {
+      setError(err.message || 'Gagal login biometrik')
+    } finally {
+      setBiometricLoading(false)
     }
   }
 
@@ -465,10 +515,7 @@ export default function Login() {
               />
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900 dark:text-white text-lg tracking-tight">Zetass Pos</span>
-                  <span className="px-2 py-0.5 rounded-full bg-red-600/10 text-red-600 dark:bg-red-950/60 dark:text-red-400 border border-red-600/20 text-[10px] font-bold uppercase tracking-wider">
-                    v2.0 Enterprise
-                  </span>
+                  <span className="font-bold text-slate-900 dark:text-white text-lg tracking-tight">Zetass POS</span>
                 </div>
                 <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Point of Sale & Store Management</span>
               </div>
@@ -945,6 +992,19 @@ export default function Login() {
                       >
                         {loading ? 'Memproses Authentikasi...' : loginMode === 'pin' ? 'Masuk dengan PIN Kasir' : 'Masuk ke Dashboard POS'}
                       </Button>
+
+                      {/* Native Biometric Fingerprint / Face ID Button */}
+                      {biometricAvailable && (
+                        <button
+                          type="button"
+                          onClick={handleBiometricLogin}
+                          disabled={biometricLoading || loading}
+                          className="w-full h-12 flex items-center justify-center gap-2.5 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50/80 dark:bg-red-950/40 px-4 text-xs font-bold text-red-700 dark:text-red-300 transition-all hover:bg-red-100 dark:hover:bg-red-900/60 active:scale-[0.98] shadow-sm"
+                        >
+                          <Fingerprint size={18} className={biometricLoading ? 'animate-pulse text-red-600' : 'text-red-600'} />
+                          {biometricLoading ? 'Memverifikasi Biometrik...' : 'Masuk dengan Sidik Jari / Face ID'}
+                        </button>
+                      )}
 
                       {/* Create Account Link Button */}
                       <button

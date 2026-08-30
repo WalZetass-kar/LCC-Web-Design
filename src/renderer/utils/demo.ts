@@ -23,7 +23,7 @@ export function isDemoMode(): boolean {
  * Get the demo blocked message.
  */
 export function getDemoBlockedMessage(action?: string): string {
-  return `🔒 Mode Demo (READ ONLY): ${action ? `Tidak dapat ${action}.` : 'Aksi ini tidak diizinkan.'} Silakan login dengan akun biasa untuk menggunakan fitur penuh.`
+  return `Mode Demo (READ ONLY): ${action ? `Tidak dapat ${action}.` : 'Aksi ini tidak diizinkan.'} Silakan login dengan akun biasa untuk menggunakan fitur penuh.`
 }
 
 /**

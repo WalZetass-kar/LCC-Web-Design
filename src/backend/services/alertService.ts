@@ -103,7 +103,7 @@ export class AlertService {
             INSERT INTO mediasoft_notifikasi (judul, pesan, jenis, tgl_dibuat, dibaca, link)
             VALUES (?, ?, ?, ?, ?, ?)
           `).run(
-            severity === 'KADALUARSA' ? '⚠️ Produk Kadaluarsa' : 'Produk Akan Kadaluarsa',
+            severity === 'KADALUARSA' ? ' Produk Kadaluarsa' : 'Produk Akan Kadaluarsa',
             message,
             'EXPIRED',
             now,

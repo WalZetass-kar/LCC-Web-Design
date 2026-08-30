@@ -157,7 +157,7 @@ function PopupCard({ popup, onSaved }: { popup: PopupRow; onSaved: () => void })
         >
           <Eye className="w-4 h-4" /> Preview Popup
         </button>
-        {saved && <span className="text-xs text-green-600 dark:text-green-400 font-medium">✓ Tersimpan</span>}
+        {saved && <span className="text-xs text-green-600 dark:text-green-400 font-medium"> Tersimpan</span>}
       </div>
     </div>
   )

@@ -67,9 +67,9 @@ function openExternalUrl(url: string): void {
  */
 export function buildUpgradeMessage(params: WhatsAppUpgradeParams): string {
   const lines: string[] = [
-    `Halo Admin, saya ingin upgrade paket Zetass Pos 🚀`,
+    `Halo Admin, saya ingin upgrade paket Zetass Pos`,
     ``,
-    `📋 *Detail Pesanan:*`,
+    `*Detail Pesanan:*`,
     `• Paket: *${params.planName}* (${params.planPrice}${params.planPeriod})`,
     `• Nama: ${params.userName}`,
   ]
@@ -83,7 +83,7 @@ export function buildUpgradeMessage(params: WhatsAppUpgradeParams): string {
 
   lines.push(
     ``,
-    `Mohon info cara pembayaran dan aktivasinya. Terima kasih! 🙏`,
+    `Mohon info cara pembayaran dan aktivasinya. Terima kasih!`,
   )
 
   return lines.join('\n')

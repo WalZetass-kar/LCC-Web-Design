@@ -335,7 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (wasDemo && isNowPaid) {
               window.dispatchEvent(new CustomEvent('toast:show', {
                 detail: {
-                  message: `🎉 Lisensi Aktif: ${nextUser.subscription_plan_name || 'Paket Berhasil Diaktifkan'}!`,
+                  message: `Lisensi Aktif: ${nextUser.subscription_plan_name || 'Paket Berhasil Diaktifkan'}!`,
                   type: 'success',
                 },
               }))

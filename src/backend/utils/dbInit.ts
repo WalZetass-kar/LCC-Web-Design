@@ -6,7 +6,7 @@
 import { sqlite } from '../../database/connection.js'
 
 export function initDatabase() {
-  console.log('🔧 Initializing database tables...')
+  console.log(' Initializing database tables...')
   
   try {
     // Tax/PPN
@@ -240,7 +240,7 @@ export function initDatabase() {
     const taxCount = sqlite.prepare('SELECT COUNT(*) as count FROM mediasoft_tax_settings').get() as any
     if (taxCount?.count === 0) {
       sqlite.prepare('INSERT INTO mediasoft_tax_settings (name, rate, is_active) VALUES (?, ?, ?)').run('PPN 10%', 10, 1)
-      console.log('✅ Default tax created')
+      console.log(' Default tax created')
     }
     
     const loyaltyCount = sqlite.prepare('SELECT COUNT(*) as count FROM mediasoft_loyalty_tiers').get() as any
@@ -254,7 +254,7 @@ export function initDatabase() {
       for (const t of tiers) {
         sqlite.prepare('INSERT INTO mediasoft_loyalty_tiers (name, min_points, discount_percent, benefits, color) VALUES (?, ?, ?, ?, ?)').run(t.name, t.min_points, t.discount_percent, t.benefits, t.color)
       }
-      console.log('✅ Default loyalty tiers created')
+      console.log(' Default loyalty tiers created')
     }
 
     const notifCount = sqlite.prepare('SELECT COUNT(*) as count FROM mediasoft_notification_settings').get() as any
@@ -266,11 +266,11 @@ export function initDatabase() {
           quiet_start, quiet_end
         ) VALUES (1, 1, 1, 1, 1, 0, 5, 0, '', 1, '22:00', '06:00')
       `).run()
-      console.log('✅ Default notification settings created')
+      console.log(' Default notification settings created')
     }
     
-    console.log('✅ Database initialization complete')
+    console.log(' Database initialization complete')
   } catch (error) {
-    console.error('❌ Database initialization failed:', error)
+    console.error(' Database initialization failed:', error)
   }
 }

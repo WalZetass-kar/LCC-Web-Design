@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
@@ -13,6 +13,32 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useSessionTimeout } from '../hooks/useSessionTimeout'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../utils/api'
+import { preloadCorePages } from '../routes'
+
+function PageLoadingFallback() {
+  return (
+    <div className="space-y-4 animate-pulse p-1">
+      <div className="flex items-center justify-between">
+        <div className="space-y-2">
+          <div className="h-6 w-48 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+          <div className="h-3.5 w-64 bg-slate-200/70 dark:bg-slate-800/70 rounded" />
+        </div>
+        <div className="flex gap-2">
+          <div className="h-9 w-24 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-24 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+            <div className="h-3 w-20 bg-slate-200 dark:bg-slate-800 rounded" />
+            <div className="h-6 w-28 bg-slate-200 dark:bg-slate-800 rounded" />
+          </div>
+        ))}
+      </div>
+      <div className="h-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4" />
+    </div>
+  )
+}
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -28,6 +54,10 @@ export default function AppLayout() {
   const handlePullRefresh = useCallback(async () => {
     window.dispatchEvent(new CustomEvent('app:refresh'))
     await new Promise(r => setTimeout(r, 500))
+  }, [])
+
+  useEffect(() => {
+    preloadCorePages()
   }, [])
 
   useEffect(() => {
@@ -80,13 +110,11 @@ export default function AppLayout() {
         <Topbar onMenuClick={handleMenuClick} />
         <main ref={mainRef} className={`flex-1 overflow-y-auto ${location.pathname === '/assistant' ? 'p-4 sm:p-5' : 'p-4 pb-24 sm:p-5 lg:pb-5'} scrollbar-thin`}>
           <PullToRefresh onRefresh={handlePullRefresh}>
-            <Outlet />
+            <Suspense fallback={<PageLoadingFallback />}>
+              <Outlet />
+            </Suspense>
           </PullToRefresh>
         </main>
-        {/* Footer */}
-        <div className="h-7 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-center">
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">Zetass Pos Developer</span>
-        </div>
       </div>
       <OfflineIndicator />
       {location.pathname !== '/assistant' && <MobileBottomNav />}

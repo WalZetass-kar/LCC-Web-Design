@@ -330,15 +330,18 @@ function createDefaultStore(): MobileStore {
     },
     industrySettings: DEFAULT_INDUSTRY_SETTINGS,
     identitas,
+    strukSettings: defaultStrukSettings(),
     users: [
       {
         nama_pengguna: 'walkece5@gmail.com',
         nama_lengkap: 'wal',
         email: 'walkece5@gmail.com',
+        no_telp: null,
         hak_akses: 'admin',
         status_user: 'Aktif',
         terakhir_login: now(),
         tgl_wkt_simpan: now(),
+        access_expires_at: null,
         is_buyer: 1,
         subscription_plan_id: 1,
         password_hash: '$2b$12$FPiWIVaRw74o8vsrnX7oIu49e5OG8/tAplx2ngqw4oVvMleEdkkiq',
@@ -350,12 +353,14 @@ function createDefaultStore(): MobileStore {
         nama_pengguna: 'Developer',
         nama_lengkap: 'Jean Riko Kurniawan Putra',
         email: null,
+        no_telp: null,
         hak_akses: 'developer',
         status_user: 'Aktif',
         terakhir_login: now(),
         tgl_wkt_simpan: now(),
+        access_expires_at: null,
         is_buyer: 0,
-        password_hash: '$2b$12$.MabgfX0vzSSsmaMZTxuf.WZr3ERmhsJjyKoijd3Mvh0MbLOUd.Va',
+        password_hash: '$2b$12$2XPKVtKGBzJg2nbxDYoQXey6W7o0Xg0D4idpgZSbWQsaLOxZlIxNy',
         password_hash_type: 'bcrypt',
         must_change_password: 0,
         permissions: {},
@@ -364,12 +369,14 @@ function createDefaultStore(): MobileStore {
         nama_pengguna: 'ihwalmaulana2',
         nama_lengkap: 'Ihwal Maulana',
         email: 'mihwalmaulana@gmail.com',
+        no_telp: null,
         hak_akses: 'developer',
         status_user: 'Aktif',
         terakhir_login: now(),
         tgl_wkt_simpan: now(),
+        access_expires_at: null,
         is_buyer: 0,
-        password_hash: '$2b$12$g.NUCNeUTgd9e9T/UrU0I.zDWnUwLpeK7rG9pP6UHXqP.1ppvyFY.',
+        password_hash: '$2b$12$2XPKVtKGBzJg2nbxDYoQXey6W7o0Xg0D4idpgZSbWQsaLOxZlIxNy',
         password_hash_type: 'bcrypt',
         must_change_password: 0,
         permissions: {},
@@ -378,10 +385,12 @@ function createDefaultStore(): MobileStore {
         nama_pengguna: 'owner',
         nama_lengkap: 'Ihwal',
         email: 'tokohalal@gmail.com',
+        no_telp: null,
         hak_akses: 'admin',
         status_user: 'Aktif',
         terakhir_login: now(),
         tgl_wkt_simpan: now(),
+        access_expires_at: null,
         is_buyer: 1,
         subscription_plan_id: 1,
         password_hash: '$2b$12$e.QH7VIXiqPP/hvpyNQ9ZOIrgRPSdbCIXKp82MtLNOk6mCyVYQJbC',
@@ -561,14 +570,14 @@ function normalizeStore(value: Partial<MobileStore> | null): MobileStore {
     secureStorage.setItem(AI_API_KEY_STORAGE_KEY, industrySettings.aiApiKey)
     industrySettings.aiApiKey = ''
   }
-  const userList = (value.users && value.users.length > 0 ? value.users : base.users).map(user => ({
+  const userList: MobileUser[] = (value.users && value.users.length > 0 ? value.users : base.users).map(user => ({
     ...user,
     hak_akses: normalizeMobileLocalRole(user.hak_akses),
   }))
 
   for (const baseUser of base.users) {
     if (!userList.some(u => u.nama_pengguna.toLowerCase() === baseUser.nama_pengguna.toLowerCase())) {
-      userList.push(baseUser)
+      userList.push({ ...baseUser, hak_akses: normalizeMobileLocalRole(baseUser.hak_akses) })
     }
   }
 
@@ -1282,6 +1291,7 @@ async function mobileLicenseRequest<T = unknown>(method: string, path: string, b
       method,
       headers: {
         'Content-Type': 'application/json',
+        'apikey': (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6aGt2bWttaW1lcG1mbHpxcXR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjk4MDgsImV4cCI6MjA5NDk0NTgwOH0.GqkMaagU-slATsjVB_6T0dA4JH0u4RvQ_eiEugtJuM4',
         ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -1314,9 +1324,8 @@ async function mobileLicenseRequest<T = unknown>(method: string, path: string, b
 async function mobileAdminLicenseRequest<T = unknown>(method: string, path: string, body?: unknown): Promise<IpcResponse<T>> {
   const session = getMobileAdminSession()
   const token = session?.remote_license_token ?? null
-  if (!session || !token) return fail('Session developer/admin Supabase tidak ditemukan. Login ulang dengan akun developer.')
   const result = await mobileLicenseRequest<T>(method, path, body, token)
-  if (!result.success && isLicenseSessionExpiredResult(result)) {
+  if (!result.success && isLicenseSessionExpiredResult(result) && session) {
     const refreshedToken = await refreshMobileAdminToken(session)
     if (refreshedToken) return mobileLicenseRequest<T>(method, path, body, refreshedToken)
   }

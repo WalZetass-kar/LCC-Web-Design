@@ -1,16 +1,19 @@
 import { useEffect, useState, useRef } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Eye, Printer } from 'lucide-react'
+import { Eye, Printer, Bluetooth } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Badge from '../components/Badge'
 import DataTable from '../components/DataTable'
 import Struk from '../components/Struk'
+import BluetoothPrinterModal from '../components/BluetoothPrinterModal'
 import { SkeletonPage } from '../components/Skeleton'
 import { api } from '../utils/api'
 import { formatRupiah, formatDateTime } from '../utils/format'
 import { useReactToPrint } from 'react-to-print'
+import { bluetoothPrinter } from '../utils/bluetoothPrinter'
+import { useToast } from '../contexts/ToastContext'
 import type { Penjualan, PenjualanDetailItem } from '../../shared/types'
 
 export default function Riwayat() {
@@ -38,7 +41,62 @@ export default function Riwayat() {
     }
   }
 
+  const toast = useToast()
+  const [showBtModal, setShowBtModal] = useState(false)
+  const [btPrinting, setBtPrinting] = useState(false)
+
   const handlePrint = useReactToPrint({ content: () => strukRef.current })
+
+  const handleBluetoothPrint = async () => {
+    if (!detail) return
+    if (!bluetoothPrinter.isConnected()) {
+      setShowBtModal(true)
+      return
+    }
+
+    setBtPrinting(true)
+    try {
+      const identitasRes = await api<any>('identitas:get')
+      const strukSettingsRes = await api<any>('strukSettings:get')
+      const paperSize = (localStorage.getItem('zetass_bt_paper_size') as '58mm' | '80mm') || strukSettingsRes?.data?.paper_size || '58mm'
+
+      const result = await bluetoothPrinter.printStruk({
+        namaToko: identitasRes?.data?.namatoko || 'Zetass Pos',
+        alamat: identitasRes?.data?.alamattoko,
+        telepon: identitasRes?.data?.nomortelptoko,
+        kdTransaksi: detail.header.kd_tansaksi_jual,
+        waktu: formatDateTime(detail.header.tgl_wkt_transaksi),
+        kasir: detail.header.username_transaksi || 'Kasir',
+        items: detail.details.map(d => ({
+          nama: String(d.nama_barang || d.kd_barang || 'Produk'),
+          qty: d.qty ?? 1,
+          harga: d.harga_jual ?? 0,
+          subtotal: d.total_harga_jual ?? 0,
+        })),
+        totalItem: detail.details.reduce((s, i) => s + (i.qty ?? 1), 0),
+        subtotal: detail.header.sub_total ?? 0,
+        diskon: Number((detail.header as any).diskon_promo ?? (detail.header as any).diskon ?? 0),
+        pajak: Number((detail.header as any).pajak ?? 0),
+        totalBayar: detail.header.sub_total ?? 0,
+        nominalBayar: detail.header.yang_dibayar ?? detail.header.sub_total ?? 0,
+        kembalian: detail.header.kembalian ?? 0,
+        metodeBayar: detail.header.jenis_pembayaran ?? 'TUNAI',
+        pesanFooter: strukSettingsRes?.data?.footer_text || 'Terima kasih atas kunjungan Anda!',
+        tipeKertas: paperSize,
+        openCashDrawer: true,
+      })
+
+      if (result.success) {
+        toast(result.message, 'success')
+      } else {
+        toast(result.message, 'error')
+      }
+    } catch (err: any) {
+      toast(err.message || 'Gagal mencetak ke printer Bluetooth.', 'error')
+    } finally {
+      setBtPrinting(false)
+    }
+  }
 
   // Convert detail items to CartItem format for Struk
   const cartItems = detail?.details.map(d => ({
@@ -95,10 +153,19 @@ export default function Riwayat() {
         title={`Detail: ${detail?.header.kd_tansaksi_jual}`}
         size="lg"
         footer={
-          <>
+          <div className="flex flex-wrap gap-2 w-full justify-end">
             <Button variant="secondary" onClick={() => setDetail(null)} className="w-full sm:w-auto">Tutup</Button>
+            <Button
+              variant="secondary"
+              icon={<Bluetooth size={14} className={bluetoothPrinter.isConnected() ? 'text-emerald-500' : 'text-slate-400'} />}
+              onClick={handleBluetoothPrint}
+              disabled={btPrinting}
+              className="w-full sm:w-auto font-bold border-slate-300 dark:border-slate-700"
+            >
+              {btPrinting ? 'Mencetak...' : bluetoothPrinter.isConnected() ? 'Cetak Thermal BT' : 'Printer BT'}
+            </Button>
             <Button icon={<Printer size={14} />} onClick={handlePrint} className="w-full sm:w-auto">Cetak Ulang Struk</Button>
-          </>
+          </div>
         }
       >
         {detail && (
@@ -154,6 +221,8 @@ export default function Riwayat() {
           </div>
         )}
       </Modal>
+
+      <BluetoothPrinterModal open={showBtModal} onClose={() => setShowBtModal(false)} />
     </div>
   )
 }

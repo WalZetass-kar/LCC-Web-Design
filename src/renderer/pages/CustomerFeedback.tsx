@@ -163,7 +163,7 @@ export default function CustomerFeedback() {
                 <div className="mt-2 space-y-1">
                   {[5, 4, 3, 2, 1].map(r => (
                     <div key={r} className="flex items-center gap-2 text-xs">
-                      <span className="w-8 text-slate-500">{r} ★</span>
+                      <span className="w-8 text-slate-500">{r} </span>
                       <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-amber-400 rounded-full"

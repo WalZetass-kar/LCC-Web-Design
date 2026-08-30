@@ -296,7 +296,7 @@ export default function SubscriptionPlans() {
                 {/* Badges */}
                 <div className="flex items-center gap-2 mb-3">
                   {plan.is_recommended && plan.is_active && (
-                    <Badge label="⭐ Rekomendasi" variant="purple" />
+                    <Badge label="Rekomendasi" variant="purple" />
                   )}
                   <Badge
                     label={plan.is_active ? 'Aktif' : 'Nonaktif'}
@@ -511,7 +511,7 @@ export default function SubscriptionPlans() {
                 className="w-4 h-4 rounded accent-purple-500"
               />
               <span className="text-sm text-slate-700 dark:text-slate-200">
-                ⭐ Rekomendasi
+                Rekomendasi
               </span>
             </label>
           </div>

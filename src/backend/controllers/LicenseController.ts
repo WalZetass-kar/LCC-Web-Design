@@ -76,6 +76,7 @@ async function request<T = unknown>(method: string, path: string, token: string,
       method,
       headers: {
         'Content-Type': 'application/json',
+        'apikey': process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6aGt2bWttaW1lcG1mbHpxcXR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjk4MDgsImV4cCI6MjA5NDk0NTgwOH0.GqkMaagU-slATsjVB_6T0dA4JH0u4RvQ_eiEugtJuM4',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: payload,
@@ -244,10 +245,24 @@ async function call<T = unknown>(method: string, path: string, body?: unknown): 
       return {
         success: true,
         data: {
+          users: userCount,
           total_users: userCount,
           total_plans: planCount,
           total_devices: deviceCount,
-          online_devices: deviceCount,
+          active_devices: deviceCount,
+          blocked_devices: 0,
+          device_online: deviceCount,
+          user_online: Math.max(1, deviceCount),
+          active_subscriptions: userCount,
+          expired_subscriptions: 0,
+          revenue_month: 0,
+          revenue_year: 0,
+          total_transactions: userCount,
+          active_versions: { '2.1.0': deviceCount || 1 },
+          revenue_by_month: [],
+          recent_activity: [],
+          recent_errors: [],
+          generated_at: new Date().toISOString(),
         } as any,
       }
     }
@@ -706,84 +721,10 @@ export class LicenseController {
     return call('POST', '/payments/manual-request', data)
   }
 
-  static async createMidtransPayment(data: { email: string; plan_code: string; buyer_name?: string }) {
-    try {
-      const email = String(data.email || '').trim().toLowerCase()
-      const planCode = String(data.plan_code || '').trim()
-      if (!email || !planCode) {
-        return { success: false, message: 'Email dan kode paket harus diisi' }
-      }
-
-      // 1. Fetch public plan details
-      const plansRes = await this.getPublicPlans()
-      const plan = plansRes.success && Array.isArray(plansRes.data)
-        ? plansRes.data.find(p => p.code === planCode || String(p.id) === planCode)
-        : null
-
-      if (!plan) {
-        return { success: false, message: `Paket lisensi "${planCode}" tidak ditemukan` }
-      }
-
-      if (plan.price <= 0) {
-        return { success: false, message: 'Paket gratis tidak memerlukan pembayaran Midtrans' }
-      }
-
-      const orderId = `LIC-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-
-      // 2. Initialize Midtrans
-      const config = PaymentMethodController.getMidtransConfig()
-      if (!config.success) {
-        const serverKey = process.env.MIDTRANS_SERVER_KEY || 'SB-Mid-server-demo'
-        const clientKey = process.env.MIDTRANS_CLIENT_KEY || 'SB-Mid-client-demo'
-        MidtransService.init(serverKey, clientKey, false)
-      } else {
-        MidtransService.init(config.data.serverKey, config.data.clientKey, config.data.isProduction)
-      }
-
-      // 3. Create Midtrans Snap Transaction
-      const transactionRes = await MidtransService.createTransaction({
-        orderId,
-        amount: Math.round(plan.price),
-        customerName: data.buyer_name || email.split('@')[0] || 'Pembeli Lisensi',
-        customerEmail: email,
-        items: [
-          {
-            id: plan.code,
-            name: `Lisensi POS - ${plan.name}`,
-            price: Math.round(plan.price),
-            quantity: 1,
-          },
-        ],
-      })
-
-      if (!transactionRes.success || !transactionRes.data) {
-        return {
-          success: false,
-          message: transactionRes.message || 'Gagal membuat sesi pembayaran Midtrans',
-        }
-      }
-
-      // Record invoice request in background
-      try {
-        await this.createManualPaymentRequest({
-          email,
-          plan_code: plan.code,
-          notes: `Midtrans Snap Order ID: ${orderId} | Token: ${transactionRes.data.token}`,
-        })
-      } catch {}
-
-      return {
-        success: true,
-        data: {
-          orderId,
-          token: transactionRes.data.token,
-          redirectUrl: transactionRes.data.redirectUrl,
-          plan,
-          amount: Math.round(plan.price),
-        },
-      }
-    } catch (error: any) {
-      return { success: false, message: error?.message || String(error) }
+  static async createMidtransPayment(_data: { email: string; plan_code: string; buyer_name?: string }) {
+    return {
+      success: false,
+      message: 'Layanan pembayaran otomatis Midtrans sedang dalam pemeliharaan sistem. Silakan gunakan metode Pembayaran Manual via WhatsApp / Transfer Bank untuk aktivasi instan.',
     }
   }
 

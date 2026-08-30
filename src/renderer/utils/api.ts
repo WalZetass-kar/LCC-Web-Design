@@ -81,7 +81,7 @@ export async function api<T>(channel: string, ...args: unknown[]): Promise<IpcRe
   const isRead = isReadChannel(channel)
 
   if (demoMode && !isRead) {
-    console.warn(`🔒 [DEMO PRE-FLIGHT] Blocked: ${channel}`)
+    console.warn(`[DEMO PRE-FLIGHT] Blocked: ${channel}`)
     return {
       success: false,
       message: getDemoBlockedMessage(),
@@ -110,7 +110,7 @@ export async function api<T>(channel: string, ...args: unknown[]): Promise<IpcRe
 
       // Only retry on retryable errors and if we haven't exceeded max retries
       if (attempt < MAX_RETRIES && isRetryableError(error)) {
-        console.warn(`⚠️ [API RETRY] Attempt ${attempt + 1}/${MAX_RETRIES} for ${channel}:`, error.message)
+        console.warn(`[API RETRY] Attempt ${attempt + 1}/${MAX_RETRIES} for ${channel}:`, error.message)
         // Exponential backoff: 500ms, 1000ms, 2000ms
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 500))
         continue
@@ -125,7 +125,7 @@ export async function api<T>(channel: string, ...args: unknown[]): Promise<IpcRe
   const missingHandler = /No handler registered/i.test(message)
   const timeout = /timeout/i.test(message)
 
-  console.error(`❌ API Error [${channel}]:`, lastError)
+  console.error(`[API Error] [${channel}]:`, lastError)
   return {
     success: false,
     message: missingHandler

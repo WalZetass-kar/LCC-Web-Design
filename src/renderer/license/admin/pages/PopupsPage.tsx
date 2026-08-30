@@ -96,7 +96,7 @@ const PopupCard: React.FC<{ popup: PopupRow; onSaved: () => void }> = ({ popup, 
           <Save className="w-4 h-4" />
           {saving ? 'Menyimpan…' : 'Simpan'}
         </Button>
-        {saved && <span className="text-xs text-green-600 dark:text-green-400 font-medium">✓ Tersimpan</span>}
+        {saved && <span className="text-xs text-green-600 dark:text-green-400 font-medium"> Tersimpan</span>}
       </div>
     </div>
   );

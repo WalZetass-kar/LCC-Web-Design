@@ -430,7 +430,7 @@ export class ExportService {
       doc.circle(20, 17, 8, 'F')
       doc.setFontSize(12)
       doc.setTextColor(79, 70, 229)
-      doc.text('⚡', 17, 20)
+      doc.text('', 17, 20)
 
       // Title
       doc.setFontSize(18)
@@ -1441,7 +1441,7 @@ export class ExportService {
           d.setTextColor(255, 255, 255)
           d.setFont('helvetica', 'bold')
           d.setFontSize(14)
-          d.text('🛒', logoX + logoSize/2, logoY + logoSize/2 + 2, { align: 'center' })
+          d.text('', logoX + logoSize/2, logoY + logoSize/2 + 2, { align: 'center' })
         }
         
         // Store Meta on Left
@@ -1852,7 +1852,7 @@ export class ExportService {
       doc.circle(20, 20, 10, 'F')
       doc.setFontSize(14)
       doc.setTextColor(16, 185, 129)
-      doc.text('📦', 16, 23)
+      doc.text('', 16, 23)
 
       // Title
       doc.setFontSize(20)
@@ -1881,9 +1881,9 @@ export class ExportService {
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(7)
       doc.setTextColor(220, 38, 38)
-      doc.text(`⚠ Menipis: ${menipis} item`, pageWidth - 65, 19)
+      doc.text(` Menipis: ${menipis} item`, pageWidth - 65, 19)
       doc.setTextColor(16, 185, 129)
-      doc.text(`✓ Aman: ${aman} item`, pageWidth - 65, 24)
+      doc.text(` Aman: ${aman} item`, pageWidth - 65, 24)
       doc.setTextColor(100, 116, 139)
       doc.text(`Total: ${data.length} item`, pageWidth - 65, 29)
 
@@ -1892,7 +1892,7 @@ export class ExportService {
       // Table
       const headers = ['No', 'Kode', 'Nama Barang', 'Stok', 'Min', 'Status']
       const body = data.map((item, idx) => {
-        const status = (item.stok || 0) <= (item.stok_minimum || 0) ? 'MENIPIS ⚠' : 'AMAN ✓'
+        const status = (item.stok || 0) <= (item.stok_minimum || 0) ? 'MENIPIS ' : 'AMAN '
         return [
           idx + 1,
           item.kd_barang,

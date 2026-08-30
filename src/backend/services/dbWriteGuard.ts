@@ -23,7 +23,7 @@ export class DemoWriteBlockedError extends Error {
 export function safeWrite(operation?: string): void {
   if (demoSession.isDemoMode()) {
     const username = demoSession.getUsername()
-    console.error(`🛑 DB WRITE BLOCKED: operation="${operation ?? 'unknown'}" user="${username}" — DEMO MODE ACTIVE`)
+    console.error(` DB WRITE BLOCKED: operation="${operation ?? 'unknown'}" user="${username}" — DEMO MODE ACTIVE`)
     
     // Log the violation
     demoSession.logViolation(`db:${operation ?? 'unknown'}`, [])
@@ -53,7 +53,7 @@ export async function guardedWrite<T>(
     // Post-check: Verify demo mode hasn't been set during execution
     // (paranoid defense against race conditions)
     if (demoSession.isDemoMode()) {
-      console.error(`🛑 POST-WRITE DEMO CHECK FAILED: operation="${operation}" — This should never happen!`)
+      console.error(` POST-WRITE DEMO CHECK FAILED: operation="${operation}" — This should never happen!`)
       demoSession.logViolation(`db:post-check:${operation}`, [])
       throw new DemoWriteBlockedError(operation)
     }
@@ -77,7 +77,7 @@ export function guardedWriteSync<T>(operation: string, fn: () => T): T {
   
   // Post-check
   if (demoSession.isDemoMode()) {
-    console.error(`🛑 POST-WRITE DEMO CHECK FAILED: operation="${operation}" — This should never happen!`)
+    console.error(` POST-WRITE DEMO CHECK FAILED: operation="${operation}" — This should never happen!`)
     demoSession.logViolation(`db:post-check:${operation}`, [])
     throw new DemoWriteBlockedError(operation)
   }

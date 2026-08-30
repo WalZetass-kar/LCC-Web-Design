@@ -77,7 +77,7 @@ export function useDemoGuard(): DemoGuardResult {
       const blocked = checkPremiumFeature(featureName)
       if (blocked) {
         toast(
-          `🔒 Fitur "${friendlyName ?? featureName}" hanya tersedia untuk pengguna dengan lisensi aktif.`,
+          `Fitur "${friendlyName ?? featureName}" hanya tersedia untuk pengguna dengan lisensi aktif.`,
           'error'
         )
       }

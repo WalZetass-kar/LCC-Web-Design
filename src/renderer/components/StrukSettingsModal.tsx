@@ -1,8 +1,10 @@
 import { useState, useEffect, type ChangeEvent, type DragEvent } from 'react'
-import { X, Save, Upload, Trash2 } from 'lucide-react'
+import { X, Save, Upload, Trash2, Bluetooth } from 'lucide-react'
 import { api } from '../utils/api'
 import { useToast } from '../contexts/ToastContext'
 import ConfirmDialog from './ConfirmDialog'
+import BluetoothPrinterModal from './BluetoothPrinterModal'
+import { bluetoothPrinter } from '../utils/bluetoothPrinter'
 
 const DEFAULT_FOOTER_TEXT = 'Terima kasih atas kunjungan Anda'
 const MAX_QRIS_SIZE = 5 * 1024 * 1024
@@ -63,6 +65,7 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [confirmRemoveQris, setConfirmRemoveQris] = useState(false)
+  const [showBtModal, setShowBtModal] = useState(false)
   const [settings, setSettings] = useState<StrukSettings>({
     printer_type: 'thermal',
     paper_size: '58mm',
@@ -290,6 +293,28 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
                     </button>
                   ))}
                 </div>
+
+                {/* Bluetooth Thermal Printer Quick Connect */}
+                <div className="mt-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center">
+                      <Bluetooth size={18} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800 dark:text-white">Printer Bluetooth Thermal (ESC/POS)</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {bluetoothPrinter.isConnected() ? `Terhubung: ${bluetoothPrinter.getConnectedPrinterName()}` : 'Belum tersambung ke printer'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBtModal(true)}
+                    className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-red-500 transition shadow-sm"
+                  >
+                    {bluetoothPrinter.isConnected() ? 'Kelola' : 'Sambungkan'}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -508,6 +533,10 @@ export default function StrukSettingsModal({ isOpen, onClose }: StrukSettingsMod
         confirmText="Hapus"
         variant="danger"
         loading={uploading}
+      />
+      <BluetoothPrinterModal
+        open={showBtModal}
+        onClose={() => setShowBtModal(false)}
       />
     </>
   )

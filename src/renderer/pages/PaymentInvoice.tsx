@@ -106,7 +106,7 @@ export default function PaymentInvoice() {
   const [creating, setCreating] = useState(false)
   
   // Midtrans Payment State
-  const [paymentMethod, setPaymentMethod] = useState<'midtrans' | 'whatsapp'>('midtrans')
+  const [paymentMethod, setPaymentMethod] = useState<'midtrans' | 'whatsapp'>('whatsapp')
   const [midtransOrder, setMidtransOrder] = useState<{
     orderId: string
     token: string
@@ -277,11 +277,11 @@ export default function PaymentInvoice() {
     const message = [
       'Halo Admin Zetass POS, saya ingin membeli / berlangganan lisensi:',
       '',
-      `📦 Paket: ${selectedPlan.name} (${selectedPlan.code})`,
-      `💰 Harga: ${formatPlanPrice(selectedPlan)} / ${getPlanDurationLabel(selectedPlan.duration_days)}`,
-      `⏱️ Durasi: ${durationText}`,
-      `👤 Akun: ${user?.nama_lengkap ?? user?.nama_pengguna ?? '-'}`,
-      `📧 Email: ${buyerEmail || '-'}`,
+      `Paket: ${selectedPlan.name} (${selectedPlan.code})`,
+      `Harga: ${formatPlanPrice(selectedPlan)} / ${getPlanDurationLabel(selectedPlan.duration_days)}`,
+      `Durasi: ${durationText}`,
+      `Akun: ${user?.nama_lengkap ?? user?.nama_pengguna ?? '-'}`,
+      `Email: ${buyerEmail || '-'}`,
       '',
       'Mohon nomor rekening pembayaran dan aktivasi lisensinya. Terima kasih.',
     ].join('\n')
@@ -582,8 +582,8 @@ export default function PaymentInvoice() {
                   }`}
                 >
                   {isRecommended && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 px-3 py-0.5 text-[10px] font-extrabold text-white shadow-md">
-                      ★ REKOMENDASI
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-3 py-0.5 text-[10px] font-extrabold text-white shadow-md">
+                      REKOMENDASI
                     </div>
                   )}
 
@@ -629,11 +629,11 @@ export default function PaymentInvoice() {
                       }}
                       className={`w-full rounded-xl py-2.5 text-xs font-bold transition ${
                         active
-                          ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/25 hover:bg-violet-700'
+                           ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/25 hover:bg-violet-700'
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
                       }`}
                     >
-                      {active ? '✓ Paket Terpilih' : 'Pilih Paket'}
+                      {active ? 'Paket Terpilih' : 'Pilih Paket'}
                     </button>
                   </div>
                 </div>
@@ -660,40 +660,82 @@ export default function PaymentInvoice() {
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
                 Metode Pembayaran
               </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('midtrans')}
-                  className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-xs font-bold transition ${
-                    paymentMethod === 'midtrans'
-                      ? 'border-violet-500 bg-violet-50/70 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-2 ring-violet-500/20'
-                      : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Zap size={15} className="text-amber-500 fill-amber-500" />
-                    <span>Otomatis (Midtrans)</span>
-                  </div>
-                  <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">QRIS, VA, E-Wallet</span>
-                </button>
-
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* WhatsApp Manual Payment (Active) */}
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('whatsapp')}
-                  className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-xs font-bold transition ${
+                  className={`flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all ${
                     paymentMethod === 'whatsapp'
-                      ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20'
+                      ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 ring-2 ring-emerald-500/30 shadow-sm'
                       : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <MessageCircle size={15} className="text-emerald-500" />
-                    <span>Manual (WhatsApp)</span>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-600/20 text-emerald-500 flex items-center justify-center shrink-0">
+                      <MessageCircle size={17} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">Manual (WhatsApp)</span>
+                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-[9px] font-black">
+                          AKTIF
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">BCA, Mandiri, BRI, QRIS Manual</p>
+                    </div>
                   </div>
-                  <span className="text-[10px] font-normal text-slate-500 dark:text-slate-400">Chat Admin / Transfer</span>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'whatsapp' ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 dark:border-slate-700'}`}>
+                    {paymentMethod === 'whatsapp' && <Check size={10} strokeWidth={3} />}
+                  </div>
+                </button>
+
+                {/* Midtrans Automated (Under Maintenance) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod('midtrans')
+                    toast('Layanan Midtrans sedang dalam pemeliharaan sistem. Gunakan WhatsApp untuk aktivasi langsung.', 'info')
+                  }}
+                  className={`flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all ${
+                    paymentMethod === 'midtrans'
+                      ? 'border-amber-500 bg-amber-50/70 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 ring-2 ring-amber-500/30 shadow-sm'
+                      : 'border-slate-200/80 dark:border-slate-800/80 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                      <CreditCard size={17} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Otomatis (Midtrans)</span>
+                        <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-600 dark:text-amber-300 text-[9px] font-black">
+                          MAINTENANCE
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">Dalam pemeliharaan berkala</p>
+                    </div>
+                  </div>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'midtrans' ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-300 dark:border-slate-700'}`}>
+                    {paymentMethod === 'midtrans' && <Check size={10} strokeWidth={3} />}
+                  </div>
                 </button>
               </div>
             </div>
+
+            {/* Maintenance Warning Banner if Midtrans Selected */}
+            {paymentMethod === 'midtrans' && (
+              <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-200 text-xs">
+                <p className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+                  <AlertTriangle size={14} className="text-amber-500" />
+                  Gateway Otomatis Sedang Dalam Pemeliharaan
+                </p>
+                <p className="text-[11px] mt-1 text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Layanan pembayaran otomatis Midtrans sedang ditingkatkan. Silakan pilih <strong>Manual (WhatsApp)</strong> agar admin developer dapat memproses aktivasi lisensi Anda secara langsung.
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -726,22 +768,24 @@ export default function PaymentInvoice() {
             {paymentMethod === 'midtrans' ? (
               <button
                 type="button"
-                onClick={handleRequestPayment}
-                disabled={creating || !selectedPlan}
-                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-violet-600/25 transition hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50"
+                onClick={() => {
+                  toast('Layanan Midtrans sedang dalam pemeliharaan. Silakan beralih ke WhatsApp untuk aktivasi langsung.', 'info')
+                  setPaymentMethod('whatsapp')
+                }}
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-300 dark:bg-slate-800 px-5 py-3.5 text-sm font-bold text-slate-600 dark:text-slate-400 cursor-not-allowed transition"
               >
-                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4 fill-white" />}
-                Bayar Otomatis Sekarang (Midtrans)
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                Midtrans Sedang Maintenance (Klik untuk Beralih ke WhatsApp)
               </button>
             ) : (
               <button
                 type="button"
                 onClick={handleRequestPayment}
                 disabled={creating || !selectedPlan}
-                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/25 transition hover:bg-emerald-700 disabled:opacity-50"
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/25 transition hover:bg-emerald-700 disabled:opacity-50 active:scale-[0.98]"
               >
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                Chat & Beli via WhatsApp Developer
+                Beli via WhatsApp Admin ({selectedPlan ? selectedPlan.name : 'Pilih Paket'})
               </button>
             )}
           </div>

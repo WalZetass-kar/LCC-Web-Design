@@ -77,24 +77,24 @@ function runMigrations() {
     const hasPasswordHashType = columns.some(col => col.name === 'password_hash_type')
     
     if (!hasPasswordHashType) {
-      console.log('⚠️  CRITICAL: password_hash_type column is missing!')
+      console.log('️  CRITICAL: password_hash_type column is missing!')
       console.log('Adding password_hash_type column...')
       try {
         sqlite.exec(`ALTER TABLE mediasoft_pengguna ADD COLUMN password_hash_type TEXT DEFAULT 'sha1';`)
         sqlite.exec(`UPDATE mediasoft_pengguna SET password_hash_type = 'sha1' WHERE password_hash_type IS NULL;`)
-        console.log('✓ password_hash_type column added successfully')
+        console.log(' password_hash_type column added successfully')
       } catch (err: unknown) {
         if (err instanceof Error && err.message?.includes('duplicate column')) {
-          console.log('✓ password_hash_type column already exists')
+          console.log(' password_hash_type column already exists')
         } else {
           const message = err instanceof Error ? err.message : String(err)
-          console.error('❌ Failed to add password_hash_type column:', message)
+          console.error(' Failed to add password_hash_type column:', message)
           console.error('Please close all database connections and restart the app')
           throw new Error('Database migration failed: password_hash_type column is required but could not be added')
         }
       }
     } else {
-      console.log('✓ password_hash_type column exists')
+      console.log(' password_hash_type column exists')
     }
 
     const hasMustChangePassword = columns.some(col => col.name === 'must_change_password')
@@ -107,7 +107,7 @@ function runMigrations() {
           SET must_change_password = 1
           WHERE COALESCE(status_user, 'Aktif') = 'Aktif'
         `)
-        console.log('✓ must_change_password column added successfully')
+        console.log(' must_change_password column added successfully')
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
         if (!message.includes('duplicate column')) {
@@ -121,7 +121,7 @@ function runMigrations() {
         console.log(`Adding ${name} column to mediasoft_pengguna...`)
         try {
           sqlite.exec(`ALTER TABLE mediasoft_pengguna ADD COLUMN ${name} ${definition};`)
-          console.log(`✓ ${name} column added successfully`)
+          console.log(` ${name} column added successfully`)
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err)
           if (!message.includes('duplicate column')) {
@@ -141,7 +141,7 @@ function runMigrations() {
         console.log(`Adding ${name} column to mediasoft_activity_log...`)
         try {
           sqlite.exec(`ALTER TABLE mediasoft_activity_log ADD COLUMN ${name} ${definition};`)
-          console.log(`✓ ${name} column added successfully`)
+          console.log(` ${name} column added successfully`)
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err)
           if (!message.includes('duplicate column')) {
@@ -175,7 +175,7 @@ function runMigrations() {
       console.log('Adding email column...')
         try {
           sqlite.exec(`ALTER TABLE mediasoft_pengguna ADD COLUMN email TEXT;`)
-          console.log('✓ email column added successfully')
+          console.log(' email column added successfully')
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err)
           if (!message.includes('duplicate column')) {
@@ -189,7 +189,7 @@ function runMigrations() {
         console.log('Adding no_telp column...')
         try {
           sqlite.exec(`ALTER TABLE mediasoft_pengguna ADD COLUMN no_telp TEXT;`)
-          console.log('✓ no_telp column added successfully')
+          console.log(' no_telp column added successfully')
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err)
           if (!message.includes('duplicate column')) {
@@ -203,7 +203,7 @@ function runMigrations() {
         console.log('Adding access_expires_at column...')
         try {
           sqlite.exec(`ALTER TABLE mediasoft_pengguna ADD COLUMN access_expires_at TEXT;`)
-          console.log('✓ access_expires_at column added successfully')
+          console.log(' access_expires_at column added successfully')
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err)
           if (!message.includes('duplicate column')) {
@@ -254,7 +254,7 @@ function runMigrations() {
         } finally {
           sqlite.pragma('foreign_keys = ON')
         }
-        console.log('✓ user preferences foreign key fixed')
+        console.log(' user preferences foreign key fixed')
       } else {
         sqlite.exec(`
           CREATE TABLE IF NOT EXISTS mediasoft_user_preferences (
@@ -299,7 +299,7 @@ function runMigrations() {
         } finally {
           sqlite.pragma('foreign_keys = ON')
         }
-        console.log('✓ payment details foreign key fixed')
+        console.log(' payment details foreign key fixed')
       }
       
       const kasCols = sqlite.prepare("PRAGMA table_info(mediasoft_kas_drawer)").all() as Array<{ name: string }>
@@ -307,7 +307,7 @@ function runMigrations() {
         console.log('Adding total_pemasukan column to kas_drawer...')
         try {
           sqlite.exec(`ALTER TABLE mediasoft_kas_drawer ADD COLUMN total_pemasukan REAL DEFAULT 0;`)
-          console.log('✓ total_pemasukan column added successfully')
+          console.log(' total_pemasukan column added successfully')
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err)
           if (!message.includes('duplicate column')) {
@@ -321,7 +321,7 @@ function runMigrations() {
         console.log('Adding discount_amount column to penjualan...')
         try {
           sqlite.exec(`ALTER TABLE mediasoft_penjualan ADD COLUMN discount_amount REAL DEFAULT 0;`)
-          console.log('✓ discount_amount column added successfully')
+          console.log(' discount_amount column added successfully')
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err)
           if (!message.includes('duplicate column')) {
@@ -333,7 +333,7 @@ function runMigrations() {
         console.log('Adding shift_id column to penjualan...')
         try {
           sqlite.exec(`ALTER TABLE mediasoft_penjualan ADD COLUMN shift_id INTEGER;`)
-          console.log('✓ shift_id column added successfully')
+          console.log(' shift_id column added successfully')
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err)
           if (!message.includes('duplicate column')) {
@@ -343,7 +343,7 @@ function runMigrations() {
       }
     
   } catch (error: any) {
-    console.error('❌ Migration error:', error.message)
+    console.error(' Migration error:', error.message)
     throw error // Throw critical errors to prevent app from starting with broken schema
   }
 
@@ -372,10 +372,10 @@ function runMigrations() {
         .run('Bulanan', 299000, 30, JSON.stringify(['Semua fitur Harian', 'Multi-user (3 akun)', 'Export Excel & PDF', 'Laporan lanjutan', 'Backup otomatis', 'Support prioritas']), 1, 1, now)
       sqlite.prepare(`INSERT INTO mediasoft_subscription_plans (name, price, duration_days, features, is_active, is_recommended, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
         .run('Tahunan', 2899000, 365, JSON.stringify(['Semua fitur Bulanan', 'Multi-user (unlimited)', 'Stok opname', 'Manajemen hutang', 'Shift management', 'API access', 'Support 24/7']), 1, 0, now)
-      console.log('✓ Seeded default subscription plans')
+      console.log('[Database] Seeded default subscription plans')
     }
   } catch (err: any) {
-  console.error('⚠️ Subscription plans migration:', err.message)
+    console.error('[Database Warning] Subscription plans migration:', err.message)
   }
 
   // ── Advanced Features Migration ──
@@ -553,9 +553,9 @@ function runMigrations() {
     )
   `)
 
-  console.log('✓ Advanced features migrations completed')
+    console.log('[Database] Advanced features migrations completed')
   } catch (err: any) {
-  console.error('⚠️ Advanced features migration error:', err.message)
+    console.error('[Database Warning] Advanced features migration error:', err.message)
   }
 
   // ── Branch Support Migration ──
@@ -573,9 +573,9 @@ function runMigrations() {
     if (!pjCols.some(col => col.name === 'branch_id')) {
       sqlite.exec("ALTER TABLE mediasoft_penjualan ADD COLUMN branch_id INTEGER DEFAULT 1")
     }
-    console.log('✓ Branch support migration completed')
+    console.log('[Database] Branch support migration completed')
   } catch (err: any) {
-    console.error('⚠️ Branch support migration:', err.message)
+    console.error('[Database Warning] Branch support migration:', err.message)
   }
 }
 
@@ -626,7 +626,7 @@ runMigrations()
       try {
         sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`)
       } catch (err: any) {
-        console.error(`⚠️ License migration failed for ${table}.${col}:`, err.message)
+        console.error(`[Database Error] License migration failed for ${table}.${col}:`, err.message)
       }
     }
   }
@@ -1608,7 +1608,7 @@ runMigrations()
       WHERE hak_akses = 'superadmin'
     `).run()
   } catch (err: any) {
-    console.error('⚠️ Developer role normalization:', err.message)
+    console.error('[Database Warning] Developer role normalization:', err.message)
   }
 })()
 

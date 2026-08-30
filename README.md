@@ -1,14 +1,14 @@
 # Zetass POS
 
-> **Aplikasi Point of Sale Desktop & Mobile** yang dibangun dengan Electron, React, dan Capacitor.
+> **Aplikasi Point of Sale Multi-Platform (Desktop, Mobile Android, & Web Online)** yang dibangun dengan Electron, React, Capacitor, dan Supabase Cloud.
 
 **Developer:** [WalZetass-Kar](https://github.com/WalZetass-kar)  
-**Platform:** Windows · Linux · macOS · Android · iOS  
-**Versi:** 2.0.1
+**Platform:** Windows · Linux · macOS · Android · Web Browser  
+**Versi:** 2.1.0
 
 ---
 
-## 📸 Screenshot
+## Screenshot
 
 | Login | Dashboard | POS / Kasir |
 |-------|-----------|-------------|
@@ -16,68 +16,104 @@
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Teknologi |
 |-------|-----------|
 | Frontend | React 18, TypeScript, TailwindCSS |
 | Desktop | Electron 31, Vite 5 |
 | Mobile | Capacitor 8 (Android & iOS) |
-| Database | SQLite (better-sqlite3), Drizzle ORM |
-| Build | Vite, electron-builder |
-| CI/CD | GitHub Actions |
+| Web / Cloud | Supabase Edge Functions & PostgreSQL |
+| Database Lokal | SQLite (better-sqlite3), Drizzle ORM |
+| Build & Deploy | Vite, electron-builder, Gradle, Supabase CLI |
 
 ---
 
-## ⚙️ Prasyarat Sistem
+## Opsi Instalasi Aplikasi
 
-Pastikan semua tools berikut sudah terinstal sebelum menjalankan proyek:
+Anda dapat menggunakan aplikasi ini dengan **dua cara**:
+1. **Opsi 1: Menggunakan Installer Siap Pakai (Tanpa Coding / Tanpa Node.js)** — Cocok untuk pemilik toko / kasir.
+2. **Opsi 2: Menjalankan dari Source Code (Mode Developer)** — Cocok untuk programmer / kustomisasi fitur.
 
-| Tool | Versi Minimum | Perintah Cek |
-|------|--------------|--------------|
-| **Node.js** | 20+ | `node --version` |
-| **npm** | 9+ | `npm --version` |
-| **pnpm** *(direkomendasikan)* | 9+ | `pnpm --version` |
-| **Git** | Any | `git --version` |
-| **JDK** | 17+ *(untuk Android)* | `java --version` |
-| **Android Studio** | Ladybug+ *(untuk Android)* | — |
+---
 
-### Instal pnpm (jika belum ada)
+## Opsi 1: Menggunakan Installer Siap Pakai
+
+Jika Anda hanya ingin langsung memakai aplikasi di toko tanpa perlu instal Node.js/tools developer:
+
+* **Windows:** Unduh dan jalankan file installer `.exe` di folder `release/Zetass Pos-2.1.0-x64.exe`.
+* **Linux:** Instal file `.deb` dengan perintah `sudo dpkg -i release/zetass-pos_2.1.0_amd64.deb` atau jalankan file `.AppImage`.
+* **Android:** Unduh dan pasang file `release/ZetassPOS.apk` di HP atau tablet Android Anda.
+
+---
+
+## Opsi 2: Menjalankan dari Source Code (Desktop Electron)
+
+Panduan berikut diperuntukkan bagi pengguna baru atau developer yang ingin menjalankan aplikasi dari kode sumber.
+
+### 1. Instalasi Software yang Diperlukan di Laptop
+
+Sebelum menjalankan kode, pastikan software berikut sudah terpasang di laptop Anda:
+
+#### A. Instal Node.js & npm
+1. Kunjungi situs resmi Node.js: **[https://nodejs.org](https://nodejs.org/)**
+2. Unduh versi **LTS (Disarankan Node.js v20 atau v22)**.
+3. Jalankan file installer:
+   * **Pengguna Windows:** Saat proses instalasi, centang opsi *"Automatically install the necessary tools"* (agar Python dan C++ Build Tools terpasang otomatis untuk modul database SQLite).
+   * **Pengguna Linux (Ubuntu/Debian):**
+     ```bash
+     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+     sudo apt-get install -y nodejs build-essential
+     ```
+4. Verifikasi instalasi di Terminal / CMD:
+   ```bash
+   node --version
+   npm --version
+   ```
+
+#### B. Instal Git
+1. Unduh Git dari **[https://git-scm.com](https://git-scm.com/)**.
+2. Instal dengan pengaturan default hingga selesai.
+3. Cek versi:
+   ```bash
+   git --version
+   ```
+
+#### C. Instal pnpm (Package Manager Cepat)
+Buka Terminal / Command Prompt lalu jalankan:
 ```bash
 npm install -g pnpm
 ```
 
 ---
 
-## 🚀 Cara Menjalankan — Desktop (Electron)
+### 2. Langkah Menjalankan Aplikasi Desktop
 
-### 1. Clone repository
+Setelah semua software di atas terinstal:
+
+#### Langkah 1: Clone Repository
 ```bash
 git clone https://github.com/WalZetass-kar/LCC-Web-Design.git
 cd LCC-Web-Design
 ```
 
-### 2. Install dependencies
+#### Langkah 2: Instal Dependencies Proyek
 ```bash
 pnpm install
-# atau jika tidak ada pnpm:
-npm install
 ```
+*(Atau gunakan `npm install` jika tidak menggunakan pnpm)*
 
-### 3. Jalankan aplikasi desktop
+#### Langkah 3: Jalankan Aplikasi
 ```bash
 npm run dev
 ```
 
-Aplikasi Electron akan terbuka otomatis. Jika baru pertama kali, akan muncul form **Setup Akun Admin** — isi username, nama lengkap, dan password untuk membuat akun pertama.
+Jendela aplikasi Desktop Electron akan terbuka secara otomatis.
 
-> **Login Default (jika database sudah ada):**
-> - Username & Password: sesuai yang dibuat saat setup pertama
-> - Atau gunakan akun **Demo** untuk melihat-lihat tanpa akun
+> **Catatan Penggunaan Pertama Kali:**
+> Saat pertama kali dijalankan, sistem akan membuka halaman **Setup Akun Admin**. Masukkan nama pengguna dan kata sandi untuk membuat akun toko pertama Anda.
 
----
-
-## 📱 Cara Menjalankan — Android
+##  Cara Menjalankan — Android
 
 Ada **3 cara** untuk menjalankan di Android:
 
@@ -111,7 +147,7 @@ npm run android:open
 #### Langkah 4 — Jalankan dari Android Studio
 1. Tunggu proses **Gradle Sync** selesai (lihat indikator progress di bagian bawah)
 2. Pilih **emulator** dari dropdown device di toolbar atas
-3. Klik tombol ▶️ **Run 'app'**
+3. Klik tombol  **Run 'app'**
 4. Tunggu proses build & install (~1–3 menit pertama kali)
 
 ---
@@ -122,7 +158,7 @@ npm run android:open
 1. Buka **Pengaturan** → **Tentang Ponsel**
 2. Ketuk **Nomor Build** sebanyak **7 kali** hingga muncul notif "Anda sekarang adalah developer"
 3. Kembali ke **Pengaturan** → **Opsi Pengembang**
-4. Aktifkan **USB Debugging** ✅
+4. Aktifkan **USB Debugging** 
 
 #### Langkah 2 — Sambungkan HP ke Laptop
 1. Hubungkan HP dengan kabel USB ke laptop
@@ -149,7 +185,7 @@ npm run android:open
 Di Android Studio:
 1. Tunggu Gradle sync selesai
 2. Pilih **nama HP kamu** dari dropdown device (bukan emulator)
-3. Klik ▶️ **Run** → aplikasi akan terinstal langsung di HP
+3. Klik  **Run** → aplikasi akan terinstal langsung di HP
 
 ---
 
@@ -170,7 +206,7 @@ npm run android:open
 
 ---
 
-## 🌐 Preview di Browser (Mobile View)
+##  Preview di Browser (Mobile View)
 
 Cara termudah dan tercepat untuk melihat tampilan mobile tanpa HP/emulator:
 
@@ -178,11 +214,11 @@ Cara termudah dan tercepat untuk melihat tampilan mobile tanpa HP/emulator:
 npm run dev:mobile
 ```
 
-Lalu buka browser → tekan **F12** → klik ikon **📱 Toggle Device Toolbar** → pilih perangkat seperti `Pixel 7`, `Galaxy S20`, dll.
+Lalu buka browser → tekan **F12** → klik ikon ** Toggle Device Toolbar** → pilih perangkat seperti `Pixel 7`, `Galaxy S20`, dll.
 
 ---
 
-## 🏗️ Build untuk Distribusi
+##  Build untuk Distribusi
 
 ### Build Windows (.exe Installer)
 ```bash
@@ -210,7 +246,7 @@ Output: `release/ZetassPOS.apk`
 
 ---
 
-## 🔑 Login Pertama Kali
+##  Login Pertama Kali
 
 Saat database **kosong / baru**, aplikasi akan menampilkan halaman **Setup Akun**.
 
@@ -224,7 +260,7 @@ Setelah setup, gunakan username & password tersebut untuk login.
 
 ---
 
-## 📁 Struktur Proyek
+##  Struktur Proyek
 
 ```
 LCC-Web-Design/
@@ -249,7 +285,7 @@ LCC-Web-Design/
 
 ---
 
-## 📋 Daftar Script
+##  Daftar Script
 
 | Perintah | Fungsi |
 |----------|--------|
@@ -266,7 +302,7 @@ LCC-Web-Design/
 
 ---
 
-## ❓ Troubleshooting
+##  Troubleshooting
 
 ### Error: `pnpm: command not found`
 ```bash
@@ -293,7 +329,7 @@ npm install -g pnpm
 
 ---
 
-## 🔒 Keamanan
+##  Keamanan
 
 - File `.env` dan `.keys/` tidak di-commit ke Git
 - Database SQLite tersimpan lokal di perangkat pengguna
@@ -302,13 +338,13 @@ npm install -g pnpm
 
 ---
 
-## 📄 Lisensi
+##  Lisensi
 
 MIT License © 2026 [WalZetass-Kar](https://github.com/WalZetass-kar)
 
 ---
 
-## 👨‍💻 Developer
+##  Developer
 
 **WalZetass-Kar**
 - GitHub: [@WalZetass-kar](https://github.com/WalZetass-kar)

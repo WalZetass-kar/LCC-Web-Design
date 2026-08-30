@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import { ShieldAlert, Shield } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 // Gunakan useAuth (POS auth) bukan useLicense untuk cek role developer
@@ -33,7 +33,9 @@ export const AdminGate: React.FC<AdminGateProps> = ({ children, fallback }) => {
         {fallback ?? (
           <div className="min-h-[60vh] flex items-center justify-center p-6">
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 max-w-sm text-center border border-slate-200 dark:border-slate-800">
-              <div className="text-4xl mb-3">🚫</div>
+              <div className="flex justify-center mb-3 text-red-500">
+                <ShieldAlert size={40} />
+              </div>
               <h2 className="text-lg font-bold mb-1">Akses Ditolak</h2>
               <p className="text-sm text-slate-500">Halaman ini hanya untuk akun developer.</p>
             </div>
@@ -50,7 +52,7 @@ export const AdminLink: React.FC<{
   onOpen: () => void;
   className?: string;
   label?: string;
-}> = ({ onOpen, className = '', label = '🛡️ Panel Developer' }) => {
+}> = ({ onOpen, className = '', label = 'Panel Developer' }) => {
   const isAdmin = useIsAdmin();
   if (!isAdmin) return null;
   return (

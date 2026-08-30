@@ -216,10 +216,10 @@ Fitur untuk mengatur keamanan aplikasi.
    - Batasi akses dari IP tertentu
 
 ### Fitur Keamanan yang Aktif:
-- ✅ Rate Limiting - Batasi request per menit
-- ✅ Input Validation - Validasi data dengan Zod
-- ✅ SQL Injection Protection - Parameterized queries
-- ✅ XSS Protection - Content sanitization
+-  Rate Limiting - Batasi request per menit
+-  Input Validation - Validasi data dengan Zod
+-  SQL Injection Protection - Parameterized queries
+-  XSS Protection - Content sanitization
 
 ### Cara Menggunakan:
 - Buka menu **Keamanan** dari sidebar

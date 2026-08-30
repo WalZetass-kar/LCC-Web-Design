@@ -25,7 +25,7 @@ class DemoSessionManager {
       loginTime: Date.now(),
       isDemo: hakAkses === 'demo',
     }
-    console.log(`🔐 DemoSessionManager: Session set for "${username}" (role: ${hakAkses}, demoMode: ${hakAkses === 'demo' ? 'active' : 'inactive'})`)
+    console.log(` DemoSessionManager: Session set for "${username}" (role: ${hakAkses}, demoMode: ${hakAkses === 'demo' ? 'active' : 'inactive'})`)
   }
 
   /**
@@ -33,7 +33,7 @@ class DemoSessionManager {
    */
   clearSession(): void {
     if (this.currentSession) {
-      console.log(`🔐 DemoSessionManager: Session cleared for "${this.currentSession.username}"`)
+      console.log(` DemoSessionManager: Session cleared for "${this.currentSession.username}"`)
     }
     this.currentSession = null
   }
@@ -85,7 +85,7 @@ class DemoSessionManager {
       this.demoViolationLog = this.demoViolationLog.slice(-100)
     }
 
-    console.warn(`🚫 DEMO VIOLATION BLOCKED: channel="${channel}" user="${this.currentSession?.username}" at ${entry.timestamp}`)
+    console.warn(` DEMO VIOLATION BLOCKED: channel="${channel}" user="${this.currentSession?.username}" at ${entry.timestamp}`)
   }
 
   /**

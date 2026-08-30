@@ -221,11 +221,11 @@ class SyncServer {
     await new Promise<void>((resolve) => {
       this.server!.once('error', error => {
         this.lastError = error instanceof Error ? error.message : String(error)
-        console.error('❌ Sync server failed:', this.lastError)
+        console.error('[Sync Server Error]:', this.lastError)
         resolve()
       })
       this.server!.listen(config.port, '127.0.0.1', () => {
-        console.log(`🔄 Sync server running at ${localUrls(config.port).join(', ')}`)
+        console.log(`[Sync Server] Running at ${localUrls(config.port).join(', ')}`)
         resolve()
       })
     })

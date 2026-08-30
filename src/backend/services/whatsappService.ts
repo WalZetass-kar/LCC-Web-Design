@@ -202,7 +202,7 @@ ${itemsList}
 *Total: Rp ${data.total.toLocaleString()}*
 Pembayaran: ${data.payment}
 
-Terima kasih atas kunjungan Anda! 🙏
+Terima kasih atas kunjungan Anda! 
     `.trim()
 
     return this.sendMessage({ to: phone, message })
@@ -215,7 +215,7 @@ Terima kasih atas kunjungan Anda! 🙏
     const productList = products.map(p => `• ${p.name} (Stok: ${p.stock})`).join('\n')
     
     const message = `
-⚠️ *PERINGATAN STOK MENIPIS*
+️ *PERINGATAN STOK MENIPIS*
 
 Produk berikut memerlukan restock:
 ${productList}
@@ -243,7 +243,7 @@ Invoice: ${data.invoiceNumber}
 Jumlah: Rp ${data.amount.toLocaleString()}
 Jatuh Tempo: ${data.dueDate}
 
-Mohon segera melakukan pembayaran. Terima kasih! 🙏
+Mohon segera melakukan pembayaran. Terima kasih! 
     `.trim()
 
     return this.sendMessage({ to: phone, message })
@@ -259,7 +259,7 @@ Mohon segera melakukan pembayaran. Terima kasih! 🙏
     validUntil: string
   }) {
     const message = `
-🎉 *PROMO SPESIAL* 🎉
+ *PROMO SPESIAL* 
 
 Halo ${data.customerName}!
 
@@ -268,7 +268,7 @@ ${data.promoDescription}
 
 Berlaku hingga: ${data.validUntil}
 
-Jangan lewatkan kesempatan ini! 🛍️
+Jangan lewatkan kesempatan ini! 
     `.trim()
 
     return this.sendMessage({ to: phone, message })

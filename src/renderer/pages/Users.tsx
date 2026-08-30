@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, Pencil, Trash2, Key, ShieldCheck, Lock, Power, CalendarPlus, Monitor, Smartphone, RefreshCw } from 'lucide-react'
+import { Plus, Pencil, Trash2, Key, ShieldCheck, Lock, Power, CalendarPlus, Monitor, Smartphone, RefreshCw, Users as UsersIcon } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
@@ -489,8 +489,8 @@ export default function Users() {
       <div className="flex gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 w-fit">
         {(['users', 'devices'] as const).map(t => (
           <button key={t} onClick={() => setActiveTab(t)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === t ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-            {t === 'users' ? '👥 Pengguna' : '📱 Devices'}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === t ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+            {t === 'users' ? <><UsersIcon size={16} /> Pengguna</> : <><Smartphone size={16} /> Devices</>}
           </button>
         ))}
       </div>
@@ -515,7 +515,7 @@ export default function Users() {
               )}
               {currentUser?.hak_akses === 'admin' && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
-                  <span>🔒</span> Pengguna bersifat lokal — hanya berlaku di perangkat ini
+                  <Lock size={12} /> Pengguna bersifat lokal — hanya berlaku di perangkat ini
                 </p>
               )}
             </div>

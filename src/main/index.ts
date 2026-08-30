@@ -107,7 +107,7 @@ app.whenReady().then(() => {
   try {
     const flagged = PenggunaModel.forceNonBcryptUsersToChangePassword()
     if (flagged > 0) {
-      console.log(`🔒 ${flagged} user(s) flagged for password migration to bcrypt`)
+      console.log(`[Password Migration] ${flagged} user(s) flagged for password migration to bcrypt`)
     }
   } catch (e) {
     console.error('Password migration flag failed:', e)

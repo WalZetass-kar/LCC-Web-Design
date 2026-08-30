@@ -50,7 +50,7 @@ function UsageBadge({ count, isDemo, onUpgrade }: UsageBadgeProps) {
     >
       <div className="flex items-center justify-between text-xs font-semibold">
         <span className={isDanger ? 'text-red-600' : isWarning ? 'text-amber-600' : 'text-primary-600'}>
-          {isDanger ? '⛔ Limit habis' : `⚡ Sisa ${remaining}x hitung HPP`}
+          {isDanger ? 'Limit habis' : `Sisa ${remaining}x hitung HPP`}
         </span>
         <span className={`tabular-nums ${isDanger ? 'text-red-500' : isWarning ? 'text-amber-500' : 'text-primary-500'}`}>
           {count}/{DEMO_LIMIT}

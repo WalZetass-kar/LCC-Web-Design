@@ -399,7 +399,7 @@ export default function Assistant() {
       toast(`AI terhubung: ${r.data?.provider ?? ''} / ${r.data?.model ?? ''}`, 'success')
       addMessageToActiveSession({
         sender: 'assistant',
-        text: `✅ **Koneksi AI Berhasil!**\n\n• **Provider**: ${r.data?.provider ?? '-'}\n• **Model**: ${r.data?.model ?? '-'}\n• **Respon**: ${r.data?.answer ?? 'OK'}`,
+        text: `**Koneksi AI Berhasil**\n\n• **Provider**: ${r.data?.provider ?? '-'}\n• **Model**: ${r.data?.model ?? '-'}\n• **Respon**: ${r.data?.answer ?? 'OK'}`,
         provider: r.data?.provider ?? 'AI Online',
         online: true,
       })
@@ -407,7 +407,7 @@ export default function Assistant() {
       toast(r.message as string ?? 'Koneksi AI gagal', 'error')
       addMessageToActiveSession({
         sender: 'assistant',
-        text: `⚠️ **Koneksi AI Gagal**\n\n${r.message ?? 'Periksa konfigurasi AI Anda di menu Pengaturan.'}`,
+        text: `**Koneksi AI Gagal**\n\n${r.message ?? 'Periksa konfigurasi AI Anda di menu Pengaturan.'}`,
         provider: 'System',
         online: false,
       })
