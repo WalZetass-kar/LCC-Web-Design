@@ -1,13 +1,15 @@
-import React, { useEffect, useCallback, useMemo } from 'react'
+import React, { useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Capacitor } from '@capacitor/core'
 import {
   Search,
   ShoppingCart,
   X,
   AlertCircle,
   ScanLine,
-  ArrowRight
+  ArrowRight,
+  Clock
 } from 'lucide-react'
 import ConfirmDialog from '../components/ConfirmDialog'
 import StrukSettingsModal from '../components/StrukSettingsModal'
@@ -43,6 +45,7 @@ export default function Transaksi() {
   const navigate = useNavigate()
   const { trackUsage, isOverLimit, remainingUsage, isDemo, showPricing } = useDemoGuard()
   const { heldCarts, holdCart, resumeCart, deleteHeld } = useHoldCart()
+  const lastScanTimestampRef = useRef<number>(0)
 
   const state = useTransaksiState()
   
@@ -54,7 +57,11 @@ export default function Transaksi() {
   }, [])
 
   useEffect(() => { loadProducts() }, [loadProducts])
-  useEffect(() => { state.searchRef.current?.focus() }, [])
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) {
+      state.searchRef.current?.focus()
+    }
+  }, [])
   useEffect(() => {
     api<Customer[]>('customer:getAll').then(r => { if (r.success) state.setCustomers(r.data ?? []) })
     api<Kategori[]>('kategori:getAll').then(r => { if (r.success) state.setCategories(r.data ?? []) })
@@ -230,19 +237,25 @@ export default function Transaksi() {
     })
     toast(`${p.nama_barang} ditambahkan ke keranjang`, 'success')
     state.setSearch('')
-    state.searchRef.current?.focus()
+    if (!Capacitor.isNativePlatform()) {
+      state.searchRef.current?.focus()
+    }
   }
 
   const handleCameraBarcode = useCallback((barcode: string) => {
-    const product = state.products.find(p => p.barcode === barcode || p.kd_barang === barcode)
+    const now = Date.now()
+    if (now - lastScanTimestampRef.current < 600) return
+    lastScanTimestampRef.current = now
+
+    const trimmed = barcode.trim()
+    const product = state.products.find(p => p.barcode === trimmed || p.kd_barang === trimmed)
     if (!product) {
       cashierSound.playErrorBuzz()
-      toast(`Barcode "${barcode}" tidak ditemukan`, 'error')
+      toast(`Barcode "${trimmed}" tidak ditemukan`, 'error')
       return
     }
 
     addToCart(product)
-    toast(`${product.nama_barang ?? product.kd_barang} ditambahkan`, 'success')
   }, [state.products, toast, addToCart])
 
   const openCameraScanner = () => {
@@ -685,7 +698,9 @@ Terima kasih atas kunjungan Anda!`
       paymentMethod: null,
     })
     loadProducts()
-    state.searchRef.current?.focus()
+    if (!Capacitor.isNativePlatform()) {
+      state.searchRef.current?.focus()
+    }
   }
 
   const renderCartAndPayment = (isMobileSheet = false) => (
@@ -797,6 +812,16 @@ Terima kasih atas kunjungan Anda!`
             </div>
 
             <div className="flex items-center justify-between sm:justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => navigate('/shifts')}
+                className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5 text-slate-700 dark:text-slate-300 shadow-sm transition shrink-0"
+                title="Buka / Tutup Shift Kasir"
+              >
+                <Clock size={14} className={state.activeShiftId ? "text-emerald-500" : "text-amber-500"} />
+                <span>{state.activeShiftId ? 'Shift Aktif' : 'Shift Kasir'}</span>
+              </button>
+
               {state.cart.length > 0 && (
                 <button
                   type="button"

@@ -132,29 +132,38 @@ export default function Shifts() {
 
           {/* Active Shift Card Banner */}
           {currentShift && (
-            <div className="rounded-3xl bg-slate-900 text-white p-6 border border-slate-800 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="rounded-2xl bg-slate-900 text-white p-5 sm:p-6 border border-slate-800 shadow-md relative overflow-hidden">
               <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 text-xs font-bold text-red-400 uppercase tracking-wider">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                    Shift Kasir Sedang Berjalan
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Shift Kasir Aktif
                   </div>
-                  <h2 className="text-2xl sm:text-3xl font-black text-white mt-1 font-mono">{currentShift.shift_number}</h2>
-                  <p className="text-xs text-slate-400 mt-1 font-medium">
-                    Dibuka pada: {formatDateTime(currentShift.start_time)}
+                  <h2 className="text-xl sm:text-2xl font-black text-white font-mono tracking-tight">{currentShift.shift_number}</h2>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Kasir: <strong className="text-slate-200">{currentShift.nama_lengkap || user?.nama_lengkap || user?.nama_pengguna}</strong> · Dibuka: {formatDateTime(currentShift.start_time)}
                   </p>
                 </div>
-                <div className="sm:text-right bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
-                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Modal Awal Laci Kas</p>
-                  <h3 className="text-xl sm:text-2xl font-black text-emerald-400 mt-0.5">{formatRupiah(currentShift.opening_balance)}</h3>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="bg-slate-800/90 px-4 py-2.5 rounded-xl border border-slate-700/60">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Modal Awal Laci</p>
+                    <h3 className="text-lg sm:text-xl font-black text-emerald-400 mt-0.5">{formatRupiah(currentShift.opening_balance)}</h3>
+                  </div>
+                  <Button
+                    onClick={() => setModal('close')}
+                    variant="danger"
+                    icon={<Clock size={16} />}
+                    className="w-full sm:w-auto font-bold shadow-sm"
+                  >
+                    Tutup Shift
+                  </Button>
                 </div>
               </div>
             </div>
           )}
 
           {/* Shift Table */}
-          <Card title="Riwayat Shift Kasir Toko" subtitle="Catatan historis pembukaan dan penutupan shift kasir" className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <Card title="Riwayat Shift Kasir Toko" subtitle="Catatan historis pembukaan dan penutupan shift kasir" className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="overflow-x-auto -mx-6">
               <table className="w-full text-xs min-w-[800px]">
                 <thead className="bg-slate-50 dark:bg-slate-950 font-extrabold text-slate-500 uppercase tracking-wider">
@@ -185,7 +194,7 @@ export default function Shifts() {
                         <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{formatDateTime(shift.start_time)}</td>
                         <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{shift.end_time ? formatDateTime(shift.end_time) : '-'}</td>
                         <td className="px-4 py-3 text-right font-bold text-slate-700 dark:text-slate-300">{formatRupiah(shift.opening_balance)}</td>
-                        <td className="px-4 py-3 text-right font-extrabold text-red-600 dark:text-red-400">{formatRupiah(shift.total_sales || 0)}</td>
+                        <td className="px-4 py-3 text-right font-extrabold text-primary-600 dark:text-primary-400">{formatRupiah(shift.total_sales || 0)}</td>
                         <td className={`px-4 py-3 text-right font-black ${(shift.difference || 0) > 0 ? 'text-emerald-600' : (shift.difference || 0) < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                           {shift.difference ? formatRupiah(shift.difference) : '-'}
                         </td>
@@ -213,29 +222,177 @@ export default function Shifts() {
           </Card>
 
           {/* Modal Buka Shift */}
-          <Modal open={modal === 'open'} onClose={() => setModal(null)} title="Buka Shift Kasir Baru" size="sm"
+          <Modal
+            open={modal === 'open'}
+            onClose={() => setModal(null)}
+            title="Buka Shift Kasir Baru"
+            size="sm"
             footer={
-              <>
-                <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto font-bold">Batal</Button>
-                <Button loading={loading} onClick={handleOpenShift} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0">Buka Shift Kasir</Button>
-              </>
+              <div className="flex flex-col sm:flex-row gap-2 w-full justify-end">
+                <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto font-bold">
+                  Batal
+                </Button>
+                <Button
+                  loading={loading}
+                  onClick={handleOpenShift}
+                  className="w-full sm:w-auto bg-primary-600 hover:bg-primary-700 text-white font-bold border-0 shadow-sm"
+                >
+                  Buka Shift Sekarang
+                </Button>
+              </div>
             }
           >
-            <Input label="Modal Awal Laci Kas (Rp) *" type="number" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} placeholder="Contoh: 200000" />
+            <div className="space-y-4">
+              {/* Cashier & Info Card */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase text-slate-400 block">Kasir Bertugas</span>
+                  <span className="font-bold text-slate-900 dark:text-white text-sm">{user?.nama_lengkap || user?.nama_pengguna || 'Kasir'}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-extrabold uppercase text-slate-400 block">Waktu Pembukaan</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">{new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB</span>
+                </div>
+              </div>
+
+              {/* Opening Balance Input */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Modal Awal di Laci Kas (Rp) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm">Rp</span>
+                  <input
+                    type="number"
+                    value={openingBalance}
+                    onChange={e => setOpeningBalance(e.target.value)}
+                    placeholder="0"
+                    className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold text-base outline-none focus:ring-2 focus:ring-primary-500/30 transition"
+                    autoFocus
+                  />
+                </div>
+                {openingBalance && !isNaN(Number(openingBalance)) && Number(openingBalance) > 0 && (
+                  <p className="text-xs font-semibold text-primary-600 dark:text-primary-400 mt-1">
+                    Terbilang: {formatRupiah(Number(openingBalance))}
+                  </p>
+                )}
+              </div>
+
+              {/* Preset Quick Chips */}
+              <div>
+                <span className="text-[11px] font-extrabold uppercase text-slate-400 block mb-1.5">Pilihan Cepat Nominal</span>
+                <div className="grid grid-cols-3 gap-2">
+                  {[0, 50000, 100000, 200000, 500000, 1000000].map(val => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setOpeningBalance(String(val))}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition ${
+                        Number(openingBalance) === val
+                          ? 'bg-primary-50 dark:bg-primary-950/50 border-primary-500 text-primary-600 dark:text-primary-400 ring-1 ring-primary-500'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {val === 0 ? 'Rp 0 (Kosong)' : formatRupiah(val)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Note / Tip */}
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100/70 dark:bg-slate-900/60 p-2.5 rounded-lg">
+                Modal awal adalah uang tunai receh/pecahan yang dimasukkan ke laci kasir sebelum melayani transaksi pembeli untuk keperluan uang kembalian.
+              </p>
+            </div>
           </Modal>
 
           {/* Modal Tutup Shift */}
-          <Modal open={modal === 'close'} onClose={() => setModal(null)} title="Tutup Shift Kasir & Rekap" size="sm"
+          <Modal
+            open={modal === 'close'}
+            onClose={() => setModal(null)}
+            title="Tutup Shift Kasir & Rekap Kas"
+            size="sm"
             footer={
-              <>
-                <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto font-bold">Batal</Button>
-                <Button loading={loading} onClick={handleCloseShift} className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold border-0">Tutup Shift Kasir</Button>
-              </>
+              <div className="flex flex-col sm:flex-row gap-2 w-full justify-end">
+                <Button variant="secondary" onClick={() => setModal(null)} className="w-full sm:w-auto font-bold">
+                  Batal
+                </Button>
+                <Button
+                  loading={loading}
+                  onClick={handleCloseShift}
+                  variant="danger"
+                  className="w-full sm:w-auto font-bold shadow-sm"
+                >
+                  Tutup Shift Sekarang
+                </Button>
+              </div>
             }
           >
-            <div className="space-y-3.5">
-              <Input label="Saldo Fisik Akhir di Laci (Rp) *" type="number" value={closingBalance} onChange={e => setClosingBalance(e.target.value)} placeholder="Hitung total uang fisik di laci..." />
-              <Input label="Catatan Penutupan Shift" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Tuliskan catatan selisih/operasional jika ada..." />
+            <div className="space-y-4">
+              {currentShift && (
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">No Shift:</span>
+                    <span className="font-bold font-mono text-slate-900 dark:text-white">{currentShift.shift_number}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Modal Awal Laci:</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{formatRupiah(currentShift.opening_balance)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Total Penjualan Tunai:</span>
+                    <span className="font-extrabold text-primary-600 dark:text-primary-400">{formatRupiah(currentShift.total_sales || 0)}</span>
+                  </div>
+                  <div className="flex justify-between pt-1.5 border-t border-slate-200 dark:border-slate-800 font-bold">
+                    <span>Estimasi Kas di Laci:</span>
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      {formatRupiah((currentShift.opening_balance || 0) + (currentShift.total_sales || 0))}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Saldo Fisik Akhir di Laci Kas (Rp) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm">Rp</span>
+                  <input
+                    type="number"
+                    value={closingBalance}
+                    onChange={e => setClosingBalance(e.target.value)}
+                    placeholder="Hitung seluruh uang fisik di laci..."
+                    className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold text-base outline-none focus:ring-2 focus:ring-primary-500/30 transition"
+                    autoFocus
+                  />
+                </div>
+                {closingBalance && !isNaN(Number(closingBalance)) && currentShift && (
+                  <div className="mt-2 p-2.5 rounded-lg bg-slate-100 dark:bg-slate-900 text-xs flex justify-between items-center font-bold">
+                    <span>Selisih Fisik vs Sistem:</span>
+                    {(() => {
+                      const exp = (currentShift.opening_balance || 0) + (currentShift.total_sales || 0)
+                      const diff = Number(closingBalance) - exp
+                      if (diff === 0) return <span className="text-emerald-600 dark:text-emerald-400">Pas (Sesuai)</span>
+                      if (diff > 0) return <span className="text-emerald-600 dark:text-emerald-400">Lebih {formatRupiah(diff)}</span>
+                      return <span className="text-red-600 dark:text-red-400">Kurang {formatRupiah(Math.abs(diff))}</span>
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Catatan Penutupan Shift (Opsional)
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Tuliskan catatan selisih uang atau operasional jika ada..."
+                  rows={2}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary-500/30 transition resize-none font-medium"
+                />
+              </div>
             </div>
           </Modal>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import appLogo from '../assets/app-logo.png'
 import { useTheme } from '../contexts/ThemeContext'
@@ -19,17 +19,19 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   const [progress, setProgress] = useState(25)
   const [isVisible, setIsVisible] = useState(true)
   const { mode } = useTheme()
+  const onFinishRef = useRef(onFinish)
+  onFinishRef.current = onFinish
 
   const isDark = mode === 'dark'
 
   useEffect(() => {
-    const step1 = setTimeout(() => { setCurrentStepIndex(1); setProgress(50) }, 300)
-    const step2 = setTimeout(() => { setCurrentStepIndex(2); setProgress(75) }, 650)
-    const step3 = setTimeout(() => { setCurrentStepIndex(3); setProgress(100) }, 1000)
+    const step1 = setTimeout(() => { setCurrentStepIndex(1); setProgress(50) }, 250)
+    const step2 = setTimeout(() => { setCurrentStepIndex(2); setProgress(75) }, 550)
+    const step3 = setTimeout(() => { setCurrentStepIndex(3); setProgress(100) }, 850)
     const finishTimer = setTimeout(() => {
       setIsVisible(false)
-      setTimeout(onFinish, 300)
-    }, 1400)
+      onFinishRef.current()
+    }, 1100)
 
     return () => {
       clearTimeout(step1)
@@ -37,7 +39,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
       clearTimeout(step3)
       clearTimeout(finishTimer)
     }
-  }, [onFinish])
+  }, [])
 
   return (
     <AnimatePresence>

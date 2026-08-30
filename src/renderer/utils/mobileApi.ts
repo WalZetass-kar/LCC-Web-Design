@@ -508,7 +508,74 @@ function createDefaultStore(): MobileStore {
     stockOpnameItems: {},
     productImages: [],
     plans: [
-      { id: 1, name: 'Android Offline', price: 0, duration_days: 30, features: ['POS offline Android'], is_active: true, is_recommended: true, created_at: now(), updated_at: null },
+      {
+        id: 1,
+        code: 'BASIC_MONTHLY',
+        name: 'Basic Bulanan',
+        price: 99000,
+        duration_days: 30,
+        features: ['1 Toko / Cabang', '1 Perangkat Kasir', 'Hingga 500 Produk', 'Transaksi Tanpa Batas', 'Laporan Penjualan Dasar', 'Export PDF Laporan', 'Backup Data'],
+        is_active: true,
+        is_recommended: false,
+        max_devices: 1,
+        max_transactions_per_day: -1,
+        max_products: 500,
+        max_users: 1,
+        feature_flags: { reports: true, export_pdf: true, backup: true, return_refund: true },
+        created_at: now(),
+        updated_at: null,
+      },
+      {
+        id: 2,
+        code: 'PRO_MONTHLY',
+        name: 'Pro Bulanan',
+        price: 99000,
+        duration_days: 30,
+        features: ['Semua Fitur Basic', 'Hingga 3 Perangkat Kasir', 'Produk & Transaksi Unlimited', 'Laporan Lengkap & Analisis Bisnis', 'Export Excel & PDF', 'Multi-User & Hak Akses', 'Stock Opname & Hutang Piutang', 'Manajemen Shift Kasir'],
+        is_active: true,
+        is_recommended: false,
+        max_devices: 3,
+        max_transactions_per_day: -1,
+        max_products: -1,
+        max_users: 5,
+        feature_flags: { reports: true, export_excel: true, export_pdf: true, multi_user: true, backup: true, restore: true, stock_opname: true, debt_management: true, shift_management: true, return_refund: true, api_access: true },
+        created_at: now(),
+        updated_at: null,
+      },
+      {
+        id: 3,
+        code: 'PRO_ANNUAL',
+        name: 'Tahunan',
+        price: 1999000,
+        duration_days: 365,
+        features: ['Hemat 30% dibanding Bulanan', 'Hingga 10 Perangkat Kasir', 'Multi-Cabang / Gudang', 'Multi-User hingga 15 Kasir', 'Produk & Transaksi Unlimited', 'Export Excel & PDF Lengkap', 'Auto-Backup Cloud & Keamanan Ekstra', 'Support Prioritas 24/7'],
+        is_active: true,
+        is_recommended: true,
+        max_devices: 10,
+        max_transactions_per_day: -1,
+        max_products: -1,
+        max_users: 15,
+        feature_flags: { reports: true, export_excel: true, export_pdf: true, multi_user: true, backup: true, restore: true, auto_backup: true, stock_opname: true, debt_management: true, shift_management: true, return_refund: true, multi_branch: true, api_access: true },
+        created_at: now(),
+        updated_at: null,
+      },
+      {
+        id: 4,
+        code: 'LIFETIME',
+        name: 'Sekali Beli Seumur Hidup',
+        price: 190000,
+        duration_days: 0,
+        features: ['Sekali Bayar Tanpa Biaya Bulanan', 'Akses Permanen Selamanya', 'Semua Fitur Operasional Kasir', 'Multi-Perangkat & Multi-User', 'Manajemen Stok & Transaksi Lengkap', 'Gratis Pembaruan Versi'],
+        is_active: true,
+        is_recommended: false,
+        max_devices: -1,
+        max_transactions_per_day: -1,
+        max_products: -1,
+        max_users: -1,
+        feature_flags: { reports: true, export_excel: true, export_pdf: true, multi_user: true, backup: true, restore: true, stock_opname: true, debt_management: true, shift_management: true, return_refund: true, api_access: true },
+        created_at: now(),
+        updated_at: null,
+      },
     ],
     tutorials: [
       { id: 1, title: 'Mulai transaksi Android', content: 'Buka menu Produk untuk mengubah data, lalu gunakan menu Transaksi.', created_at: now() },
@@ -597,6 +664,9 @@ function normalizeStore(value: Partial<MobileStore> | null): MobileStore {
     stockOpnameItems: value.stockOpnameItems ?? base.stockOpnameItems,
     batches: value.batches ?? base.batches,
     serials: value.serials ?? base.serials,
+    plans: (value.plans && value.plans.length > 1 && !value.plans.every((p: any) => p.name === 'Android Offline'))
+      ? value.plans
+      : base.plans,
   } as MobileStore
 }
 
@@ -2458,6 +2528,18 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
               if (remoteLogin?.success && remoteLogin.data) {
                 void upsertMobileRemoteBuyer(store, { loginName: user.email!, password, remote: remoteLogin.data })
                 saveStore(store)
+              } else {
+                // Auto-sync buyer to Supabase Cloud if not yet in Supabase
+                void mobileRegisterTrialCustomer({
+                  email: user.email!,
+                  password,
+                  nama_lengkap: user.nama_lengkap || user.nama_pengguna || 'Pembeli',
+                  no_telp: user.no_telp,
+                }, device).then(regRes => {
+                  if (regRes?.success) {
+                    console.log('[mobileApi] Auto-synced buyer to Supabase Cloud:', user.email)
+                  }
+                }).catch(() => {})
               }
             }).catch(() => {})
           }
@@ -3535,10 +3617,42 @@ export async function mobileApi<T>(channel: string, ...args: unknown[]): Promise
       return ok([] as T)
 
     case 'plan:getAll':
-      return ok(store.plans as T)
+    case 'plan:getActive': {
+      try {
+        const remote = await mobileLicenseRequest<AnyRecord[]>('GET', '/plans')
+        if (remote.success && Array.isArray(remote.data) && remote.data.length > 0) {
+          const remotePlans = remote.data.map((p: any, idx: number) => ({
+            id: p.id || idx + 1,
+            code: p.code || '',
+            name: p.name || 'Paket',
+            price: Number(p.price || 0),
+            duration_days: Number(p.duration_days || 30),
+            features: Array.isArray(p.features) && p.features.length > 0
+              ? p.features
+              : (typeof p.description === 'string' && p.description.trim() ? p.description.split('. ').filter(Boolean) : ['Fitur lengkap']),
+            is_active: p.is_active !== false,
+            is_recommended: Boolean(p.is_recommended),
+            max_devices: p.max_devices ?? 1,
+            max_transactions_per_day: p.max_transactions_per_day ?? -1,
+            max_products: p.max_products ?? -1,
+            max_users: p.max_users ?? 1,
+            feature_flags: p.feature_flags || {},
+            created_at: p.created_at || now(),
+            updated_at: p.updated_at || null,
+          }))
+          store.plans = remotePlans
+          saveStore(store)
+        }
+      } catch (err) {
+        console.warn('[mobileApi] Remote plans fetch error:', err)
+      }
 
-    case 'plan:getActive':
-      return ok(store.plans.filter(item => item.is_active) as T)
+      const activeOnly = channel === 'plan:getActive'
+      const visiblePlans = activeOnly
+        ? store.plans.filter(item => item.is_active !== false)
+        : store.plans
+      return ok(visiblePlans as T)
+    }
 
     case 'plan:create':
       return createSimpleRow(store, store.plans, 'plan', args[0] as AnyRecord) as IpcResponse<T>

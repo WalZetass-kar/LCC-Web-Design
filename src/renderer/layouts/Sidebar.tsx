@@ -39,6 +39,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       { to: '/', icon: LayoutDashboard, label: 'Dashboard', code: 'nav_dashboard' },
       { to: '/assistant', icon: Bot, label: 'Asisten AI', code: 'nav_dashboard' },
       { to: '/transaksi', icon: ShoppingCart, label: 'Kasir', code: 'nav_penjualan' },
+      { to: '/shifts', icon: Clock, label: 'Shift Kasir', code: 'nav_penjualan' },
       { to: '/riwayat', icon: History, label: 'Riwayat', code: 'nav_penjualan' },
       { to: '/customer-display-page', icon: Monitor, label: 'Customer Display', code: 'nav_dashboard' },
       { to: '/daily-notes', icon: FileText, label: 'Daily Notes', code: 'nav_dashboard' },

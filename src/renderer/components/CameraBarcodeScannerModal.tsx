@@ -21,6 +21,7 @@ export default function CameraBarcodeScannerModal({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const scanIntervalRef = useRef<number | null>(null)
+  const scannedRef = useRef(false)
 
   const [status, setStatus] = useState('Menyiapkan kamera...')
   const [error, setError] = useState('')
@@ -51,8 +52,15 @@ export default function CameraBarcodeScannerModal({
 
   const handleBarcodeFound = useCallback(
     (code: string) => {
+      if (scannedRef.current) return
       const trimmed = code.trim()
       if (!trimmed) return
+
+      scannedRef.current = true
+      if (scanIntervalRef.current) {
+        window.clearInterval(scanIntervalRef.current)
+        scanIntervalRef.current = null
+      }
 
       triggerHaptic()
       cashierSound.playScanBeep()
@@ -64,12 +72,13 @@ export default function CameraBarcodeScannerModal({
         stopCamera()
         onScan(trimmed)
         onClose()
-      }, 400)
+      }, 250)
     },
     [onScan, onClose, stopCamera]
   )
 
   const startCamera = useCallback(async () => {
+    scannedRef.current = false
     setError('')
     setStatus('Menyiapkan kamera...')
     setLastScanned(null)

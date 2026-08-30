@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Sun, Moon, Bell, Menu, ChevronRight, Home, Check, CheckCheck, Trash2, Crown } from 'lucide-react'
+import { Sun, Moon, Bell, Menu, ChevronRight, Home, Check, CheckCheck, Trash2, Crown, Clock } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../utils/api'
@@ -169,7 +169,7 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
   const parentLabel = route?.parent
 
   const initials = (user?.nama_lengkap ?? user?.nama_pengguna ?? 'U')
-    .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    .split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
 
   return (
     <header className="h-14 glass border-b border-white/30 dark:border-slate-700/30 flex items-center justify-between px-4 sm:px-6 shrink-0 relative z-30">
@@ -216,6 +216,17 @@ export default function Topbar({ onMenuClick }: TopbarProps) {
             <span className="truncate max-w-[120px]">{user.subscription_plan_name}</span>
           </button>
         ) : null}
+
+        {/* Shift Kasir Shortcut */}
+        <button
+          type="button"
+          onClick={() => navigate('/shifts')}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100/90 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors"
+          title="Buka / Tutup Shift Kasir"
+        >
+          <Clock size={15} className="text-primary-600 dark:text-primary-400" />
+          <span className="hidden sm:inline">Shift</span>
+        </button>
 
         <button onClick={toggleMode} aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors" title="Toggle dark mode">
           {mode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}

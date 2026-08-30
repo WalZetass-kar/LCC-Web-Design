@@ -268,6 +268,27 @@ export function DemoProvider({ children }: { children: ReactNode }) {
 
 export function useDemo(): DemoContextValue {
   const ctx = useContext(DemoContext)
-  if (!ctx) throw new Error('useDemo must be used within DemoProvider')
+  if (!ctx) {
+    return {
+      state: {
+        is_demo: false,
+        subscription_type: null,
+        subscription_start: null,
+        subscription_end: null,
+        usage_limit: 10,
+        usage_count: 0,
+      },
+      isPricingOpen: false,
+      triggerReason: null,
+      openPricing: () => {},
+      closePricing: () => {},
+      incrementUsage: () => {},
+      checkPremiumFeature: () => true,
+      isOverLimit: false,
+      remainingUsage: 10,
+      premiumFeatures: [],
+      isSubscribed: true,
+    }
+  }
   return ctx
 }

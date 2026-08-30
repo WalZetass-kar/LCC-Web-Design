@@ -74,7 +74,10 @@ function App() {
 // Initialize Sentry before mounting the React tree
 initSentry()
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const container = document.getElementById('root')!
+const root = (window as any).__reactRoot || ((window as any).__reactRoot = ReactDOM.createRoot(container))
+
+root.render(
   <React.StrictMode>
     <ErrorBoundary>
       <ProductionConfigGate>
