@@ -78,6 +78,268 @@ serve(async (req) => {
       });
     }
 
+    // 2.1 Register Trial / New Buyer Account from Mobile / Web
+    if ((pathname.endsWith("/register-trial") || pathname.endsWith("/customer/register") || pathname.endsWith("/auth/register-demo")) && req.method === "POST") {
+      const { email, password, name, phone, device } = body;
+
+      if (!email) throw new Error("Email wajib diisi");
+
+      // 1. Check if customer already exists
+      const { data: existingCustomers } = await supabase
+        .from('license_customers')
+        .select('id, email')
+        .eq('email', email.toLowerCase().trim());
+
+      if (existingCustomers && existingCustomers.length > 0) {
+        return new Response(JSON.stringify({
+          success: false,
+          message: "Email sudah terdaftar. Silakan login atau gunakan email lain.",
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // 2. Create customer in license_customers
+      const customerName = name || email.split('@')[0] || 'Pembeli';
+      const { data: newCustomer, error: createCustErr } = await supabase
+        .from('license_customers')
+        .insert({
+          email: email.toLowerCase().trim(),
+          name: customerName,
+          phone: phone || null,
+          status: 'active',
+          metadata: {
+            registered_from: 'mobile_app',
+            phone: phone || null,
+          }
+        })
+        .select()
+        .single();
+
+      if (createCustErr) throw createCustErr;
+
+      // 3. Find TRIAL_3_DAYS plan or STANDARD plan
+      const { data: trialPlans } = await supabase
+        .from('subscription_plans')
+        .select('id, code, name, duration_days, price')
+        .or('code.eq.TRIAL_3_DAYS,name.ilike.%Trial%')
+        .limit(1);
+
+      let trialPlan = trialPlans && trialPlans[0];
+      if (!trialPlan) {
+        const { data: stdPlans } = await supabase
+          .from('subscription_plans')
+          .select('id, code, name, duration_days, price')
+          .limit(1);
+        trialPlan = stdPlans && stdPlans[0];
+      }
+
+      // 4. Create customer_subscription (3 days trial)
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + (trialPlan?.duration_days || 3));
+
+      let subscriptionRecord = null;
+      if (trialPlan && newCustomer) {
+        const { data: newSub } = await supabase
+          .from('customer_subscriptions')
+          .insert({
+            customer_id: newCustomer.id,
+            plan_id: trialPlan.id,
+            status: 'active',
+            started_at: new Date().toISOString(),
+            expires_at: expiresAt.toISOString(),
+          })
+          .select()
+          .single();
+        subscriptionRecord = newSub;
+      }
+
+      // 5. Register device in customer_devices if device info provided
+      const deviceId = device?.deviceId || `mobile-${Date.now()}`;
+      const deviceName = device?.deviceName || device?.osName || 'Android Device';
+      const osName = device?.osName || 'Android';
+      const appVersion = device?.appVersion || '2.1.0';
+
+      if (newCustomer) {
+        await supabase
+          .from('customer_devices')
+          .insert({
+            customer_id: newCustomer.id,
+            device_id: deviceId,
+            device_name: deviceName,
+            os_name: osName,
+            app_version: appVersion,
+            status: 'active',
+            first_seen_at: new Date().toISOString(),
+            last_seen_at: new Date().toISOString(),
+          });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Pendaftaran berhasil! Akun trial 3 hari aktif.",
+        data: {
+          customer: newCustomer,
+          subscription: subscriptionRecord,
+          plan: trialPlan,
+          device_id: deviceId,
+        }
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 2.2 Customer Login (from Mobile App)
+    if (pathname.endsWith("/customer/login") && req.method === "POST") {
+      const { email, password, device } = body;
+      if (!email) throw new Error("Email wajib diisi");
+
+      const { data: customer } = await supabase
+        .from('license_customers')
+        .select(`
+          id, name, email, phone, status,
+          customer_subscriptions (
+            id, status, expires_at, started_at,
+            subscription_plans ( id, code, name, duration_days, price )
+          ),
+          customer_devices (
+            id, device_id, device_name, status, last_seen_at
+          )
+        `)
+        .eq('email', email.toLowerCase().trim())
+        .single();
+
+      if (!customer) {
+        return new Response(JSON.stringify({
+          success: false,
+          message: "Akun pembeli belum terdaftar. Silakan daftar akun baru terlebih dahulu.",
+        }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Update or insert device
+      if (device?.deviceId) {
+        const deviceId = device.deviceId;
+        const deviceName = device.deviceName || 'Android Device';
+        const osName = device.osName || 'Android';
+        const appVersion = device.appVersion || '2.1.0';
+
+        const { data: existDev } = await supabase
+          .from('customer_devices')
+          .select('id')
+          .eq('customer_id', customer.id)
+          .eq('device_id', deviceId)
+          .single();
+
+        if (existDev) {
+          await supabase.from('customer_devices').update({
+            last_seen_at: new Date().toISOString(),
+            device_name: deviceName,
+            app_version: appVersion,
+          }).eq('id', existDev.id);
+        } else {
+          await supabase.from('customer_devices').insert({
+            customer_id: customer.id,
+            device_id: deviceId,
+            device_name: deviceName,
+            os_name: osName,
+            app_version: appVersion,
+            status: 'active',
+            first_seen_at: new Date().toISOString(),
+            last_seen_at: new Date().toISOString(),
+          });
+        }
+      }
+
+      const sub = (customer.customer_subscriptions || [])[0];
+      const plan = sub?.subscription_plans;
+
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          user: {
+            id: customer.id,
+            email: customer.email,
+            name: customer.name,
+            phone: customer.phone,
+            status: customer.status,
+          },
+          subscription: sub ? {
+            id: sub.id,
+            status: sub.status,
+            expires_at: sub.expires_at,
+            plan: plan || null,
+          } : null,
+          plan: plan || null,
+        }
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 2.3 Check License / Sync
+    if ((pathname.endsWith("/check-license") || pathname.endsWith("/license/check")) && req.method === "POST") {
+      const { email, deviceId, username } = body;
+      const searchEmail = (email || username || '').toLowerCase().trim();
+
+      if (searchEmail) {
+        const { data: customer } = await supabase
+          .from('license_customers')
+          .select(`
+            id, name, email, status, force_popup_code, force_popup_until,
+            customer_subscriptions (
+              id, status, expires_at, started_at,
+              subscription_plans ( id, code, name, duration_days, price )
+            )
+          `)
+          .eq('email', searchEmail)
+          .single();
+
+        if (customer) {
+          if (deviceId) {
+            await supabase.from('customer_devices').update({
+              last_seen_at: new Date().toISOString(),
+            }).eq('customer_id', customer.id).eq('device_id', deviceId);
+          }
+
+          const sub = (customer.customer_subscriptions || [])[0];
+          const plan = sub?.subscription_plans;
+
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              subscription: sub ? {
+                id: sub.id,
+                status: sub.status,
+                expires_at: sub.expires_at,
+                plan: plan || null,
+              } : null,
+              force_popup_code: customer.force_popup_code,
+              force_popup_until: customer.force_popup_until,
+              status: customer.status,
+            }
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          subscription: {
+            status: 'ACTIVE',
+            plan: { code: 'STANDARD', name: 'Standard' },
+          }
+        }
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // 3. Plans list
     if ((pathname.endsWith("/plans") || pathname.endsWith("/admin/plans")) && req.method === "GET") {
       const { data: plans, error: planErr } = await supabase
